@@ -1,0 +1,141 @@
+{
+  "brand_identity": {
+    "name": "AI Village: The Echoes",
+    "theme": "Dark Fantasy x Neural Network",
+    "emotional_tone": "Mysterious, Ancient, Adaptive, Infinite",
+    "design_archetype": "The Weaver",
+    "keywords": ["Ethereal", "Obsidian", "Runic", "Connected"]
+  },
+  "typography": {
+    "headings": {
+      "family": "Cinzel, serif",
+      "weights": ["400", "700", "900"],
+      "usage": "All section titles, hero text, location names",
+      "import_url": "https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Manrope:wght@300;400;500;600&family=JetBrains+Mono:wght@400&display=swap"
+    },
+    "body": {
+      "family": "Manrope, sans-serif",
+      "weights": ["300", "400", "600"],
+      "usage": "General UI text, descriptions, chat messages"
+    },
+    "mono": {
+      "family": "'JetBrains Mono', monospace",
+      "usage": "System stats, dataspace coordinates, AI thought processes"
+    }
+  },
+  "colors": {
+    "palette": {
+      "background": "#050505",
+      "surface": "#0F0F11",
+      "surface_highlight": "#1A1A1E",
+      "border": "#27272A",
+      "primary": "#D4AF37",
+      "primary_foreground": "#000000",
+      "secondary": "#7B68EE",
+      "secondary_foreground": "#FFFFFF",
+      "text_main": "#E1E1E3",
+      "text_muted": "#A1A1AA",
+      "accent_danger": "#991B1B",
+      "accent_success": "#065F46"
+    },
+    "gradients": {
+      "hero_glow": "radial-gradient(circle at center, rgba(123, 104, 238, 0.15) 0%, rgba(5, 5, 5, 0) 70%)",
+      "gold_sheen": "linear-gradient(45deg, #D4AF37 0%, #F5E08E 50%, #D4AF37 100%)"
+    }
+  },
+  "layout_strategy": {
+    "global": {
+      "bg_class": "bg-[#050505] text-[#E1E1E3] antialiased selection:bg-[#D4AF37] selection:text-black",
+      "container_padding": "p-6 md:p-12 lg:p-24",
+      "max_width": "max-w-7xl mx-auto"
+    },
+    "grid_system": {
+      "village_map": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-[300px]",
+      "bento_highlight": "md:col-span-2 md:row-span-2",
+      "sidebar_layout": "grid grid-cols-1 lg:grid-cols-[300px_1fr] h-screen overflow-hidden"
+    }
+  },
+  "component_styling": {
+    "buttons": {
+      "primary": "bg-[#D4AF37] text-black font-cinzel font-bold uppercase tracking-widest hover:bg-[#F5E08E] transition-all duration-300 shadow-[0_0_15px_rgba(212,175,55,0.3)] rounded-sm",
+      "ghost": "bg-transparent border border-[#27272A] text-[#A1A1AA] hover:text-[#D4AF37] hover:border-[#D4AF37] transition-all duration-300 font-manrope rounded-sm",
+      "rune": "relative overflow-hidden group border border-[#7B68EE]/30 bg-[#7B68EE]/5 hover:bg-[#7B68EE]/10 text-[#7B68EE] font-mono text-xs uppercase tracking-widest"
+    },
+    "cards": {
+      "base": "bg-[#0F0F11]/80 backdrop-blur-md border border-[#27272A] p-6 rounded-sm shadow-2xl hover:border-[#7B68EE]/50 transition-colors duration-500",
+      "glass": "bg-black/40 backdrop-blur-xl border border-white/10"
+    },
+    "inputs": {
+      "chat": "bg-[#0F0F11] border-none focus:ring-1 focus:ring-[#D4AF37] placeholder:text-[#27272A] text-[#E1E1E3] font-manrope rounded-sm p-4 shadow-inner"
+    }
+  },
+  "visual_enhancers": {
+    "texture": "overlay-noise-opacity-5",
+    "effects": [
+      "Use 'drop-shadow-[0_0_10px_rgba(212,175,55,0.2)]' for active artifacts",
+      "Use 'grayscale hover:grayscale-0' transition for inactive characters"
+    ],
+    "animations": {
+      "enter": "animate-in fade-in zoom-in-95 duration-700 ease-out",
+      "float": "animate-pulse duration-[3000ms]"
+    }
+  },
+  "assets": {
+    "images": {
+      "landing_hero": "https://images.unsplash.com/photo-1746472603784-23c90049ca14?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "village_bg_night": "https://images.unsplash.com/photo-1607223090232-57bd27efa9cd?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "village_cabin": "https://images.unsplash.com/photo-1498108757159-bfb4831dbc58?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "character_mystic": "https://images.unsplash.com/photo-1680447079006-f04c5c8bb087?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "character_warrior": "https://images.unsplash.com/photo-1687567571600-4b5ad80665b8?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "dataspace_abstract": "https://images.unsplash.com/photo-1762279388956-1c098163a2a8?crop=entropy&cs=srgb&fm=jpg&q=85",
+      "dataspace_nodes": "https://images.unsplash.com/photo-1762278804798-dd7e493db051?crop=entropy&cs=srgb&fm=jpg&q=85"
+    },
+    "icons_library": "lucide-react"
+  },
+  "implementation_steps": [
+    {
+      "step": 1,
+      "title": "Setup Base Styles",
+      "action": "Update tailwind.config.js with the new color palette (obsidian, gold, slate-blue) and add the fonts (Cinzel, Manrope). Add the @import to index.css."
+    },
+    {
+      "step": 2,
+      "title": "Create Layout Shell",
+      "action": "Build the main layout wrapper with the sidebar for Village/Map and the main content area for Dialogue/Dataspace. Use absolute positioning for the 'Immersive Mode'."
+    },
+    {
+      "step": 3,
+      "title": "Build Core Components",
+      "action": "Customize Shadcn components (Card, Button, Input, Dialog, ScrollArea). Strip the default radius to 'rounded-sm' or 'rounded-none' for a sharper, fantasy feel. Remove white backgrounds, switch to dark glass."
+    },
+    {
+      "step": 4,
+      "title": "Develop Landing Page",
+      "action": "Create the 'World Entry' page using the mist mountain image as a full-screen background. Add a 'Connect to Neural Link' button."
+    },
+    {
+      "step": 5,
+      "title": "Implement Village & Chat",
+      "action": "Create the split view: Visual representation of location (top/back) + Dialogue Interface (bottom/front). Ensure the chat feels like a script, not a WhatsApp message."
+    },
+    {
+      "step": 6,
+      "title": "Global Dataspace",
+      "action": "Create a visualization page using the abstract network images or a canvas particle system to represent the AI's growing knowledge."
+    }
+  ],
+  "universal_guidelines": {
+    "do": [
+      "Use 'backdrop-blur' heavily to separate layers without solid opacity.",
+      "Add 'data-testid' to all interactive elements.",
+      "Use 'sonner' for all in-game notifications (e.g., 'Relationship improved').",
+      "Keep text contrast high: light grey on black, NOT dark grey on black.",
+      "Make the AI responses feel 'alive' by adding subtle typing animations or glowing borders when it 'thinks'."
+    ],
+    "avoid": [
+      "Don't use rounded-xl or rounded-2xl. This is not a SaaS tool. Keep edges sharp or slightly rounded (sm).",
+      "Don't use standard bright blue/green system colors. Use the gold/slate palette.",
+      "Don't crowd the interface. Fantasy interfaces need 'breathing room' (negative space)."
+    ]
+  }
+}
