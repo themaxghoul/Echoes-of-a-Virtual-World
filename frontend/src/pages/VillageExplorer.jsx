@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { 
   MapPin, Send, Menu, X, User, BookOpen, 
   ChevronRight, Loader2, Home, Sparkles, Lock, Unlock,
-  Crown, Shield, Flame, Eye, Moon, Star
+  Crown, Shield, Flame, Eye, Moon, Star, Globe
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -69,6 +69,7 @@ const VillageExplorer = () => {
   const [unlockedLocations, setUnlockedLocations] = useState(['village_square']);
   const [conversationCount, setConversationCount] = useState(0);
   const [visitedLocations, setVisitedLocations] = useState(new Set(['village_square']));
+  const [worldNews, setWorldNews] = useState([]);
 
   // Load progression from localStorage
   useEffect(() => {
@@ -131,13 +132,15 @@ const VillageExplorer = () => {
       }
 
       try {
-        const [charRes, locRes] = await Promise.all([
+        const [charRes, locRes, newsRes] = await Promise.all([
           axios.get(`${API}/character/${charId}`),
-          axios.get(`${API}/locations`)
+          axios.get(`${API}/locations`),
+          axios.get(`${API}/news`).catch(() => ({ data: { headlines: [] } }))
         ]);
         
         setCharacter(charRes.data);
         setLocations(locRes.data);
+        setWorldNews(newsRes.data.headlines || []);
         
         const startLoc = locRes.data.find(l => l.id === charRes.data.current_location) || locRes.data[0];
         setCurrentLocation(startLoc);
@@ -452,6 +455,17 @@ const VillageExplorer = () => {
               <Sparkles className="w-3 h-3 text-gold" />
               <span className="font-mono text-xs text-gold">{playerXP} XP</span>
             </div>
+            {worldNews.length > 0 && (
+              <button
+                data-testid="news-indicator-btn"
+                onClick={() => setInputMessage("What news from the outer world?")}
+                className="hidden sm:flex items-center gap-2 px-3 py-1 bg-slate-blue/20 hover:bg-slate-blue/30 rounded-sm transition-colors"
+                title="Ask about world news"
+              >
+                <Globe className="w-3 h-3 text-slate-blue" />
+                <span className="font-mono text-xs text-slate-blue">News</span>
+              </button>
+            )}
             <Sparkles className="w-4 h-4 text-slate-blue animate-pulse sm:hidden" />
           </div>
         </header>
@@ -552,8 +566,9 @@ const VillageExplorer = () => {
 
         {/* Input Area */}
         <div className="flex-shrink-0 border-t border-border/30 bg-surface/50 backdrop-blur-sm p-4">
-          <div className="max-w-3xl mx-auto flex gap-3">
-            <div className="flex-1 relative">
+          <div className="max-w-3xl mx-auto">
+            {/* Main Input Row */}
+            <div className="flex gap-3">
               <Input
                 ref={inputRef}
                 data-testid="chat-input"
@@ -562,36 +577,44 @@ const VillageExplorer = () => {
                 onKeyPress={handleKeyPress}
                 placeholder="What do you do? What do you say?"
                 disabled={isLoading}
-                className="bg-obsidian border-border/50 focus:ring-gold/50 focus:border-gold/50 font-manrope rounded-sm pr-12 py-6"
+                className="flex-1 bg-obsidian border-border/50 focus:ring-gold/50 focus:border-gold/50 font-manrope rounded-sm py-6"
               />
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                {currentLocation.available_actions.slice(0, 2).map((action, i) => (
+              <Button
+                data-testid="send-message-btn"
+                onClick={handleSendMessage}
+                disabled={isLoading || !inputMessage.trim()}
+                className="bg-gold text-black hover:bg-gold-light rounded-sm px-6 disabled:opacity-50"
+              >
+                {isLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Send className="w-5 h-5" />
+                )}
+              </Button>
+            </div>
+            
+            {/* Action Buttons - Outside and Below */}
+            <div className="flex items-center justify-between mt-3">
+              <p className="font-mono text-xs text-muted-foreground/50">
+                Press Enter to send
+              </p>
+              
+              {/* Quick Actions - Bottom Right Corner */}
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs text-muted-foreground/40 mr-2">Quick:</span>
+                {currentLocation.available_actions.slice(0, 4).map((action, i) => (
                   <button
                     key={i}
+                    data-testid={`quick-action-${action}-btn`}
                     onClick={() => setInputMessage(action)}
-                    className="text-xs text-muted-foreground hover:text-gold px-2 py-1 bg-surface rounded-sm"
+                    className="text-xs text-muted-foreground hover:text-gold px-3 py-1.5 bg-obsidian/80 border border-border/30 hover:border-gold/50 rounded-sm transition-all duration-200"
                   >
                     {action}
                   </button>
                 ))}
               </div>
             </div>
-            <Button
-              data-testid="send-message-btn"
-              onClick={handleSendMessage}
-              disabled={isLoading || !inputMessage.trim()}
-              className="bg-gold text-black hover:bg-gold-light rounded-sm px-6 disabled:opacity-50"
-            >
-              {isLoading ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <Send className="w-5 h-5" />
-              )}
-            </Button>
           </div>
-          <p className="text-center font-mono text-xs text-muted-foreground/50 mt-2">
-            Press Enter to send • Type any action or dialogue
-          </p>
         </div>
       </main>
     </div>

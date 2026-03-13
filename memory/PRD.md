@@ -39,6 +39,15 @@ Build an AI Village storytelling experience where users interact with AI compani
 - [x] XP progress bar in sidebar
 - [x] LocalStorage persistence for progression
 
+### Phase 1.6 - UI Fixes & Real-World Integration (Jan 2026)
+- [x] Fixed action buttons placement - moved outside input field to bottom right
+- [x] Added "Quick:" action buttons bar below input (explore, talk, rest, observe)
+- [x] Real-world news integration via Google News RSS
+- [x] News caching (1 hour) to reduce API calls
+- [x] AI system prompt now includes world news for fantasy-context responses
+- [x] News indicator button in header (globe icon)
+- [x] Click news button to ask "What news from the outer world?"
+
 ### Tech Stack
 - Frontend: React + Tailwind CSS + Shadcn/UI
 - Backend: FastAPI + MongoDB

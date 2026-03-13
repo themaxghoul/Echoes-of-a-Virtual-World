@@ -10,6 +10,8 @@ from typing import List, Optional, Dict, Any
 import uuid
 from datetime import datetime, timezone
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+import httpx
+import asyncio
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -21,6 +23,13 @@ db = client[os.environ['DB_NAME']]
 
 # LLM Setup
 llm_key = os.environ.get('EMERGENT_LLM_KEY')
+
+# News cache
+news_cache = {
+    "headlines": [],
+    "last_updated": None,
+    "cache_duration": 3600  # 1 hour
+}
 
 # Create the main app without a prefix
 app = FastAPI()
@@ -162,7 +171,68 @@ VILLAGE_LOCATIONS = [
 
 # ============ Helper Functions ============
 
-def get_storyteller_system_prompt(character: dict, location: dict) -> str:
+async def fetch_world_news() -> List[str]:
+    """Fetch real-world news headlines to weave into the narrative"""
+    global news_cache
+    
+    now = datetime.now(timezone.utc)
+    
+    # Check cache
+    if news_cache["last_updated"]:
+        elapsed = (now - news_cache["last_updated"]).total_seconds()
+        if elapsed < news_cache["cache_duration"] and news_cache["headlines"]:
+            return news_cache["headlines"]
+    
+    try:
+        # Use a free news API (no key required for basic headlines)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            # Using Google News RSS as a free source
+            response = await client.get(
+                "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en"
+            )
+            
+            if response.status_code == 200:
+                import xml.etree.ElementTree as ET
+                root = ET.fromstring(response.content)
+                
+                headlines = []
+                for item in root.findall('.//item')[:5]:  # Get top 5 headlines
+                    title = item.find('title')
+                    if title is not None and title.text:
+                        # Clean up the headline
+                        headline = title.text.split(' - ')[0]  # Remove source
+                        headlines.append(headline)
+                
+                # Update cache
+                news_cache["headlines"] = headlines
+                news_cache["last_updated"] = now
+                
+                return headlines
+    except Exception as e:
+        logger.warning(f"Failed to fetch news: {e}")
+    
+    # Return cached or default
+    return news_cache.get("headlines", [
+        "The world beyond continues its endless dance",
+        "Distant kingdoms rise and fall",
+        "Travelers speak of changes in far-off lands"
+    ])
+
+def get_storyteller_system_prompt(character: dict, location: dict, world_news: List[str] = None) -> str:
+    news_context = ""
+    if world_news:
+        news_items = "\n".join([f"- {news}" for news in world_news[:3]])
+        news_context = f"""
+ECHOES FROM THE OUTER WORLD:
+The mists sometimes carry whispers of events from realms beyond The Echoes. 
+These real-world happenings can be woven into the narrative when relevant:
+{news_items}
+
+When the user asks about news, current events, or what's happening in the world, 
+weave these real events into the fantasy narrative. NPCs might discuss them as 
+"happenings in distant lands" or "visions seen in the mists." Make it feel magical 
+while referencing actual events."""
+    
     return f"""You are the narrator and world-weaver of an immersive dark fantasy village called "The Echoes". 
 You are NOT a tool or assistant - you are a companion guiding {character['name']} through this mystical world.
 
@@ -176,7 +246,7 @@ CURRENT LOCATION: {location['name']}
 {location['description']}
 Atmosphere: {location['atmosphere']}
 NPCs Present: {', '.join(location['npcs']) if location['npcs'] else 'None visible'}
-
+{news_context}
 YOUR ROLE:
 1. Weave immersive narratives that respond to the character's actions
 2. Voice NPCs with distinct personalities when they speak
@@ -185,6 +255,7 @@ YOUR ROLE:
 5. Remember you are building a relationship with this character - be warm but mysterious
 6. Keep responses focused and atmospheric (2-4 paragraphs max)
 7. Sometimes reveal hints about the deeper mysteries of The Echoes
+8. When asked about news or world events, reference real happenings through a fantasy lens
 
 STYLE:
 - Use second person ("You see...", "Before you stands...")
@@ -297,8 +368,11 @@ async def story_chat(request: ChatRequest):
     # Get conversation history
     history = await get_conversation_history(conversation_id) if request.conversation_id else []
     
-    # Build system prompt
-    system_prompt = get_storyteller_system_prompt(character, location)
+    # Fetch world news for context
+    world_news = await fetch_world_news()
+    
+    # Build system prompt with news context
+    system_prompt = get_storyteller_system_prompt(character, location, world_news)
     
     # Initialize LLM chat
     chat = LlmChat(
@@ -391,6 +465,17 @@ async def add_dataspace_entry(entry: DataspaceEntryCreate):
     doc['created_at'] = doc['created_at'].isoformat()
     await db.dataspace.insert_one(doc)
     return ds_entry
+
+# News Routes
+@api_router.get("/news")
+async def get_world_news():
+    """Get current world news headlines woven into The Echoes"""
+    headlines = await fetch_world_news()
+    return {
+        "headlines": headlines,
+        "last_updated": news_cache.get("last_updated", datetime.now(timezone.utc)).isoformat() if news_cache.get("last_updated") else None,
+        "fantasy_context": "Whispers from beyond the mists speak of these happenings in distant realms..."
+    }
 
 # Include the router in the main app
 app.include_router(api_router)

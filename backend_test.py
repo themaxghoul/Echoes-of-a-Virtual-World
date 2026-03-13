@@ -196,6 +196,62 @@ class AIVillageAPITester:
             200
         )
 
+    def test_news_endpoint(self):
+        """Test GET /api/news for world news integration"""
+        success, response = self.run_test(
+            "Get World News Headlines",
+            "GET",
+            "news",
+            200
+        )
+        
+        if success and isinstance(response, dict):
+            if 'headlines' in response and isinstance(response['headlines'], list):
+                print(f"   Found {len(response['headlines'])} news headlines")
+                if len(response['headlines']) > 0:
+                    print(f"   Sample headline: {response['headlines'][0][:50]}...")
+                    print(f"   ✅ News integration working")
+                else:
+                    print(f"   ⚠️  No headlines returned")
+            else:
+                print(f"   ❌ Invalid response format: missing 'headlines' field")
+        
+        return success, response
+
+    def test_chat_with_news_query(self):
+        """Test AI chat with news-related query"""
+        if not self.character_id:
+            print("❌ Cannot test - No character ID available")
+            return False, {}
+        
+        news_chat_data = {
+            "character_id": self.character_id,
+            "location_id": "village_square", 
+            "message": "What news from the outer world?"
+        }
+        
+        print(f"   Testing AI chat with news query (may take 10-15 seconds)...")
+        success, response = self.run_test(
+            "AI Chat with News Query",
+            "POST",
+            "chat",
+            200,
+            data=news_chat_data
+        )
+        
+        if success and 'response' in response:
+            ai_response = response['response'].lower()
+            news_keywords = ['news', 'world', 'outer', 'realm', 'beyond', 'distant', 'happening']
+            found_keywords = [kw for kw in news_keywords if kw in ai_response]
+            
+            print(f"   AI Response length: {len(response['response'])} characters")
+            if found_keywords:
+                print(f"   ✅ AI response includes news context (keywords: {', '.join(found_keywords)})")
+            else:
+                print(f"   ⚠️  AI response may not include news context")
+        
+        return success, response
+
 def main():
     """Run all API tests"""
     print("🚀 Starting AI Village Backend API Tests")
@@ -214,6 +270,8 @@ def main():
         tester.test_get_conversations,
         tester.test_dataspace_stats,
         tester.test_get_dataspace,
+        tester.test_news_endpoint,  # Test news integration
+        tester.test_chat_with_news_query,  # Test AI + news
     ]
     
     # Execute tests
