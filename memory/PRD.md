@@ -29,6 +29,16 @@ Build an AI Village storytelling experience where users interact with AI compani
 - [x] Conversation persistence in MongoDB
 - [x] Character persistence per user
 
+### Phase 1.5 - Progression & NPC System (Jan 2026)
+- [x] Fixed sidebar visibility bug (content hides when closed)
+- [x] NPC visual appearances with avatar images
+- [x] Milestone-based world progression (6 milestones)
+- [x] XP system (+10 conversations, +20 new locations)
+- [x] Locked/unlocked location system
+- [x] Per-location background images
+- [x] XP progress bar in sidebar
+- [x] LocalStorage persistence for progression
+
 ### Tech Stack
 - Frontend: React + Tailwind CSS + Shadcn/UI
 - Backend: FastAPI + MongoDB
@@ -38,21 +48,36 @@ Build an AI Village storytelling experience where users interact with AI compani
 ## Prioritized Backlog
 
 ### P0 (Next Sprint)
-- [ ] Enhanced NPC dialogue system
-- [ ] Quest/objective tracking
-- [ ] Character stats progression
+- [ ] Outer Realms expansion (unlocked at 1000 XP)
+- [ ] NPC relationship tracking with affinity meters
+- [ ] Quest/objective system with story arcs
+- [ ] Character stat progression (skills)
 
 ### P1 (Future)
 - [ ] Multiple character support
 - [ ] Save/load game states
-- [ ] NPC relationship tracking
 - [ ] Inventory system
+- [ ] Dynamic NPC dialogue memory
 
-### P2 (VR Phase)
-- [ ] Voice input/output
-- [ ] 3D environment rendering
+### P2 (VR Phase - Hardware Rendering)
+- [ ] Voice input/output integration
+- [ ] 3D environment rendering (VR console handles GPU)
 - [ ] VR controller integration
 - [ ] Full-Dive interface prep
+- [ ] Spatial audio for immersion
+
+## VR Integration Notes
+The VR consoles will handle:
+- Graphics rendering memory
+- 3D scene processing
+- Controller input mapping
+- Spatial tracking
+
+Backend will provide:
+- AI narrative generation
+- World state management
+- Character/NPC data
+- Progression tracking
 
 ## Next Tasks
 1. Add more dynamic NPCs with unique personalities
