@@ -26,11 +26,13 @@ const NPC_AVATARS = {
   'The Hooded Stranger': { icon: Shield, color: 'text-gray-400', bg: 'bg-gray-400/20', image: null },
   'The Grove Keeper': { icon: Moon, color: 'text-emerald-400', bg: 'bg-emerald-400/20', image: 'https://images.unsplash.com/photo-1552374196-c4e7ffc6e126?w=100&h=100&fit=crop' },
   'Sentinel Vex': { icon: Shield, color: 'text-red-400', bg: 'bg-red-400/20', image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop' },
+  'Oracle Veythra': { icon: Eye, color: 'text-cyan-400', bg: 'bg-cyan-400/20', image: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=100&h=100&fit=crop', isOracle: true },
 };
 
 // Location images for each area
 const LOCATION_IMAGES = {
   'village_square': 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&h=400&fit=crop',
+  'oracle_sanctum': 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&h=400&fit=crop',
   'the_forge': 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=800&h=400&fit=crop',
   'ancient_library': 'https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=800&h=400&fit=crop',
   'wanderers_rest': 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=800&h=400&fit=crop',
@@ -40,7 +42,7 @@ const LOCATION_IMAGES = {
 
 // Milestone system for world progression
 const MILESTONES = [
-  { id: 1, name: 'First Steps', description: 'Enter The Echoes', xpRequired: 0, unlocks: ['village_square'] },
+  { id: 1, name: 'First Steps', description: 'Enter The Echoes', xpRequired: 0, unlocks: ['village_square', 'oracle_sanctum'] },
   { id: 2, name: 'Seeker', description: 'Visit 3 locations', xpRequired: 50, unlocks: ['the_forge', 'ancient_library'] },
   { id: 3, name: 'Conversationalist', description: 'Have 10 conversations', xpRequired: 150, unlocks: ['wanderers_rest'] },
   { id: 4, name: 'Explorer', description: 'Discover all initial areas', xpRequired: 300, unlocks: ['shadow_grove'] },
@@ -413,12 +415,20 @@ const VillageExplorer = () => {
             {/* Bottom Nav */}
             <div className="p-4 border-t border-border/30 space-y-2">
               <button
-                data-testid="nav-home-btn"
-                onClick={() => navigate('/')}
-                className="w-full flex items-center gap-2 p-3 text-muted-foreground hover:text-foreground transition-colors"
+                data-testid="nav-quests-btn"
+                onClick={() => navigate('/quests')}
+                className="w-full flex items-center gap-2 p-3 text-muted-foreground hover:text-gold transition-colors"
               >
-                <Home className="w-4 h-4" />
-                <span className="font-manrope text-sm">Return Home</span>
+                <Sparkles className="w-4 h-4" />
+                <span className="font-manrope text-sm">Quest Board</span>
+              </button>
+              <button
+                data-testid="nav-profile-btn"
+                onClick={() => navigate('/profile')}
+                className="w-full flex items-center gap-2 p-3 text-muted-foreground hover:text-gold transition-colors"
+              >
+                <User className="w-4 h-4" />
+                <span className="font-manrope text-sm">My Profile</span>
               </button>
               <button
                 data-testid="nav-dataspace-btn"
@@ -427,6 +437,14 @@ const VillageExplorer = () => {
               >
                 <BookOpen className="w-4 h-4" />
                 <span className="font-manrope text-sm">Global Dataspace</span>
+              </button>
+              <button
+                data-testid="nav-home-btn"
+                onClick={() => navigate('/')}
+                className="w-full flex items-center gap-2 p-3 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Home className="w-4 h-4" />
+                <span className="font-manrope text-sm">Return Home</span>
               </button>
             </div>
           </div>

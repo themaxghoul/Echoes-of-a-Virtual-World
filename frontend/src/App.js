@@ -5,6 +5,8 @@ import LandingPage from "@/pages/LandingPage";
 import CharacterCreation from "@/pages/CharacterCreation";
 import VillageExplorer from "@/pages/VillageExplorer";
 import DataspaceView from "@/pages/DataspaceView";
+import QuestBoard from "@/pages/QuestBoard";
+import UserProfilePage from "@/pages/UserProfilePage";
 
 function App() {
   return (
@@ -15,6 +17,8 @@ function App() {
           <Route path="/create-character" element={<CharacterCreation />} />
           <Route path="/village" element={<VillageExplorer />} />
           <Route path="/dataspace" element={<DataspaceView />} />
+          <Route path="/quests" element={<QuestBoard />} />
+          <Route path="/profile" element={<UserProfilePage />} />
         </Routes>
       </BrowserRouter>
       <Toaster 
