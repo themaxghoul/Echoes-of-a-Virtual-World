@@ -48,6 +48,19 @@ Build an AI Village storytelling experience where users interact with AI compani
 - [x] News indicator button in header (globe icon)
 - [x] Click news button to ask "What news from the outer world?"
 
+### Phase 2.0 - Multiplayer & AI Expansion (Jan 2026)
+- [x] **Oracle Veythra** - Special NPC who sees real-world news as prophecies
+- [x] **Sirix-1 Supreme Account** - Immutable user with max permissions (cannot be overwritten)
+- [x] **User Profile System** - Persistent profiles across characters with resources
+- [x] **Permission Tiers**: Basic → Advanced → Admin → Sirix-1
+- [x] **Quest System** - Both NPCs and players can create quests with resource payouts
+- [x] **NPC Location Stamps** - Each NPC has home location + visitable locations
+- [x] **Quest Board UI** - View, create, and accept quests
+- [x] **Profile Page** - View resources, XP, permissions, characters
+- [x] **WebSocket Multiplayer** - Real-time chat infrastructure
+- [x] **Message Boards** - Async communication per location
+- [x] **8 NPCs initialized** with personalities, roles, and knowledge domains
+
 ### Tech Stack
 - Frontend: React + Tailwind CSS + Shadcn/UI
 - Backend: FastAPI + MongoDB
