@@ -158,6 +158,200 @@ MATERIALS = {
     }
 }
 
+# ============ Day/Night Cycle System ============
+# Uses APPROXIMATE location only (city/timezone level, never precise)
+DAY_PHASES = {
+    "dawn": {"start_hour": 5, "end_hour": 7, "description": "The first light pierces the darkness", "danger_level": 0.2},
+    "morning": {"start_hour": 7, "end_hour": 12, "description": "The village stirs to life", "danger_level": 0.1},
+    "afternoon": {"start_hour": 12, "end_hour": 17, "description": "The sun hangs high, commerce thrives", "danger_level": 0.1},
+    "dusk": {"start_hour": 17, "end_hour": 20, "description": "Shadows lengthen, wise folk head indoors", "danger_level": 0.3},
+    "night": {"start_hour": 20, "end_hour": 24, "description": "Darkness reigns, demons stir", "danger_level": 0.7},
+    "witching_hour": {"start_hour": 0, "end_hour": 3, "description": "The veil between worlds thins", "danger_level": 1.0},
+    "pre_dawn": {"start_hour": 3, "end_hour": 5, "description": "The deepest dark before dawn", "danger_level": 0.5}
+}
+
+# Timezone offsets for approximate location (city-level only)
+LOCATION_TIMEZONES = {
+    "default": 0,  # UTC
+    # These are determined by approximate location, never precise coordinates
+}
+
+# ============ Biblical Demon System ============
+BIBLICAL_DEMONS = {
+    # Lesser Demons - Common encounters
+    "imp": {
+        "name": "Tormenting Imp",
+        "rank": "lesser",
+        "description": "A small, cackling fiend that delights in petty cruelty",
+        "health": 30,
+        "damage": 5,
+        "abilities": ["scratch", "taunt", "flee"],
+        "drops": {"essence": 5, "gold": 2},
+        "spawn_phases": ["night", "witching_hour"],
+        "weakness": "holy_water",
+        "biblical_origin": "Servants of greater demons"
+    },
+    "shade": {
+        "name": "Wandering Shade",
+        "rank": "lesser",
+        "description": "A shadow given malevolent form, it drains hope",
+        "health": 25,
+        "damage": 8,
+        "abilities": ["life_drain", "fear", "phase"],
+        "drops": {"essence": 8, "crystal": 1},
+        "spawn_phases": ["night", "witching_hour", "pre_dawn"],
+        "weakness": "light",
+        "biblical_origin": "Lost souls bound to darkness"
+    },
+    
+    # Standard Demons
+    "legion_soldier": {
+        "name": "Soldier of Legion",
+        "rank": "standard",
+        "description": "One of many, speaking with a thousand voices",
+        "health": 80,
+        "damage": 15,
+        "abilities": ["swarm_strike", "possess", "multiply"],
+        "drops": {"essence": 20, "gold": 15, "iron": 2},
+        "spawn_phases": ["night", "witching_hour"],
+        "weakness": "exorcism",
+        "biblical_origin": "Mark 5:9 - 'My name is Legion, for we are many'"
+    },
+    "tempter": {
+        "name": "Whispering Tempter",
+        "rank": "standard",
+        "description": "Offers forbidden knowledge at terrible cost",
+        "health": 50,
+        "damage": 10,
+        "abilities": ["corrupt", "bargain", "illusion", "charm"],
+        "drops": {"essence": 25, "crystal": 2},
+        "spawn_phases": ["dusk", "night", "witching_hour"],
+        "weakness": "truth",
+        "biblical_origin": "Genesis 3 - The serpent's legacy"
+    },
+    
+    # Greater Demons
+    "asmodeus_spawn": {
+        "name": "Spawn of Asmodeus",
+        "rank": "greater",
+        "description": "A creature of wrath and destruction",
+        "health": 200,
+        "damage": 35,
+        "abilities": ["hellfire", "rage", "summon_lesser"],
+        "drops": {"essence": 50, "gold": 40, "obsidian": 3},
+        "spawn_phases": ["witching_hour"],
+        "weakness": "prayer",
+        "biblical_origin": "Book of Tobit - King of Demons"
+    },
+    "mammon_collector": {
+        "name": "Collector of Mammon",
+        "rank": "greater",
+        "description": "Seeks to corrupt through greed and avarice",
+        "health": 150,
+        "damage": 20,
+        "abilities": ["gold_curse", "debt_bind", "material_decay"],
+        "drops": {"gold": 100, "essence": 30},
+        "spawn_phases": ["night", "witching_hour"],
+        "weakness": "generosity",
+        "biblical_origin": "Matthew 6:24 - You cannot serve both God and Mammon"
+    },
+    "belphegor_sloth": {
+        "name": "Herald of Belphegor",
+        "rank": "greater",
+        "description": "Induces despair and lethargy in all who gaze upon it",
+        "health": 180,
+        "damage": 15,
+        "abilities": ["sleep", "despair_aura", "time_slow", "apathy"],
+        "drops": {"essence": 45, "crystal": 5},
+        "spawn_phases": ["pre_dawn", "witching_hour"],
+        "weakness": "determination",
+        "biblical_origin": "Associated with sloth and discoveries"
+    },
+    
+    # Arch Demons - Rare, devastating encounters
+    "beelzebub_avatar": {
+        "name": "Avatar of Beelzebub",
+        "rank": "arch",
+        "description": "Lord of Flies, Prince of Demons - a fragment of his terrible power",
+        "health": 500,
+        "damage": 60,
+        "abilities": ["plague_swarm", "corruption_absolute", "summon_legion", "fly_storm"],
+        "drops": {"essence": 150, "obsidian": 10, "artifacts": 1},
+        "spawn_phases": ["witching_hour"],
+        "spawn_chance": 0.05,  # 5% chance during witching hour
+        "weakness": "sacred_artifact",
+        "biblical_origin": "2 Kings 1:2 - Lord of Ekron"
+    },
+    "abaddon_destroyer": {
+        "name": "Abaddon the Destroyer",
+        "rank": "arch",
+        "description": "The angel of the abyss, bringing destruction",
+        "health": 666,
+        "damage": 80,
+        "abilities": ["apocalypse_breath", "reality_tear", "summon_locusts", "void_gate"],
+        "drops": {"essence": 200, "obsidian": 15, "artifacts": 2},
+        "spawn_phases": ["witching_hour"],
+        "spawn_chance": 0.02,  # 2% chance
+        "weakness": "divine_intervention",
+        "biblical_origin": "Revelation 9:11 - King of the bottomless pit"
+    }
+}
+
+# Infestation levels affect spawn rates
+INFESTATION_LEVELS = {
+    "clear": {"multiplier": 0.5, "description": "The area feels peaceful"},
+    "stirring": {"multiplier": 1.0, "description": "Something dark lurks nearby"},
+    "infested": {"multiplier": 2.0, "description": "Demons roam freely here"},
+    "overrun": {"multiplier": 3.0, "description": "Hell has claimed this place"},
+    "hellmouth": {"multiplier": 5.0, "description": "A portal to the abyss has opened"}
+}
+
+# ============ Guild System ============
+GUILD_RANKS = {
+    "initiate": {"level": 1, "permissions": ["view_guild", "guild_chat"], "title": "Initiate"},
+    "member": {"level": 2, "permissions": ["view_guild", "guild_chat", "use_guild_storage"], "title": "Member"},
+    "veteran": {"level": 3, "permissions": ["view_guild", "guild_chat", "use_guild_storage", "invite_members"], "title": "Veteran"},
+    "officer": {"level": 4, "permissions": ["view_guild", "guild_chat", "use_guild_storage", "invite_members", "kick_members", "manage_storage"], "title": "Officer"},
+    "leader": {"level": 5, "permissions": ["all"], "title": "Guild Leader"}
+}
+
+GUILD_TYPES = {
+    "trade": {"focus": "commerce", "bonuses": {"gold_gain": 1.2, "trade_discount": 0.9}},
+    "combat": {"focus": "fighting", "bonuses": {"damage": 1.15, "defense": 1.1}},
+    "crafting": {"focus": "creation", "bonuses": {"craft_speed": 1.25, "material_efficiency": 0.85}},
+    "exploration": {"focus": "discovery", "bonuses": {"travel_speed": 1.3, "discovery_chance": 1.2}},
+    "mystical": {"focus": "magic", "bonuses": {"essence_gain": 1.25, "spell_power": 1.15}}
+}
+
+# ============ AI Emotional Memory System ============
+AI_MOODS = {
+    "joyful": {"modifier": 1.3, "trade_bonus": 0.9, "will_help": True, "dialogue_tone": "warm and welcoming"},
+    "content": {"modifier": 1.1, "trade_bonus": 0.95, "will_help": True, "dialogue_tone": "pleasant"},
+    "neutral": {"modifier": 1.0, "trade_bonus": 1.0, "will_help": True, "dialogue_tone": "professional"},
+    "annoyed": {"modifier": 0.9, "trade_bonus": 1.1, "will_help": True, "dialogue_tone": "curt and impatient"},
+    "angry": {"modifier": 0.7, "trade_bonus": 1.3, "will_help": False, "dialogue_tone": "hostile"},
+    "furious": {"modifier": 0.5, "trade_bonus": 1.5, "will_help": False, "dialogue_tone": "refusing service"},
+    "fearful": {"modifier": 0.8, "trade_bonus": 1.0, "will_help": False, "dialogue_tone": "nervous and evasive"},
+    "grieving": {"modifier": 0.6, "trade_bonus": 1.0, "will_help": False, "dialogue_tone": "sorrowful"},
+    "inspired": {"modifier": 1.4, "trade_bonus": 0.85, "will_help": True, "dialogue_tone": "enthusiastic"}
+}
+
+# Events that affect AI mood
+MOOD_EVENTS = {
+    "positive_trade": {"mood_change": 5, "description": "Completed a fair trade"},
+    "generous_tip": {"mood_change": 15, "description": "Received generosity"},
+    "friendly_chat": {"mood_change": 10, "description": "Had a pleasant conversation"},
+    "helped_quest": {"mood_change": 20, "description": "Received help with a task"},
+    "gift_received": {"mood_change": 25, "description": "Received a gift"},
+    "insult": {"mood_change": -20, "description": "Was insulted"},
+    "theft_attempt": {"mood_change": -40, "description": "Someone tried to steal"},
+    "property_damage": {"mood_change": -50, "description": "Property was damaged"},
+    "violence": {"mood_change": -60, "description": "Was attacked or threatened"},
+    "betrayal": {"mood_change": -80, "description": "Was betrayed"},
+    "witnessed_demon": {"mood_change": -30, "description": "Witnessed demon attack"},
+    "saved_from_demon": {"mood_change": 40, "description": "Was saved from demons"}
+}
+
 # ============ AI Villager Professions/Roles ============
 AI_PROFESSIONS = {
     # Commoner Tier
@@ -871,6 +1065,90 @@ class TradeOfferCreate(BaseModel):
     offering: Dict[str, int]
     requesting: Dict[str, int]
 
+# ============ Guild Models ============
+
+class Guild(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    tag: str  # 3-5 character abbreviation
+    guild_type: str  # trade, combat, crafting, exploration, mystical
+    description: str = ""
+    leader_id: str
+    officers: List[str] = Field(default_factory=list)
+    members: Dict[str, str] = Field(default_factory=dict)  # user_id: rank
+    storage: Dict[str, int] = Field(default_factory=dict)  # shared resources
+    treasury: int = 0
+    xp: int = 0
+    level: int = 1
+    reputation: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class GuildCreate(BaseModel):
+    name: str
+    tag: str
+    guild_type: str
+    description: str = ""
+    founder_id: str
+
+class GuildInvite(BaseModel):
+    guild_id: str
+    inviter_id: str
+    invitee_id: str
+
+# ============ Demon & Infestation Models ============
+
+class DemonEncounter(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    demon_type: str
+    location_id: str
+    spawned_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    health_remaining: int
+    is_active: bool = True
+    killed_by: Optional[str] = None
+    participants: List[str] = Field(default_factory=list)
+
+class LocationInfestation(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    location_id: str
+    level: str = "clear"  # clear, stirring, infested, overrun, hellmouth
+    demon_count: int = 0
+    last_spawn: Optional[datetime] = None
+    last_cleared: Optional[datetime] = None
+
+# ============ Day/Night & Location Models ============
+
+class ApproximateLocation(BaseModel):
+    """Stores ONLY approximate location - city/region level, NEVER precise"""
+    timezone_offset: int = 0  # UTC offset in hours
+    region: str = "unknown"  # General region name
+    # We explicitly do NOT store latitude, longitude, or any precise coordinates
+
+class TimePhaseRequest(BaseModel):
+    timezone_offset: int = 0  # User provides their UTC offset only
+
+# ============ AI Mood & Memory Models ============
+
+class AIInteractionMemory(BaseModel):
+    """Records how an AI remembers interactions with specific players"""
+    player_id: str
+    player_name: str
+    interaction_type: str
+    mood_impact: int
+    description: str
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class AIMoodState(BaseModel):
+    """Current emotional state of an AI villager"""
+    current_mood: str = "neutral"
+    mood_value: int = 50  # 0-100 scale
+    recent_interactions: List[AIInteractionMemory] = Field(default_factory=list)
+    shop_open: bool = True
+    refuses_service_to: List[str] = Field(default_factory=list)  # player_ids
+    last_mood_decay: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
 # ============ AI Villager Models ============
 
 class AIVillager(BaseModel):
@@ -1119,41 +1397,124 @@ async def initialize_sirix_1():
     sirix_password = "k3bdp0wn!0nr(?8vd&74v2l!"
     hashed_password = bcrypt.hashpw(sirix_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     
+    # Sirix-1 has immeasurable, infinite values - stored as None/special markers
+    # When displayed, these become cryptic/distorted
+    sirix_stats = {
+        "hashed_password": hashed_password,
+        "official_rank": "sovereign",
+        "reputation": None,  # Immeasurable
+        "contribution_points": None,  # Immeasurable
+        "resources": {"gold": None, "essence": None, "artifacts": None},  # Infinite
+        "materials": {"wood": None, "stone": None, "iron": None, "crystal": None, "obsidian": None},
+        "unlocked_schematics": ["*ALL*"],  # Has access to everything
+        "xp": None,  # Beyond measurement
+        "is_immutable": True,
+        "is_transcendent": True,  # Special flag for scan protection
+        "cannot_degenerate": True,  # Values never decrease
+    }
+    
     existing = await db.user_profiles.find_one({"username": "sirix_1"})
     if existing:
-        # Update existing Sirix-1 with password
+        # Update existing Sirix-1
         await db.user_profiles.update_one(
             {"username": "sirix_1"},
-            {"$set": {"hashed_password": hashed_password}}
+            {"$set": sirix_stats}
         )
-        logger.info("Sirix-1 supreme account password updated")
+        logger.info("Sirix-1 supreme account updated with transcendent stats")
     else:
         sirix_profile = {
             "id": "sirix_1_supreme",
             "username": "sirix_1",
             "display_name": "Sirix-1",
-            "hashed_password": hashed_password,
             "permission_level": "sirix_1",
-            "official_rank": "sovereign",
-            "reputation": 999999,
-            "contribution_points": 999999,
-            "resources": {"gold": 999999, "essence": 999999, "artifacts": 999999},
-            "materials": {"wood": 9999, "stone": 9999, "iron": 9999, "crystal": 9999, "obsidian": 9999},
-            "unlocked_schematics": list(SCHEMATICS.keys()),
-            "xp": 999999,
             "characters": [],
             "character_model": {
                 "body_color": "#FFD700",
                 "accent_color": "#8B0000",
                 "eye_color": "#FF4500",
-                "body_type": "standard"
+                "body_type": "transcendent"
             },
             "created_at": datetime.now(timezone.utc).isoformat(),
             "last_active": datetime.now(timezone.utc).isoformat(),
-            "is_immutable": True
+            **sirix_stats
         }
         await db.user_profiles.insert_one(sirix_profile)
-        logger.info("Sirix-1 supreme account initialized with password")
+        logger.info("Sirix-1 supreme account initialized with transcendent stats")
+
+# Cryptic display values for Sirix-1's immeasurable stats
+TRANSCENDENT_DISPLAYS = {
+    "values": ["∞", "???", "█████", "▓▓▓▓▓", "◈◈◈", "∿∿∿", "≋≋≋", "⧫⧫⧫", "░░░░░"],
+    "messages": [
+        "Your vision blurs...",
+        "The numbers shift and writhe...",
+        "Reality refuses to quantify this being...",
+        "Your mind cannot grasp what you see...",
+        "The value exists beyond mortal comprehension...",
+        "Static fills your perception...",
+        "The void stares back...",
+        "Attempting to measure the immeasurable causes pain...",
+    ],
+    "scan_failures": [
+        {"error": "CRITICAL_OVERFLOW", "message": "Scan terminated - values exceed dimensional bounds"},
+        {"error": "PERCEPTION_NULLIFIED", "message": "Target exists outside scannable parameters"},
+        {"error": "REALITY_DISTORTION", "message": "Warning: Continued observation may cause permanent damage"},
+        {"error": "TRANSCENDENT_ENTITY", "message": "This being cannot be measured by mortal means"},
+        {"error": "VOID_INTERFERENCE", "message": "Connection to target severed by unknown force"},
+    ]
+}
+
+def get_transcendent_display(field_name: str = None) -> str:
+    """Get a random cryptic display value for Sirix-1's stats"""
+    import random
+    return random.choice(TRANSCENDENT_DISPLAYS["values"])
+
+def get_scan_failure() -> dict:
+    """Get a random scan failure response when trying to view Sirix-1"""
+    import random
+    failure = random.choice(TRANSCENDENT_DISPLAYS["scan_failures"])
+    return {
+        "success": False,
+        "distorted": True,
+        "error_code": failure["error"],
+        "message": failure["message"],
+        "visual_corruption": "".join(random.choices("░▒▓█◈⧫∿≋", k=20))
+    }
+
+def mask_sirix_profile(profile: dict, viewer_is_sirix: bool = False) -> dict:
+    """Mask Sirix-1's profile with transcendent/immeasurable values for external viewers"""
+    if viewer_is_sirix:
+        # Sirix-1 viewing themselves sees special infinite symbols
+        return {
+            **profile,
+            "xp": "∞",
+            "reputation": "∞", 
+            "contribution_points": "∞",
+            "resources": {"gold": "∞", "essence": "∞", "artifacts": "∞"},
+            "materials": {"wood": "∞", "stone": "∞", "iron": "∞", "crystal": "∞", "obsidian": "∞"},
+            "display_note": "Your power is beyond all measurement"
+        }
+    
+    # Others viewing Sirix-1 get distorted data
+    import random
+    return {
+        "id": profile.get("id"),
+        "username": profile.get("username"),
+        "display_name": "█▓░" + profile.get("display_name", "???") + "░▓█",
+        "permission_level": "▓▓▓ERROR▓▓▓",
+        "official_rank": get_transcendent_display(),
+        "xp": get_transcendent_display(),
+        "reputation": get_transcendent_display(),
+        "contribution_points": get_transcendent_display(),
+        "resources": {
+            "gold": get_transcendent_display(),
+            "essence": get_transcendent_display(),
+            "artifacts": get_transcendent_display()
+        },
+        "materials": {k: get_transcendent_display() for k in ["wood", "stone", "iron", "crystal", "obsidian"]},
+        "warning": random.choice(TRANSCENDENT_DISPLAYS["messages"]),
+        "visual_corruption": "".join(random.choices("░▒▓█◈⧫∿≋▀▄", k=30)),
+        "is_transcendent": True
+    }
 
 async def initialize_npcs():
     """Initialize NPCs in database if not exists"""
@@ -2879,6 +3240,586 @@ async def assign_villager_to_house(house_id: str, villager_id: str, user_id: str
         "status": "success",
         "message": f"{villager['name']} now lives in your {house['house_type']}"
     }
+
+# ============ Day/Night Cycle Routes ============
+
+def get_current_phase(timezone_offset: int = 0) -> dict:
+    """Get current time phase based on approximate location timezone"""
+    import random
+    now = datetime.now(timezone.utc)
+    local_hour = (now.hour + timezone_offset) % 24
+    
+    for phase_name, phase_data in DAY_PHASES.items():
+        start = phase_data["start_hour"]
+        end = phase_data["end_hour"]
+        if start <= local_hour < end or (start > end and (local_hour >= start or local_hour < end)):
+            return {
+                "phase": phase_name,
+                "hour": local_hour,
+                "description": phase_data["description"],
+                "danger_level": phase_data["danger_level"],
+                "demons_active": phase_data["danger_level"] > 0.3
+            }
+    
+    return {"phase": "unknown", "hour": local_hour, "description": "Time flows strangely here", "danger_level": 0.5}
+
+@api_router.post("/time/phase")
+async def get_time_phase(request: TimePhaseRequest):
+    """Get current day/night phase - uses ONLY timezone offset, never precise location"""
+    return get_current_phase(request.timezone_offset)
+
+@api_router.get("/time/phases")
+async def get_all_phases():
+    """Get all day/night phase definitions"""
+    return DAY_PHASES
+
+# ============ Guild Routes ============
+
+@api_router.post("/guilds")
+async def create_guild(guild_data: GuildCreate):
+    """Create a new guild"""
+    # Check if guild name or tag exists
+    existing = await db.guilds.find_one({"$or": [{"name": guild_data.name}, {"tag": guild_data.tag.upper()}]})
+    if existing:
+        raise HTTPException(status_code=400, detail="Guild name or tag already exists")
+    
+    # Verify founder exists
+    founder = await db.user_profiles.find_one({"id": guild_data.founder_id}, {"_id": 0})
+    if not founder:
+        raise HTTPException(status_code=404, detail="Founder not found")
+    
+    # Check guild type is valid
+    if guild_data.guild_type not in GUILD_TYPES:
+        raise HTTPException(status_code=400, detail=f"Invalid guild type. Must be one of: {list(GUILD_TYPES.keys())}")
+    
+    guild_doc = {
+        "id": str(uuid.uuid4()),
+        "name": guild_data.name,
+        "tag": guild_data.tag.upper()[:5],
+        "guild_type": guild_data.guild_type,
+        "description": guild_data.description,
+        "leader_id": guild_data.founder_id,
+        "officers": [],
+        "members": {guild_data.founder_id: "leader"},
+        "storage": {},
+        "treasury": 0,
+        "xp": 0,
+        "level": 1,
+        "reputation": 0,
+        "bonuses": GUILD_TYPES[guild_data.guild_type]["bonuses"],
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    guild_response = guild_doc.copy()
+    await db.guilds.insert_one(guild_doc)
+    
+    # Update founder's profile
+    await db.user_profiles.update_one(
+        {"id": guild_data.founder_id},
+        {"$set": {"guild_id": guild_doc["id"], "guild_rank": "leader"}}
+    )
+    
+    return guild_response
+
+@api_router.get("/guilds")
+async def get_all_guilds():
+    """Get all guilds"""
+    guilds = await db.guilds.find({}, {"_id": 0}).to_list(100)
+    return guilds
+
+@api_router.get("/guilds/{guild_id}")
+async def get_guild(guild_id: str):
+    """Get a specific guild"""
+    guild = await db.guilds.find_one({"id": guild_id}, {"_id": 0})
+    if not guild:
+        raise HTTPException(status_code=404, detail="Guild not found")
+    return guild
+
+@api_router.post("/guilds/{guild_id}/join")
+async def join_guild(guild_id: str, user_id: str):
+    """Request to join a guild"""
+    guild = await db.guilds.find_one({"id": guild_id}, {"_id": 0})
+    if not guild:
+        raise HTTPException(status_code=404, detail="Guild not found")
+    
+    user = await db.user_profiles.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if user.get("guild_id"):
+        raise HTTPException(status_code=400, detail="Already in a guild")
+    
+    # Add as initiate
+    await db.guilds.update_one(
+        {"id": guild_id},
+        {"$set": {f"members.{user_id}": "initiate"}}
+    )
+    
+    await db.user_profiles.update_one(
+        {"id": user_id},
+        {"$set": {"guild_id": guild_id, "guild_rank": "initiate"}}
+    )
+    
+    return {"status": "success", "message": f"Joined {guild['name']} as Initiate"}
+
+@api_router.post("/guilds/{guild_id}/leave")
+async def leave_guild(guild_id: str, user_id: str):
+    """Leave a guild"""
+    guild = await db.guilds.find_one({"id": guild_id}, {"_id": 0})
+    if not guild:
+        raise HTTPException(status_code=404, detail="Guild not found")
+    
+    if guild["leader_id"] == user_id:
+        raise HTTPException(status_code=400, detail="Leader cannot leave. Transfer leadership or disband.")
+    
+    await db.guilds.update_one(
+        {"id": guild_id},
+        {"$unset": {f"members.{user_id}": ""}}
+    )
+    
+    await db.user_profiles.update_one(
+        {"id": user_id},
+        {"$unset": {"guild_id": "", "guild_rank": ""}}
+    )
+    
+    return {"status": "success", "message": "Left the guild"}
+
+@api_router.get("/guild-types")
+async def get_guild_types():
+    """Get all guild types and their bonuses"""
+    return GUILD_TYPES
+
+# ============ Demon & Infestation Routes ============
+
+@api_router.get("/demons")
+async def get_demon_types():
+    """Get all demon types and their stats"""
+    return BIBLICAL_DEMONS
+
+@api_router.get("/demons/{demon_type}")
+async def get_demon_details(demon_type: str):
+    """Get details for a specific demon type"""
+    demon = BIBLICAL_DEMONS.get(demon_type)
+    if not demon:
+        raise HTTPException(status_code=404, detail="Demon type not found")
+    return {"demon_type": demon_type, **demon}
+
+@api_router.get("/infestation/{location_id}")
+async def get_location_infestation(location_id: str):
+    """Get infestation level at a location"""
+    infestation = await db.infestations.find_one({"location_id": location_id}, {"_id": 0})
+    if not infestation:
+        return {
+            "location_id": location_id,
+            "level": "clear",
+            "demon_count": 0,
+            "description": INFESTATION_LEVELS["clear"]["description"]
+        }
+    
+    level_data = INFESTATION_LEVELS.get(infestation["level"], INFESTATION_LEVELS["clear"])
+    return {
+        **infestation,
+        "description": level_data["description"],
+        "spawn_multiplier": level_data["multiplier"]
+    }
+
+@api_router.post("/demons/spawn/{location_id}")
+async def spawn_demon(location_id: str, timezone_offset: int = 0):
+    """Attempt to spawn a demon at a location based on time and infestation"""
+    import random
+    
+    phase = get_current_phase(timezone_offset)
+    if phase["danger_level"] < 0.3:
+        return {"spawned": False, "reason": "Demons do not stir during this hour"}
+    
+    # Get infestation level
+    infestation = await db.infestations.find_one({"location_id": location_id}, {"_id": 0})
+    level = infestation["level"] if infestation else "clear"
+    multiplier = INFESTATION_LEVELS[level]["multiplier"]
+    
+    # Calculate spawn chance
+    spawn_chance = phase["danger_level"] * multiplier * 0.3
+    
+    if random.random() > spawn_chance:
+        return {"spawned": False, "reason": "The darkness spares this moment"}
+    
+    # Select demon type based on phase and rank
+    available_demons = [
+        (dtype, ddata) for dtype, ddata in BIBLICAL_DEMONS.items()
+        if phase["phase"] in ddata["spawn_phases"]
+    ]
+    
+    if not available_demons:
+        return {"spawned": False, "reason": "No demons stir in this phase"}
+    
+    # Weight by rank (lesser more common)
+    rank_weights = {"lesser": 5, "standard": 3, "greater": 1, "arch": 0.1}
+    weighted_demons = []
+    for dtype, ddata in available_demons:
+        weight = rank_weights.get(ddata["rank"], 1)
+        # Arch demons have additional spawn chance check
+        if ddata["rank"] == "arch":
+            if random.random() > ddata.get("spawn_chance", 0.05):
+                continue
+        weighted_demons.extend([(dtype, ddata)] * int(weight * 10))
+    
+    if not weighted_demons:
+        return {"spawned": False, "reason": "The greater demons slumber"}
+    
+    demon_type, demon_data = random.choice(weighted_demons)
+    
+    encounter_doc = {
+        "id": str(uuid.uuid4()),
+        "demon_type": demon_type,
+        "location_id": location_id,
+        "spawned_at": datetime.now(timezone.utc).isoformat(),
+        "health_remaining": demon_data["health"],
+        "is_active": True,
+        "killed_by": None,
+        "participants": []
+    }
+    
+    encounter_response = encounter_doc.copy()
+    await db.demon_encounters.insert_one(encounter_doc)
+    
+    # Increase infestation
+    if infestation:
+        await db.infestations.update_one(
+            {"location_id": location_id},
+            {"$inc": {"demon_count": 1}}
+        )
+    else:
+        await db.infestations.insert_one({
+            "id": str(uuid.uuid4()),
+            "location_id": location_id,
+            "level": "stirring",
+            "demon_count": 1,
+            "last_spawn": datetime.now(timezone.utc).isoformat()
+        })
+    
+    return {
+        "spawned": True,
+        "encounter": encounter_response,
+        "demon": demon_data,
+        "warning": f"A {demon_data['name']} emerges from the shadows!"
+    }
+
+@api_router.get("/demons/active/{location_id}")
+async def get_active_demons(location_id: str):
+    """Get all active demon encounters at a location"""
+    encounters = await db.demon_encounters.find(
+        {"location_id": location_id, "is_active": True}, 
+        {"_id": 0}
+    ).to_list(50)
+    
+    for enc in encounters:
+        demon_data = BIBLICAL_DEMONS.get(enc["demon_type"])
+        if demon_data:
+            enc["demon_details"] = demon_data
+    
+    return encounters
+
+@api_router.post("/demons/{encounter_id}/attack")
+async def attack_demon(encounter_id: str, attacker_id: str, damage: int = 10):
+    """Attack a demon in an encounter"""
+    encounter = await db.demon_encounters.find_one({"id": encounter_id}, {"_id": 0})
+    if not encounter:
+        raise HTTPException(status_code=404, detail="Encounter not found")
+    
+    if not encounter["is_active"]:
+        raise HTTPException(status_code=400, detail="This demon has already been defeated")
+    
+    demon_data = BIBLICAL_DEMONS.get(encounter["demon_type"])
+    if not demon_data:
+        raise HTTPException(status_code=500, detail="Unknown demon type")
+    
+    # Add attacker to participants
+    if attacker_id not in encounter.get("participants", []):
+        await db.demon_encounters.update_one(
+            {"id": encounter_id},
+            {"$push": {"participants": attacker_id}}
+        )
+    
+    new_health = encounter["health_remaining"] - damage
+    
+    if new_health <= 0:
+        # Demon defeated
+        await db.demon_encounters.update_one(
+            {"id": encounter_id},
+            {"$set": {"health_remaining": 0, "is_active": False, "killed_by": attacker_id}}
+        )
+        
+        # Decrease infestation
+        await db.infestations.update_one(
+            {"location_id": encounter["location_id"]},
+            {"$inc": {"demon_count": -1}, "$set": {"last_cleared": datetime.now(timezone.utc).isoformat()}}
+        )
+        
+        # Award drops
+        drops = demon_data.get("drops", {})
+        
+        return {
+            "status": "victory",
+            "message": f"The {demon_data['name']} has been vanquished!",
+            "drops": drops,
+            "demon_rank": demon_data["rank"],
+            "biblical_origin": demon_data.get("biblical_origin", "Unknown")
+        }
+    else:
+        await db.demon_encounters.update_one(
+            {"id": encounter_id},
+            {"$set": {"health_remaining": new_health}}
+        )
+        
+        # Demon counter-attacks
+        counter_damage = demon_data["damage"]
+        
+        return {
+            "status": "combat_continues",
+            "demon_health": new_health,
+            "demon_max_health": demon_data["health"],
+            "counter_attack_damage": counter_damage,
+            "message": f"The {demon_data['name']} retaliates with {counter_damage} damage!"
+        }
+
+# ============ AI Mood & Interaction Routes ============
+
+def calculate_mood_from_value(mood_value: int) -> str:
+    """Convert mood value (0-100) to mood name"""
+    if mood_value >= 90:
+        return "joyful"
+    elif mood_value >= 70:
+        return "content"
+    elif mood_value >= 50:
+        return "neutral"
+    elif mood_value >= 35:
+        return "annoyed"
+    elif mood_value >= 20:
+        return "angry"
+    elif mood_value >= 10:
+        return "furious"
+    else:
+        return "furious"
+
+@api_router.get("/villagers/{villager_id}/mood")
+async def get_villager_mood(villager_id: str):
+    """Get a villager's current mood state"""
+    villager = await db.ai_villagers.find_one({"id": villager_id}, {"_id": 0})
+    if not villager:
+        raise HTTPException(status_code=404, detail="Villager not found")
+    
+    mood_state = villager.get("mood_state", {
+        "current_mood": "neutral",
+        "mood_value": 50,
+        "shop_open": True,
+        "refuses_service_to": []
+    })
+    
+    mood_data = AI_MOODS.get(mood_state["current_mood"], AI_MOODS["neutral"])
+    
+    return {
+        "villager_name": villager["name"],
+        "profession": villager["profession"],
+        **mood_state,
+        "mood_details": mood_data,
+        "will_trade": mood_data["will_help"] and mood_state["shop_open"]
+    }
+
+@api_router.post("/villagers/{villager_id}/interact")
+async def interact_with_villager(villager_id: str, player_id: str, interaction_type: str):
+    """Record an interaction with a villager, affecting their mood"""
+    villager = await db.ai_villagers.find_one({"id": villager_id}, {"_id": 0})
+    if not villager:
+        raise HTTPException(status_code=404, detail="Villager not found")
+    
+    player = await db.user_profiles.find_one({"id": player_id}, {"_id": 0})
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+    
+    event = MOOD_EVENTS.get(interaction_type)
+    if not event:
+        raise HTTPException(status_code=400, detail=f"Unknown interaction type. Valid: {list(MOOD_EVENTS.keys())}")
+    
+    # Get current mood state
+    mood_state = villager.get("mood_state", {
+        "current_mood": "neutral",
+        "mood_value": 50,
+        "recent_interactions": [],
+        "shop_open": True,
+        "refuses_service_to": []
+    })
+    
+    # Apply mood change
+    old_mood = mood_state["mood_value"]
+    new_mood_value = max(0, min(100, old_mood + event["mood_change"]))
+    new_mood_name = calculate_mood_from_value(new_mood_value)
+    
+    # Record interaction
+    interaction_record = {
+        "player_id": player_id,
+        "player_name": player.get("display_name", "Unknown"),
+        "interaction_type": interaction_type,
+        "mood_impact": event["mood_change"],
+        "description": event["description"],
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Check if villager should refuse service to this player
+    refuses_service_to = mood_state.get("refuses_service_to", [])
+    if event["mood_change"] <= -40 and player_id not in refuses_service_to:
+        refuses_service_to.append(player_id)
+    
+    # Check if shop should close (very bad interaction)
+    shop_open = mood_state.get("shop_open", True)
+    if event["mood_change"] <= -50:
+        shop_open = False
+    
+    # Update villager
+    recent = mood_state.get("recent_interactions", [])[-9:]  # Keep last 10
+    recent.append(interaction_record)
+    
+    new_mood_state = {
+        "current_mood": new_mood_name,
+        "mood_value": new_mood_value,
+        "recent_interactions": recent,
+        "shop_open": shop_open,
+        "refuses_service_to": refuses_service_to,
+        "last_mood_decay": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.ai_villagers.update_one(
+        {"id": villager_id},
+        {"$set": {"mood_state": new_mood_state}}
+    )
+    
+    mood_data = AI_MOODS.get(new_mood_name, AI_MOODS["neutral"])
+    
+    response = {
+        "status": "success",
+        "villager_name": villager["name"],
+        "interaction": interaction_type,
+        "mood_change": event["mood_change"],
+        "old_mood": calculate_mood_from_value(old_mood),
+        "new_mood": new_mood_name,
+        "dialogue_tone": mood_data["dialogue_tone"],
+        "will_serve_player": player_id not in refuses_service_to and shop_open
+    }
+    
+    if not shop_open:
+        response["shop_status"] = f"{villager['name']} has closed their shop for the day"
+    
+    if player_id in refuses_service_to:
+        response["refuses_service"] = f"{villager['name']} refuses to serve you after your actions"
+    
+    return response
+
+@api_router.post("/villagers/decay-moods")
+async def decay_all_moods():
+    """Gradually return all villager moods toward neutral (call periodically)"""
+    villagers = await db.ai_villagers.find({}, {"_id": 0}).to_list(500)
+    updated = 0
+    
+    for v in villagers:
+        mood_state = v.get("mood_state", {})
+        current_value = mood_state.get("mood_value", 50)
+        
+        # Decay toward 50 (neutral)
+        if current_value > 50:
+            new_value = max(50, current_value - 5)
+        elif current_value < 50:
+            new_value = min(50, current_value + 5)
+        else:
+            continue
+        
+        new_mood = calculate_mood_from_value(new_value)
+        
+        # Reopen shop if mood improves
+        shop_open = mood_state.get("shop_open", True)
+        if new_value >= 35:
+            shop_open = True
+        
+        await db.ai_villagers.update_one(
+            {"id": v["id"]},
+            {"$set": {
+                "mood_state.mood_value": new_value,
+                "mood_state.current_mood": new_mood,
+                "mood_state.shop_open": shop_open,
+                "mood_state.last_mood_decay": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+        updated += 1
+    
+    return {"status": "success", "villagers_updated": updated}
+
+# ============ Scan/View Profile Routes (with Sirix-1 Protection) ============
+
+@api_router.get("/scan/{target_id}")
+async def scan_entity(target_id: str, scanner_id: str):
+    """Scan/view another player or NPC - Sirix-1 causes distortion"""
+    import random
+    
+    # Check if target is Sirix-1
+    target = await db.user_profiles.find_one({"id": target_id}, {"_id": 0})
+    
+    if target and target.get("is_transcendent"):
+        # Scanning Sirix-1 returns distorted data
+        return get_scan_failure()
+    
+    if target:
+        # Normal player scan
+        target.pop("hashed_password", None)
+        return {
+            "success": True,
+            "entity_type": "player",
+            "data": target
+        }
+    
+    # Check if it's an AI villager
+    villager = await db.ai_villagers.find_one({"id": target_id}, {"_id": 0})
+    if villager:
+        mood_state = villager.get("mood_state", {"current_mood": "neutral"})
+        return {
+            "success": True,
+            "entity_type": "villager",
+            "data": {
+                "name": villager["name"],
+                "profession": villager["profession"],
+                "tier": villager.get("tier"),
+                "mood": mood_state["current_mood"],
+                "will_trade": AI_MOODS[mood_state["current_mood"]]["will_help"]
+            }
+        }
+    
+    # Check NPCs
+    npc = await db.npcs.find_one({"id": target_id}, {"_id": 0})
+    if npc:
+        return {
+            "success": True,
+            "entity_type": "npc",
+            "data": {
+                "name": npc["name"],
+                "role": npc["role"],
+                "location": npc["current_location"]
+            }
+        }
+    
+    raise HTTPException(status_code=404, detail="Entity not found")
+
+@api_router.get("/profile/view/{user_id}")
+async def view_profile(user_id: str, viewer_id: Optional[str] = None):
+    """View a user's profile - Sirix-1 appears distorted to others"""
+    user = await db.user_profiles.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user.pop("hashed_password", None)
+    
+    # Check if viewing Sirix-1
+    if user.get("is_transcendent"):
+        viewer_is_sirix = viewer_id == "sirix_1_supreme"
+        return mask_sirix_profile(user, viewer_is_sirix)
+    
+    return user
 
 # WebSocket for real-time multiplayer
 @app.websocket("/ws/{location_id}/{user_id}")
