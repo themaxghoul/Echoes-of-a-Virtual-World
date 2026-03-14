@@ -157,6 +157,323 @@ MATERIALS = {
     }
 }
 
+# ============ AI Villager Professions/Roles ============
+AI_PROFESSIONS = {
+    # Commoner Tier
+    "serf": {
+        "name": "Serf",
+        "tier": "commoner",
+        "description": "A humble worker who tends the land",
+        "abilities": ["gather_basic", "farm"],
+        "daily_output": {"wood": 2, "stone": 1},
+        "daily_needs": {"gold": 1},
+        "can_trade": True,
+        "knowledge_domains": ["farming", "labor", "survival"]
+    },
+    "farmer": {
+        "name": "Farmer",
+        "tier": "commoner",
+        "description": "Cultivates crops and raises livestock",
+        "abilities": ["gather_basic", "farm", "breed_animals"],
+        "daily_output": {"food": 5, "wood": 1},
+        "daily_needs": {"gold": 2, "wood": 1},
+        "can_trade": True,
+        "knowledge_domains": ["agriculture", "animal_husbandry", "weather"]
+    },
+    
+    # Craftsman Tier
+    "chef": {
+        "name": "Chef",
+        "tier": "craftsman",
+        "description": "Master of culinary arts, transforms raw ingredients",
+        "abilities": ["cook", "preserve_food", "create_potions"],
+        "daily_output": {"cooked_food": 3},
+        "daily_needs": {"gold": 3, "food": 4},
+        "can_trade": True,
+        "knowledge_domains": ["cooking", "alchemy", "nutrition"]
+    },
+    "miner": {
+        "name": "Miner",
+        "tier": "craftsman",
+        "description": "Delves deep for precious ores and gems",
+        "abilities": ["mine", "prospect", "tunnel"],
+        "daily_output": {"stone": 5, "iron": 2},
+        "daily_needs": {"gold": 4, "food": 2},
+        "can_trade": True,
+        "knowledge_domains": ["geology", "mining", "underground_survival"]
+    },
+    "blacksmith": {
+        "name": "Blacksmith",
+        "tier": "craftsman",
+        "description": "Forges weapons and tools from raw metal",
+        "abilities": ["forge", "repair", "enhance_equipment"],
+        "daily_output": {"tools": 2, "weapons": 1},
+        "daily_needs": {"gold": 5, "iron": 3, "wood": 2},
+        "can_trade": True,
+        "knowledge_domains": ["metallurgy", "weapon_craft", "armor_craft"]
+    },
+    "butcher": {
+        "name": "Butcher",
+        "tier": "craftsman",
+        "description": "Processes meat and leather goods",
+        "abilities": ["process_meat", "tan_leather", "preserve"],
+        "daily_output": {"meat": 4, "leather": 2},
+        "daily_needs": {"gold": 3, "food": 1},
+        "can_trade": True,
+        "knowledge_domains": ["butchery", "preservation", "leatherwork"]
+    },
+    "carpenter": {
+        "name": "Carpenter",
+        "tier": "craftsman",
+        "description": "Shapes wood into furniture and structures",
+        "abilities": ["build_furniture", "construct", "repair_wood"],
+        "daily_output": {"furniture": 2, "wood_crafts": 3},
+        "daily_needs": {"gold": 4, "wood": 5},
+        "can_trade": True,
+        "knowledge_domains": ["woodworking", "architecture", "construction"]
+    },
+    
+    # Warrior Tier
+    "swordsman": {
+        "name": "Swordsman",
+        "tier": "warrior",
+        "description": "Master of the blade, defender of the realm",
+        "abilities": ["fight_melee", "guard", "train_combat"],
+        "daily_output": {"protection": 3},
+        "daily_needs": {"gold": 6, "food": 3},
+        "can_trade": False,
+        "knowledge_domains": ["swordsmanship", "tactics", "honor"]
+    },
+    "archer": {
+        "name": "Archer",
+        "tier": "warrior",
+        "description": "Eagle-eyed marksman who strikes from afar",
+        "abilities": ["fight_ranged", "scout", "hunt"],
+        "daily_output": {"protection": 2, "game": 2},
+        "daily_needs": {"gold": 5, "food": 2, "wood": 1},
+        "can_trade": False,
+        "knowledge_domains": ["archery", "tracking", "wilderness"]
+    },
+    "knight": {
+        "name": "Knight",
+        "tier": "warrior",
+        "description": "Armored champion bound by chivalric code",
+        "abilities": ["fight_melee", "lead_troops", "protect_innocents"],
+        "daily_output": {"protection": 5, "morale": 2},
+        "daily_needs": {"gold": 10, "food": 4, "iron": 1},
+        "can_trade": False,
+        "knowledge_domains": ["combat", "chivalry", "leadership"]
+    },
+    
+    # Scholar Tier
+    "scribe": {
+        "name": "Scribe",
+        "tier": "scholar",
+        "description": "Keeper of records and written knowledge",
+        "abilities": ["write", "copy_texts", "research"],
+        "daily_output": {"documents": 3, "knowledge": 1},
+        "daily_needs": {"gold": 4, "wood": 1},
+        "can_trade": True,
+        "knowledge_domains": ["writing", "history", "law"]
+    },
+    "alchemist": {
+        "name": "Alchemist",
+        "tier": "scholar",
+        "description": "Seeker of transformation and elixirs",
+        "abilities": ["brew_potions", "transmute", "research_magic"],
+        "daily_output": {"potions": 2, "reagents": 1},
+        "daily_needs": {"gold": 8, "crystal": 1},
+        "can_trade": True,
+        "knowledge_domains": ["alchemy", "magic_theory", "herbalism"]
+    },
+    
+    # Mystic Tier
+    "court_mage": {
+        "name": "Court Mage",
+        "tier": "mystic",
+        "description": "Arcane advisor wielding powerful magics",
+        "abilities": ["cast_spells", "enchant", "divine", "ward"],
+        "daily_output": {"magic": 4, "enchantments": 1},
+        "daily_needs": {"gold": 15, "crystal": 2, "essence": 1},
+        "can_trade": True,
+        "knowledge_domains": ["arcane_magic", "enchanting", "divination"]
+    },
+    "priest": {
+        "name": "Priest",
+        "tier": "mystic",
+        "description": "Channel of divine power and spiritual guidance",
+        "abilities": ["heal", "bless", "purify", "commune_divine"],
+        "daily_output": {"blessings": 3, "healing": 2},
+        "daily_needs": {"gold": 8, "essence": 1},
+        "can_trade": False,
+        "knowledge_domains": ["divine_magic", "theology", "healing"]
+    },
+    
+    # Noble Tier
+    "merchant": {
+        "name": "Merchant",
+        "tier": "noble",
+        "description": "Master trader who moves goods across lands",
+        "abilities": ["trade", "appraise", "negotiate", "establish_routes"],
+        "daily_output": {"gold": 10, "trade_goods": 3},
+        "daily_needs": {"gold": 5},
+        "can_trade": True,
+        "knowledge_domains": ["economics", "negotiation", "geography"]
+    },
+    "baron": {
+        "name": "Baron",
+        "tier": "noble",
+        "description": "Minor noble who oversees lands and peasants",
+        "abilities": ["govern", "tax", "judge", "grant_land"],
+        "daily_output": {"gold": 15, "influence": 3},
+        "daily_needs": {"gold": 20, "food": 5},
+        "can_trade": False,
+        "knowledge_domains": ["governance", "law", "politics"]
+    },
+    
+    # Leadership Tier
+    "guildmaster": {
+        "name": "Guildmaster",
+        "tier": "leadership",
+        "description": "Leader of a craft guild, protects trade secrets",
+        "abilities": ["manage_guild", "train_apprentices", "set_prices", "certify_masters"],
+        "daily_output": {"gold": 20, "influence": 5, "trained_workers": 1},
+        "daily_needs": {"gold": 15, "materials": 5},
+        "can_trade": True,
+        "knowledge_domains": ["guild_politics", "trade_secrets", "economics", "mentorship"]
+    },
+    "captain": {
+        "name": "Captain of the Guard",
+        "tier": "leadership",
+        "description": "Commands the town watch and militia",
+        "abilities": ["command_troops", "patrol", "investigate", "enforce_law"],
+        "daily_output": {"protection": 10, "order": 5},
+        "daily_needs": {"gold": 12, "food": 4},
+        "can_trade": False,
+        "knowledge_domains": ["military_tactics", "law_enforcement", "leadership"]
+    }
+}
+
+# Profession Tier Rankings (for advancement)
+PROFESSION_TIERS = {
+    "commoner": {"rank": 1, "min_xp": 0, "chat_access": ["local"]},
+    "craftsman": {"rank": 2, "min_xp": 100, "chat_access": ["local", "guild"]},
+    "warrior": {"rank": 2, "min_xp": 100, "chat_access": ["local", "barracks"]},
+    "scholar": {"rank": 3, "min_xp": 250, "chat_access": ["local", "guild", "academy"]},
+    "mystic": {"rank": 4, "min_xp": 500, "chat_access": ["local", "guild", "tower"]},
+    "noble": {"rank": 5, "min_xp": 1000, "chat_access": ["local", "guild", "court"]},
+    "leadership": {"rank": 6, "min_xp": 2500, "chat_access": ["local", "guild", "court", "council"]}
+}
+
+# ============ World Seedling & Land System ============
+WORLD_SEEDLING = {
+    "origin_village": {
+        "name": "The First Echo",
+        "description": "The original village from which all expansion begins",
+        "discovered": True,
+        "locations": ["village_square", "oracle_sanctum", "the_forge", "ancient_library", 
+                      "wanderers_rest", "shadow_grove", "watchtower"]
+    }
+}
+
+# Land regions that can be discovered
+DISCOVERABLE_LANDS = {
+    "eastern_plains": {
+        "name": "The Sunward Plains",
+        "description": "Rolling grasslands where the sun lingers longest",
+        "discovery_method": "travel",
+        "travel_distance": 500,  # Units traveled to discover
+        "new_locations": ["plains_outpost", "golden_fields", "windmill_hill"],
+        "resources": {"food": 3, "wood": 1},
+        "ai_professions_common": ["farmer", "archer", "merchant"]
+    },
+    "northern_mountains": {
+        "name": "The Spine of Echoes",
+        "description": "Jagged peaks where ancient echoes reverberate",
+        "discovery_method": "travel",
+        "travel_distance": 750,
+        "new_locations": ["mountain_pass", "mining_camp", "hermit_peak"],
+        "resources": {"stone": 4, "iron": 3, "crystal": 1},
+        "ai_professions_common": ["miner", "blacksmith", "priest"]
+    },
+    "western_forest": {
+        "name": "The Deepwood",
+        "description": "An ancient forest where light barely penetrates",
+        "discovery_method": "travel",
+        "travel_distance": 600,
+        "new_locations": ["forest_edge", "hunters_lodge", "druid_circle"],
+        "resources": {"wood": 5, "food": 2},
+        "ai_professions_common": ["archer", "carpenter", "alchemist"]
+    },
+    "southern_coast": {
+        "name": "The Twilight Shore",
+        "description": "Where land meets the endless dark waters",
+        "discovery_method": "travel",
+        "travel_distance": 800,
+        "new_locations": ["fishing_village", "lighthouse_point", "smugglers_cove"],
+        "resources": {"food": 4, "gold": 2},
+        "ai_professions_common": ["merchant", "chef", "captain"]
+    },
+    "underground_realm": {
+        "name": "The Below",
+        "description": "Vast caverns beneath the world",
+        "discovery_method": "build",  # Requires building a mine entrance
+        "required_building": "mine_entrance",
+        "new_locations": ["crystal_cavern", "mushroom_forest", "deep_forge"],
+        "resources": {"stone": 5, "iron": 4, "crystal": 3, "obsidian": 2},
+        "ai_professions_common": ["miner", "blacksmith", "court_mage"]
+    }
+}
+
+# Building Schematics for houses (players can build as they explore)
+HOUSE_SCHEMATICS = {
+    "campsite": {
+        "name": "Traveler's Camp",
+        "tier": "temporary",
+        "materials": {"wood": 5},
+        "description": "A temporary shelter for travelers",
+        "capacity": 1,
+        "durability": 50,
+        "land_claim": 10  # Square units claimed
+    },
+    "cottage": {
+        "name": "Humble Cottage",
+        "tier": "basic",
+        "materials": {"wood": 20, "stone": 10},
+        "description": "A small but cozy home",
+        "capacity": 2,
+        "durability": 100,
+        "land_claim": 50
+    },
+    "house": {
+        "name": "Village House",
+        "tier": "standard",
+        "materials": {"wood": 30, "stone": 25, "iron": 5},
+        "description": "A proper house with multiple rooms",
+        "capacity": 4,
+        "durability": 150,
+        "land_claim": 100
+    },
+    "manor": {
+        "name": "Noble Manor",
+        "tier": "advanced",
+        "materials": {"wood": 50, "stone": 60, "iron": 15, "crystal": 5},
+        "description": "A grand residence befitting nobility",
+        "capacity": 8,
+        "durability": 200,
+        "land_claim": 300
+    },
+    "guild_hall": {
+        "name": "Guild Hall",
+        "tier": "special",
+        "materials": {"wood": 40, "stone": 50, "iron": 20, "crystal": 3},
+        "description": "A gathering place for guild members",
+        "capacity": 20,
+        "durability": 250,
+        "land_claim": 200
+    }
+}
+
 # ============ Building Schematics ============
 SCHEMATICS = {
     # Basic Tier (requires contribution level 0)
@@ -383,11 +700,6 @@ class UserProfile(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     last_active: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     is_immutable: bool = False
-    xp: int = 0
-    characters: List[str] = []
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    last_active: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    is_immutable: bool = False
 
 class UserProfileCreate(BaseModel):
     username: str
@@ -557,6 +869,73 @@ class TradeOfferCreate(BaseModel):
     seller_id: str
     offering: Dict[str, int]
     requesting: Dict[str, int]
+
+# ============ AI Villager Models ============
+
+class AIVillager(BaseModel):
+    """An AI-controlled villager with a profession and daily life"""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    profession: str  # Key from AI_PROFESSIONS
+    tier: str = "commoner"
+    personality: str = "friendly"
+    home_location: str = "village_square"
+    current_location: str = "village_square"
+    # Economy
+    inventory: Dict[str, int] = Field(default_factory=dict)
+    gold: int = 50
+    daily_work_done: bool = False
+    # Stats & Growth
+    xp: int = 0
+    level: int = 1
+    skills: Dict[str, int] = Field(default_factory=dict)  # skill_name: proficiency
+    # Social
+    relationships: Dict[str, int] = Field(default_factory=dict)  # villager_id: affinity
+    faction: Optional[str] = None
+    employer_id: Optional[str] = None  # Can work for player or another AI
+    # Learning
+    learned_knowledge: List[str] = Field(default_factory=list)
+    conversation_memory: List[Dict[str, Any]] = Field(default_factory=list)
+    # Timestamps
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_worked: Optional[datetime] = None
+
+class AIVillagerCreate(BaseModel):
+    name: str
+    profession: str
+    personality: str = "friendly"
+    home_location: str = "village_square"
+
+class AITradeRequest(BaseModel):
+    """AI villagers can trade with each other or players"""
+    villager_id: str
+    target_id: str  # Can be another villager or player
+    target_type: str  # "villager" or "player"
+    offering: Dict[str, int]
+    requesting: Dict[str, int]
+
+class LandDiscovery(BaseModel):
+    """Tracks discovered lands per user"""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    land_id: str  # Key from DISCOVERABLE_LANDS
+    discovered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    locations_unlocked: List[str] = Field(default_factory=list)
+
+class PlayerHouse(BaseModel):
+    """Houses built by players during exploration"""
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    owner_id: str
+    owner_name: str
+    house_type: str  # Key from HOUSE_SCHEMATICS
+    land_id: str
+    position: Dict[str, float] = Field(default_factory=lambda: {"x": 0.0, "y": 0.0})
+    residents: List[str] = Field(default_factory=list)  # villager IDs living here
+    storage: Dict[str, int] = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class CharacterCustomization(BaseModel):
     body_color: str = "#D4AF37"
@@ -775,6 +1154,53 @@ async def initialize_npcs():
             await db.npcs.insert_one(npc)
             logger.info(f"NPC {npc_data['name']} initialized")
 
+async def initialize_ai_villagers():
+    """Initialize starter AI villagers with different professions"""
+    starter_villagers = [
+        {"name": "Gareth the Steady", "profession": "farmer", "personality": "hardworking and generous", "home_location": "village_square"},
+        {"name": "Brynn Ironhand", "profession": "blacksmith", "personality": "gruff but fair", "home_location": "the_forge"},
+        {"name": "Merla Quickfingers", "profession": "chef", "personality": "warm and motherly", "home_location": "wanderers_rest"},
+        {"name": "Dorn Deepdelver", "profession": "miner", "personality": "quiet and methodical", "home_location": "watchtower"},
+        {"name": "Sera Brightblade", "profession": "swordsman", "personality": "honorable and protective", "home_location": "watchtower"},
+        {"name": "Aldric Farsight", "profession": "archer", "personality": "patient and observant", "home_location": "shadow_grove"},
+        {"name": "Elara Starweave", "profession": "alchemist", "personality": "curious and eccentric", "home_location": "ancient_library"},
+        {"name": "Magnus Coinsworth", "profession": "merchant", "personality": "shrewd but honest", "home_location": "village_square"},
+        {"name": "Brother Cedric", "profession": "priest", "personality": "serene and compassionate", "home_location": "oracle_sanctum"},
+        {"name": "Thorne Woodwright", "profession": "carpenter", "personality": "creative and patient", "home_location": "the_forge"},
+        {"name": "Mira the Butcher", "profession": "butcher", "personality": "practical and efficient", "home_location": "village_square"},
+        {"name": "Scribe Amelon", "profession": "scribe", "personality": "meticulous and scholarly", "home_location": "ancient_library"},
+    ]
+    
+    for v in starter_villagers:
+        existing = await db.ai_villagers.find_one({"name": v["name"]})
+        if not existing:
+            profession = AI_PROFESSIONS.get(v["profession"])
+            if profession:
+                villager = {
+                    "id": str(uuid.uuid4()),
+                    "name": v["name"],
+                    "profession": v["profession"],
+                    "tier": profession["tier"],
+                    "personality": v["personality"],
+                    "home_location": v["home_location"],
+                    "current_location": v["home_location"],
+                    "inventory": {},
+                    "gold": 50,
+                    "daily_work_done": False,
+                    "xp": 0,
+                    "level": 1,
+                    "skills": {skill: 1 for skill in profession["abilities"]},
+                    "relationships": {},
+                    "faction": None,
+                    "employer_id": None,
+                    "learned_knowledge": profession["knowledge_domains"].copy(),
+                    "conversation_memory": [],
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "last_worked": None
+                }
+                await db.ai_villagers.insert_one(villager)
+                logger.info(f"AI Villager {v['name']} ({v['profession']}) initialized")
+
 async def get_npc_system_prompt(npc: dict, character: dict, location: dict, world_news: List[str] = None) -> str:
     """Generate system prompt for NPC interactions"""
     news_context = ""
@@ -867,7 +1293,8 @@ async def broadcast_to_location(location_id: str, message: dict, exclude_user: s
 async def startup_event():
     await initialize_sirix_1()
     await initialize_npcs()
-    logger.info("AI Village initialized with Sirix-1 and NPCs")
+    await initialize_ai_villagers()
+    logger.info("AI Village initialized with Sirix-1, NPCs, and AI Villagers")
 
 # ============ API Routes ============
 
@@ -1549,7 +1976,7 @@ async def build_structure(request: BuildRequest):
     )
     
     # Create placed building
-    building = {
+    building_data = {
         "id": str(uuid.uuid4()),
         "schematic_id": request.schematic_id,
         "builder_id": request.user_id,
@@ -1561,7 +1988,10 @@ async def build_structure(request: BuildRequest):
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     
-    result = await db.buildings.insert_one(building)
+    # Create response copy BEFORE insert_one mutates the dict
+    building_response = building_data.copy()
+    
+    await db.buildings.insert_one(building_data)
     
     # Award contribution for building
     contribution_gain = schematic["contribution_required"] // 10 + 5
@@ -1570,8 +2000,6 @@ async def build_structure(request: BuildRequest):
         {"$inc": {"contribution_points": contribution_gain}}
     )
     
-    # Return building without MongoDB ObjectId
-    building_response = building.copy()
     return {
         "status": "success", 
         "building": building_response,
@@ -1630,7 +2058,7 @@ async def create_trade_offer(offer: TradeOfferCreate):
         if mat_id == "gold" and user.get("resources", {}).get("gold", 0) < amount:
             raise HTTPException(status_code=400, detail="Insufficient gold")
     
-    trade = {
+    trade_data = {
         "id": str(uuid.uuid4()),
         "seller_id": offer.seller_id,
         "seller_name": user.get("display_name", "Unknown"),
@@ -1640,10 +2068,11 @@ async def create_trade_offer(offer: TradeOfferCreate):
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     
-    result = await db.trades.insert_one(trade)
+    # Create response copy BEFORE insert_one mutates the dict
+    trade_response = trade_data.copy()
     
-    # Return trade without MongoDB ObjectId
-    trade_response = trade.copy()
+    await db.trades.insert_one(trade_data)
+    
     return trade_response
 
 @api_router.get("/trade/offers")
@@ -1839,6 +2268,514 @@ async def get_character_model(user_id: str):
         "eye_color": "#00CED1",
         "body_type": "standard"
     })
+
+# ============ AI Villager Routes ============
+
+@api_router.get("/professions")
+async def get_all_professions():
+    """Get all available AI professions with details"""
+    return {
+        "professions": AI_PROFESSIONS,
+        "tiers": PROFESSION_TIERS
+    }
+
+@api_router.get("/professions/{profession_id}")
+async def get_profession_details(profession_id: str):
+    """Get details for a specific profession"""
+    profession = AI_PROFESSIONS.get(profession_id)
+    if not profession:
+        raise HTTPException(status_code=404, detail="Profession not found")
+    
+    tier_info = PROFESSION_TIERS.get(profession["tier"], {})
+    return {
+        **profession,
+        "profession_id": profession_id,
+        "tier_info": tier_info
+    }
+
+@api_router.post("/villagers")
+async def create_ai_villager(villager: AIVillagerCreate):
+    """Create a new AI villager with a profession"""
+    profession = AI_PROFESSIONS.get(villager.profession)
+    if not profession:
+        raise HTTPException(status_code=400, detail="Invalid profession")
+    
+    villager_data = {
+        "id": str(uuid.uuid4()),
+        "name": villager.name,
+        "profession": villager.profession,
+        "tier": profession["tier"],
+        "personality": villager.personality,
+        "home_location": villager.home_location,
+        "current_location": villager.home_location,
+        "inventory": {},
+        "gold": 50,
+        "daily_work_done": False,
+        "xp": 0,
+        "level": 1,
+        "skills": {skill: 1 for skill in profession["abilities"]},
+        "relationships": {},
+        "faction": None,
+        "employer_id": None,
+        "learned_knowledge": profession["knowledge_domains"].copy(),
+        "conversation_memory": [],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "last_worked": None
+    }
+    
+    # Create response before insert
+    villager_response = villager_data.copy()
+    
+    await db.ai_villagers.insert_one(villager_data)
+    
+    return villager_response
+
+@api_router.get("/villagers")
+async def get_all_villagers():
+    """Get all AI villagers in the world"""
+    villagers = await db.ai_villagers.find({}, {"_id": 0}).to_list(500)
+    
+    # Add profession details to each
+    for v in villagers:
+        prof = AI_PROFESSIONS.get(v.get("profession"))
+        if prof:
+            v["profession_details"] = prof
+    
+    return villagers
+
+@api_router.get("/villagers/{villager_id}")
+async def get_villager(villager_id: str):
+    """Get a specific AI villager"""
+    villager = await db.ai_villagers.find_one({"id": villager_id}, {"_id": 0})
+    if not villager:
+        raise HTTPException(status_code=404, detail="Villager not found")
+    
+    prof = AI_PROFESSIONS.get(villager.get("profession"))
+    if prof:
+        villager["profession_details"] = prof
+    
+    return villager
+
+@api_router.get("/villagers/location/{location_id}")
+async def get_villagers_at_location(location_id: str):
+    """Get all AI villagers at a location"""
+    villagers = await db.ai_villagers.find({"current_location": location_id}, {"_id": 0}).to_list(100)
+    
+    for v in villagers:
+        prof = AI_PROFESSIONS.get(v.get("profession"))
+        if prof:
+            v["profession_details"] = prof
+    
+    return villagers
+
+@api_router.post("/villagers/{villager_id}/work")
+async def villager_do_work(villager_id: str):
+    """Have a villager perform their daily work"""
+    villager = await db.ai_villagers.find_one({"id": villager_id}, {"_id": 0})
+    if not villager:
+        raise HTTPException(status_code=404, detail="Villager not found")
+    
+    if villager.get("daily_work_done"):
+        raise HTTPException(status_code=400, detail="Villager has already worked today")
+    
+    profession = AI_PROFESSIONS.get(villager["profession"])
+    if not profession:
+        raise HTTPException(status_code=400, detail="Invalid profession")
+    
+    # Calculate output based on level
+    level_multiplier = 1 + (villager.get("level", 1) - 1) * 0.1
+    
+    # Produce daily output
+    inventory = villager.get("inventory", {})
+    gold = villager.get("gold", 0)
+    
+    output_report = []
+    for item, amount in profession.get("daily_output", {}).items():
+        produced = int(amount * level_multiplier)
+        if item == "gold":
+            gold += produced
+        else:
+            inventory[item] = inventory.get(item, 0) + produced
+        output_report.append(f"+{produced} {item}")
+    
+    # Consume daily needs
+    needs_met = True
+    for item, amount in profession.get("daily_needs", {}).items():
+        if item == "gold":
+            if gold >= amount:
+                gold -= amount
+            else:
+                needs_met = False
+        else:
+            if inventory.get(item, 0) >= amount:
+                inventory[item] -= amount
+            else:
+                needs_met = False
+    
+    # XP gain
+    xp_gain = 10 if needs_met else 5
+    new_xp = villager.get("xp", 0) + xp_gain
+    new_level = 1 + new_xp // 100
+    
+    await db.ai_villagers.update_one(
+        {"id": villager_id},
+        {"$set": {
+            "inventory": inventory,
+            "gold": gold,
+            "daily_work_done": True,
+            "last_worked": datetime.now(timezone.utc).isoformat(),
+            "xp": new_xp,
+            "level": new_level
+        }}
+    )
+    
+    return {
+        "status": "success",
+        "villager_name": villager["name"],
+        "profession": villager["profession"],
+        "output": output_report,
+        "needs_met": needs_met,
+        "xp_gained": xp_gain,
+        "new_level": new_level
+    }
+
+@api_router.post("/villagers/trade")
+async def villager_trade(trade_request: AITradeRequest):
+    """Execute a trade between an AI villager and another entity"""
+    villager = await db.ai_villagers.find_one({"id": trade_request.villager_id}, {"_id": 0})
+    if not villager:
+        raise HTTPException(status_code=404, detail="Villager not found")
+    
+    profession = AI_PROFESSIONS.get(villager["profession"])
+    if not profession or not profession.get("can_trade", False):
+        raise HTTPException(status_code=400, detail="This villager cannot trade")
+    
+    # Verify villager has items to offer
+    villager_inv = villager.get("inventory", {})
+    villager_gold = villager.get("gold", 0)
+    
+    for item, amount in trade_request.offering.items():
+        if item == "gold":
+            if villager_gold < amount:
+                raise HTTPException(status_code=400, detail="Villager has insufficient gold")
+        elif villager_inv.get(item, 0) < amount:
+            raise HTTPException(status_code=400, detail=f"Villager has insufficient {item}")
+    
+    if trade_request.target_type == "villager":
+        # Trade with another AI villager
+        target = await db.ai_villagers.find_one({"id": trade_request.target_id}, {"_id": 0})
+        if not target:
+            raise HTTPException(status_code=404, detail="Target villager not found")
+        
+        target_prof = AI_PROFESSIONS.get(target["profession"])
+        if not target_prof or not target_prof.get("can_trade", False):
+            raise HTTPException(status_code=400, detail="Target villager cannot trade")
+        
+        # Verify target has requested items
+        target_inv = target.get("inventory", {})
+        target_gold = target.get("gold", 0)
+        
+        for item, amount in trade_request.requesting.items():
+            if item == "gold":
+                if target_gold < amount:
+                    raise HTTPException(status_code=400, detail="Target has insufficient gold")
+            elif target_inv.get(item, 0) < amount:
+                raise HTTPException(status_code=400, detail=f"Target has insufficient {item}")
+        
+        # Execute trade
+        # Update villager
+        for item, amount in trade_request.offering.items():
+            if item == "gold":
+                villager_gold -= amount
+            else:
+                villager_inv[item] = villager_inv.get(item, 0) - amount
+        
+        for item, amount in trade_request.requesting.items():
+            if item == "gold":
+                villager_gold += amount
+            else:
+                villager_inv[item] = villager_inv.get(item, 0) + amount
+        
+        # Update target
+        for item, amount in trade_request.offering.items():
+            if item == "gold":
+                target_gold += amount
+            else:
+                target_inv[item] = target_inv.get(item, 0) + amount
+        
+        for item, amount in trade_request.requesting.items():
+            if item == "gold":
+                target_gold -= amount
+            else:
+                target_inv[item] = target_inv.get(item, 0) - amount
+        
+        await db.ai_villagers.update_one(
+            {"id": trade_request.villager_id},
+            {"$set": {"inventory": villager_inv, "gold": villager_gold}}
+        )
+        
+        await db.ai_villagers.update_one(
+            {"id": trade_request.target_id},
+            {"$set": {"inventory": target_inv, "gold": target_gold}}
+        )
+        
+        # Improve relationship
+        relationships = villager.get("relationships", {})
+        relationships[trade_request.target_id] = relationships.get(trade_request.target_id, 0) + 5
+        await db.ai_villagers.update_one(
+            {"id": trade_request.villager_id},
+            {"$set": {"relationships": relationships}}
+        )
+        
+        return {"status": "success", "message": f"Trade between {villager['name']} and {target['name']} completed"}
+    
+    elif trade_request.target_type == "player":
+        # Trade with a player
+        player = await db.user_profiles.find_one({"id": trade_request.target_id}, {"_id": 0})
+        if not player:
+            raise HTTPException(status_code=404, detail="Player not found")
+        
+        player_inv = player.get("materials", {})
+        player_gold = player.get("resources", {}).get("gold", 0)
+        
+        for item, amount in trade_request.requesting.items():
+            if item == "gold":
+                if player_gold < amount:
+                    raise HTTPException(status_code=400, detail="Player has insufficient gold")
+            elif player_inv.get(item, 0) < amount:
+                raise HTTPException(status_code=400, detail=f"Player has insufficient {item}")
+        
+        # Execute trade
+        # Update villager
+        for item, amount in trade_request.offering.items():
+            if item == "gold":
+                villager_gold -= amount
+            else:
+                villager_inv[item] = villager_inv.get(item, 0) - amount
+        
+        for item, amount in trade_request.requesting.items():
+            if item == "gold":
+                villager_gold += amount
+            else:
+                villager_inv[item] = villager_inv.get(item, 0) + amount
+        
+        # Update player
+        for item, amount in trade_request.offering.items():
+            if item == "gold":
+                player_gold += amount
+            else:
+                player_inv[item] = player_inv.get(item, 0) + amount
+        
+        for item, amount in trade_request.requesting.items():
+            if item == "gold":
+                player_gold -= amount
+            else:
+                player_inv[item] = player_inv.get(item, 0) - amount
+        
+        await db.ai_villagers.update_one(
+            {"id": trade_request.villager_id},
+            {"$set": {"inventory": villager_inv, "gold": villager_gold}}
+        )
+        
+        await db.user_profiles.update_one(
+            {"id": trade_request.target_id},
+            {"$set": {"materials": player_inv, "resources.gold": player_gold}}
+        )
+        
+        return {"status": "success", "message": f"Trade between {villager['name']} and player completed"}
+    
+    raise HTTPException(status_code=400, detail="Invalid target type")
+
+@api_router.post("/villagers/reset-daily")
+async def reset_villager_daily_work():
+    """Reset daily work status for all villagers (call at day start)"""
+    result = await db.ai_villagers.update_many({}, {"$set": {"daily_work_done": False}})
+    return {"status": "success", "villagers_reset": result.modified_count}
+
+# ============ World & Land Discovery Routes ============
+
+@api_router.get("/world/seedling")
+async def get_world_seedling():
+    """Get the origin world seedling data"""
+    return WORLD_SEEDLING
+
+@api_router.get("/world/lands")
+async def get_discoverable_lands():
+    """Get all discoverable lands and their requirements"""
+    return DISCOVERABLE_LANDS
+
+@api_router.get("/world/houses")
+async def get_house_schematics():
+    """Get all available house types to build"""
+    return HOUSE_SCHEMATICS
+
+@api_router.get("/world/discoveries/{user_id}")
+async def get_user_discoveries(user_id: str):
+    """Get lands discovered by a user"""
+    discoveries = await db.land_discoveries.find({"user_id": user_id}, {"_id": 0}).to_list(50)
+    
+    # Enrich with land details
+    for d in discoveries:
+        land_info = DISCOVERABLE_LANDS.get(d["land_id"])
+        if land_info:
+            d["land_details"] = land_info
+    
+    return discoveries
+
+@api_router.post("/world/discover/{land_id}")
+async def discover_land(land_id: str, user_id: str, travel_distance: int = 0):
+    """Attempt to discover a new land through travel"""
+    land = DISCOVERABLE_LANDS.get(land_id)
+    if not land:
+        raise HTTPException(status_code=404, detail="Land not found")
+    
+    # Check if already discovered
+    existing = await db.land_discoveries.find_one({"user_id": user_id, "land_id": land_id})
+    if existing:
+        raise HTTPException(status_code=400, detail="Land already discovered")
+    
+    # Check discovery requirements
+    if land["discovery_method"] == "travel":
+        if travel_distance < land["travel_distance"]:
+            raise HTTPException(status_code=400, detail=f"Need {land['travel_distance']} travel distance (have {travel_distance})")
+    elif land["discovery_method"] == "build":
+        # Check if user has built the required building
+        required = land.get("required_building")
+        building = await db.buildings.find_one({"builder_id": user_id, "schematic_id": required})
+        if not building:
+            raise HTTPException(status_code=400, detail=f"Must build {required} first")
+    
+    # Create discovery
+    discovery_data = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "land_id": land_id,
+        "discovered_at": datetime.now(timezone.utc).isoformat(),
+        "locations_unlocked": land["new_locations"]
+    }
+    
+    discovery_response = discovery_data.copy()
+    await db.land_discoveries.insert_one(discovery_data)
+    
+    # Award XP for discovery
+    await db.user_profiles.update_one(
+        {"id": user_id},
+        {"$inc": {"xp": 100}}
+    )
+    
+    return {
+        "status": "success",
+        "discovery": discovery_response,
+        "land_name": land["name"],
+        "new_locations": land["new_locations"],
+        "xp_awarded": 100
+    }
+
+@api_router.post("/world/build-house")
+async def build_player_house(user_id: str, house_type: str, land_id: str, x: float = 0.0, y: float = 0.0):
+    """Build a house in a discovered land"""
+    # Verify house type exists
+    house = HOUSE_SCHEMATICS.get(house_type)
+    if not house:
+        raise HTTPException(status_code=404, detail="House type not found")
+    
+    # Verify land is discovered
+    discovery = await db.land_discoveries.find_one({"user_id": user_id, "land_id": land_id})
+    if not discovery and land_id != "origin_village":
+        raise HTTPException(status_code=400, detail="You haven't discovered this land yet")
+    
+    # Check user has materials
+    user = await db.user_profiles.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    user_materials = user.get("materials", {})
+    for mat, amount in house["materials"].items():
+        if user_materials.get(mat, 0) < amount:
+            raise HTTPException(status_code=400, detail=f"Not enough {mat}")
+    
+    # Deduct materials
+    new_materials = user_materials.copy()
+    for mat, amount in house["materials"].items():
+        new_materials[mat] = new_materials.get(mat, 0) - amount
+    
+    await db.user_profiles.update_one({"id": user_id}, {"$set": {"materials": new_materials}})
+    
+    # Create house
+    house_data = {
+        "id": str(uuid.uuid4()),
+        "owner_id": user_id,
+        "owner_name": user.get("display_name", "Unknown"),
+        "house_type": house_type,
+        "land_id": land_id,
+        "position": {"x": x, "y": y},
+        "residents": [],
+        "storage": {},
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    house_response = house_data.copy()
+    await db.player_houses.insert_one(house_data)
+    
+    # Award contribution
+    contribution_gain = house.get("land_claim", 10)
+    await db.user_profiles.update_one({"id": user_id}, {"$inc": {"contribution_points": contribution_gain}})
+    
+    return {
+        "status": "success",
+        "house": house_response,
+        "contribution_gained": contribution_gain
+    }
+
+@api_router.get("/world/houses/{user_id}")
+async def get_user_houses(user_id: str):
+    """Get all houses owned by a user"""
+    houses = await db.player_houses.find({"owner_id": user_id}, {"_id": 0}).to_list(50)
+    
+    for h in houses:
+        schematic = HOUSE_SCHEMATICS.get(h["house_type"])
+        if schematic:
+            h["schematic"] = schematic
+    
+    return houses
+
+@api_router.post("/world/houses/{house_id}/assign-villager")
+async def assign_villager_to_house(house_id: str, villager_id: str, user_id: str):
+    """Assign an AI villager to live in your house"""
+    house = await db.player_houses.find_one({"id": house_id}, {"_id": 0})
+    if not house:
+        raise HTTPException(status_code=404, detail="House not found")
+    
+    if house["owner_id"] != user_id:
+        raise HTTPException(status_code=403, detail="You don't own this house")
+    
+    schematic = HOUSE_SCHEMATICS.get(house["house_type"])
+    if not schematic:
+        raise HTTPException(status_code=400, detail="Invalid house type")
+    
+    if len(house.get("residents", [])) >= schematic.get("capacity", 1):
+        raise HTTPException(status_code=400, detail="House is at full capacity")
+    
+    villager = await db.ai_villagers.find_one({"id": villager_id}, {"_id": 0})
+    if not villager:
+        raise HTTPException(status_code=404, detail="Villager not found")
+    
+    # Assign villager
+    await db.player_houses.update_one(
+        {"id": house_id},
+        {"$push": {"residents": villager_id}}
+    )
+    
+    # Update villager's employer
+    await db.ai_villagers.update_one(
+        {"id": villager_id},
+        {"$set": {"employer_id": user_id, "home_location": house["land_id"]}}
+    )
+    
+    return {
+        "status": "success",
+        "message": f"{villager['name']} now lives in your {house['house_type']}"
+    }
 
 # WebSocket for real-time multiplayer
 @app.websocket("/ws/{location_id}/{user_id}")
