@@ -3,187 +3,177 @@
 ## Original Problem Statement
 Build an AI Village storytelling experience where users interact with AI companions in a dynamic world. The AI learns alongside users with different day-to-day tasks, learning how to be a companion rather than a tool, and building a virtual world for future VR Full-Dive interface.
 
-## User Personas
-1. **Storytelling Enthusiasts** - Users who want immersive narrative experiences
-2. **Gamers** - Players looking for AI-driven interactive fiction
-3. **Future VR Adopters** - Early adopters building towards Full-Dive experiences
-4. **AI Curious** - Users interested in AI companions vs tools
-
-## Core Requirements
-- Interactive story dialogue with AI companion
-- Character creation/customization
-- Village exploration with location-based interactions
-- Global dataspace for AI learning/memory
-- AI villagers with professions who can trade and have daily lives
-- World expansion through travel and building
-- Day/night cycles affecting gameplay
-- Survival elements with demon infestations
-- AI emotional memory system
+## Core Philosophy
+- AIs are "raised like humans" - they learn from player interactions, other AIs, and their environment
+- The world starts as a single "seedling" village and expands through exploration
+- Player actions have consequences - wrong steps lead to trial and error learning
+- Day/night cycles affect gameplay (demons active at night)
 
 ## Special Accounts
 
 ### Sirix-1 (Supreme Account)
 - **Username**: sirix_1
+- **Password**: k3bdp0wn!0nr(?8vd&74v2l!
 - **Permission Level**: sirix_1 (highest)
-- **Is Transcendent**: true
+- **Is Transcendent**: true - stats appear as immeasurable (∞, ???, █████)
 - **Is Immutable**: true (cannot be modified)
-- **Cannot Degenerate**: true (values never decrease)
-- **Stats**: All resources stored as `None` (immeasurable/infinite)
-- **Scan Protection**: When scanned/viewed by others, returns distorted cryptic symbols (∞, ???, █████, ▓▓▓)
-- **Self-View**: Sees own stats as "∞" symbols with "Your power is beyond all measurement"
+- **Cannot Degenerate**: values never decrease
+- **Scan Protection**: Others see distorted cryptic symbols when viewing
+- **AI Helper Access**: Only user with access to test device features on mobile
 
 ## What's Been Implemented
 
-### Phase 1 - MVP Complete (Jan 2026)
-- [x] Landing page with immersive dark fantasy entry
-- [x] Character creation (name, background, traits, appearance)
-- [x] Village Explorer with 7 unique locations
-- [x] AI storyteller chat using GPT-5.2 via Emergent LLM
-- [x] Location navigation with atmosphere descriptions
-- [x] Global Dataspace page with memory visualization
-- [x] Conversation persistence in MongoDB
+### Phase 1-2: Foundation (Jan 2026)
+- [x] Landing page, auth, character creation
+- [x] Village Explorer with 7 locations
+- [x] AI storyteller chat (GPT-5.2)
+- [x] Quest system with NPC/player quests
+- [x] User profiles with permission tiers
+- [x] WebSocket multiplayer infrastructure
 
-### Phase 2.0 - Multiplayer & AI Expansion (Jan 2026)
-- [x] Oracle Veythra - NPC who sees real-world news as prophecies
-- [x] User Profile System with permission tiers
-- [x] Quest System - NPCs and players can create quests
-- [x] WebSocket Multiplayer infrastructure
-- [x] 8 NPCs initialized with personalities and roles
+### Phase 3: Building & Trading (Mar 2026)
+- [x] 5 Building materials, 19 schematics
+- [x] Trading system between players
+- [x] Contribution points system
 
-### Phase 2.5 - First Person & Auth System (Jan 2026)
-- [x] Login/Register Auth with bcrypt password hashing
-- [x] Mode Selection Screen (First Person or Story Mode)
-- [x] First Person View with D-Pad controls
-- [x] Official Rankings (13 ranks from citizen to sovereign)
-- [x] Standing System (Outcast → Legendary)
+### Phase 4: World Systems (Mar 2026)
 
-### Phase 3.0 - Building & Trading System (Mar 2026)
-- [x] 5 Building Materials with stats (wood, stone, iron, crystal, obsidian)
-- [x] 19 Building Schematics across 4 tiers
-- [x] Trading System for player-to-player exchanges
-- [x] Contribution Points system
+#### AI Professions (18 total)
+| Tier | Professions |
+|------|------------|
+| Commoner | serf, farmer |
+| Craftsman | chef, miner, blacksmith, butcher, carpenter |
+| Warrior | swordsman, archer, knight |
+| Scholar | scribe, alchemist |
+| Mystic | court_mage, priest |
+| Noble | merchant, baron |
+| Leadership | guildmaster, captain |
 
-### Phase 3.5 - AI Professions & World Expansion (Mar 2026)
-- [x] **18 AI Professions** across 7 tiers:
-  - Commoner: serf, farmer
-  - Craftsman: chef, miner, blacksmith, butcher, carpenter
-  - Warrior: swordsman, archer, knight
-  - Scholar: scribe, alchemist
-  - Mystic: court_mage, priest
-  - Noble: merchant, baron
-  - Leadership: guildmaster, captain
-- [x] **12 Starter AI Villagers** with unique personalities
-- [x] Villager Daily Work system
-- [x] Villager-to-Villager and Villager-to-Player Trading
-- [x] **World Seedling System** - "The First Echo" origin village
-- [x] **5 Discoverable Lands**: Eastern Plains, Northern Mountains, Western Forest, Southern Coast, Underground Realm
-- [x] **5 House Types**: campsite, cottage, house, manor, guild_hall
-- [x] Land Discovery via travel or building requirements
-
-### Phase 4.0 - Day/Night, Guilds, Demons, AI Mood (Mar 2026)
-
-#### Day/Night Cycle System
-Uses **APPROXIMATE location only** (timezone offset, never precise coordinates)
-- [x] **7 Time Phases**:
-  - Dawn (5-7): danger 0.2
-  - Morning (7-12): danger 0.1
-  - Afternoon (12-17): danger 0.1
-  - Dusk (17-20): danger 0.3
-  - Night (20-24): danger 0.7
-  - Witching Hour (0-3): danger 1.0
-  - Pre-Dawn (3-5): danger 0.5
-
-#### Guild System
-- [x] **5 Guild Types**:
-  - Trade: +20% gold, -10% trade discount
-  - Combat: +15% damage, +10% defense
-  - Crafting: +25% craft speed, -15% material cost
-  - Exploration: +30% travel speed, +20% discovery chance
-  - Mystical: +25% essence gain, +15% spell power
-- [x] Guild Ranks: Initiate → Member → Veteran → Officer → Leader
-- [x] Guild creation, joining, leaving
+#### Day/Night Cycle
+Uses **APPROXIMATE location only** (timezone offset, never precise)
+- Dawn (5-7): 20% danger
+- Morning (7-12): 10% danger
+- Afternoon (12-17): 10% danger
+- Dusk (17-20): 30% danger
+- Night (20-24): 70% danger
+- **Witching Hour (0-3): 100% danger**
+- Pre-Dawn (3-5): 50% danger
 
 #### Biblical Demon Infestations
-- [x] **9 Demon Types** across 4 ranks:
-  - **Lesser**: Tormenting Imp, Wandering Shade
-  - **Standard**: Soldier of Legion (Mark 5:9), Whispering Tempter (Genesis 3)
-  - **Greater**: Spawn of Asmodeus (Book of Tobit), Collector of Mammon (Matthew 6:24), Herald of Belphegor
-  - **Arch**: Avatar of Beelzebub (2 Kings 1:2), Abaddon the Destroyer (Revelation 9:11)
-- [x] Spawn chance based on time phase and infestation level
-- [x] Location infestation levels: clear → stirring → infested → overrun → hellmouth
-- [x] Combat system with drops and counter-attacks
-- [x] Biblical origin lore for each demon
+| Rank | Demons | Source |
+|------|--------|--------|
+| Lesser | Tormenting Imp, Wandering Shade | - |
+| Standard | Soldier of Legion, Whispering Tempter | Mark 5:9, Genesis 3 |
+| Greater | Spawn of Asmodeus, Collector of Mammon, Herald of Belphegor | Tobit, Matthew 6:24 |
+| Arch | Avatar of Beelzebub, Abaddon the Destroyer | 2 Kings 1:2, Rev 9:11 |
 
-#### AI Emotional Memory System
-- [x] **9 Mood States**: joyful, content, neutral, annoyed, angry, furious, fearful, grieving, inspired
-- [x] **12 Interaction Types**:
-  - Positive: positive_trade, generous_tip, friendly_chat, helped_quest, gift_received, saved_from_demon
-  - Negative: insult, theft_attempt, property_damage, violence, betrayal, witnessed_demon
-- [x] Mood affects trade prices and dialogue tone
-- [x] AI remembers which players wronged them (refuses_service_to list)
-- [x] Shop can close when villager is too upset
-- [x] Mood decay over time toward neutral
-- [x] **Environmental Learning**: AIs are raised by their environment and player interactions
+#### AI Emotional Memory
+- **9 Mood States**: joyful → content → neutral → annoyed → angry → furious
+- AIs remember player interactions and carry mood forward
+- Negative actions (property damage, theft) cause AI to refuse service
+- Moods decay toward neutral over time
 
-## Tech Stack
-- Frontend: React + Tailwind CSS + Shadcn/UI
-- Backend: FastAPI + MongoDB (motor async driver)
-- AI: OpenAI GPT-5.2 via Emergent Integrations
-- Auth: bcrypt password hashing
-- Theme: "The Void & The Flame" dark fantasy
+#### Guild System
+| Type | Focus | Key Bonus |
+|------|-------|-----------|
+| Trade | Commerce | +20% gold gain |
+| Combat | Fighting | +15% damage |
+| Crafting | Creation | +25% craft speed |
+| Exploration | Discovery | +30% travel speed |
+| Mystical | Magic | +25% essence gain |
+
+### Phase 5: Combat & Device Access (Mar 2026)
+
+#### Combat System
+**Actions:**
+- **Attack**: 10 stamina, 15 base damage, 1s cooldown
+- **Heavy Attack**: 25 stamina, 35 base damage, 2.5s cooldown
+- **Block**: 5 stamina/sec, 70% damage reduction
+- **Dodge**: 15 stamina, 0.5s invulnerability, 1.5s cooldown
+- **Sprint**: Variable stamina drain, 2x movement speed
+
+**Sprint Stamina Formula:**
+```
+drain = base_drain + (armor_weight × 0.5) / ((strength/endurance) × 0.75)
+```
+- Higher strength/endurance = less drain
+- Heavier armor = more drain
+
+**Equipment:**
+- Armor Types: none, cloth, leather, chain, plate, legendary
+- Weapon Types: fists, dagger, sword, greatsword, mace, spear, staff
+
+#### AI Helper (Test Feature - Sirix-1 Mobile Only)
+Device capabilities for enhanced gameplay:
+- **geolocation_approximate**: Timezone/region only (NEVER precise)
+- **vibration**: Haptic feedback (alert, success, damage, critical, heartbeat patterns)
+- **notification**: Game notifications
+- **orientation**: Device tilt for controls
+- **battery**: Power-saving mode
+- **network**: Quality adjustment
+- **wake_lock**: Keep screen on
+- **clipboard**: Copy game data
 
 ## API Endpoints
 
-### Authentication
-- `POST /api/auth/login` - Login with username/password
-- `POST /api/auth/register` - Register new user
-
-### Time & Location
-- `POST /api/time/phase` - Get current phase (requires timezone_offset only)
-- `GET /api/time/phases` - Get all phase definitions
+### Combat & Movement
+- `GET /api/combat/stats` - Combat definitions
+- `GET /api/character/{id}/combat-stats` - Character combat stats
+- `POST /api/character/{id}/action` - Perform combat action
+- `POST /api/character/{id}/move` - Move with optional sprint
+- `POST /api/character/{id}/equip` - Equip weapon/armor
+- `POST /api/character/{id}/regenerate` - Heal when out of combat
 
 ### Guilds
 - `POST /api/guilds` - Create guild
 - `GET /api/guilds` - List all guilds
 - `POST /api/guilds/{id}/join` - Join guild
 - `POST /api/guilds/{id}/leave` - Leave guild
-- `GET /api/guild-types` - Get guild type bonuses
 
-### Demons & Infestations
-- `GET /api/demons` - List all demon types
-- `GET /api/demons/{type}` - Get demon details
-- `POST /api/demons/spawn/{location_id}` - Spawn demon
-- `GET /api/demons/active/{location_id}` - Get active encounters
-- `POST /api/demons/{encounter_id}/attack` - Attack demon
-- `GET /api/infestation/{location_id}` - Get infestation level
+### AI Helper (Sirix-1 Only)
+- `GET /api/ai-helper/status` - Check availability
+- `GET /api/ai-helper/capabilities` - Get device capabilities
+- `POST /api/ai-helper/request-access` - Request capability access
+- `POST /api/ai-helper/execute` - Execute device command
 
-### AI Villagers & Mood
-- `GET /api/villagers/{id}/mood` - Get villager mood
-- `POST /api/villagers/{id}/interact` - Interact with villager
-- `POST /api/villagers/decay-moods` - Decay all moods toward neutral
-
-### Scan & Profile (with Sirix-1 Protection)
-- `GET /api/scan/{target_id}` - Scan entity (distorted for Sirix-1)
-- `GET /api/profile/view/{user_id}` - View profile (masked for Sirix-1)
+## Frontend Pages
+- `/` - Landing
+- `/auth` - Login/Register
+- `/create-character` - Character creation
+- `/select-mode` - Mode selection
+- `/village` - Text-based explorer
+- `/play` - First-person view with combat UI
+- `/guilds` - Guild management
+- `/quests` - Quest board
+- `/profile` - User profile
+- `/building` - Building system
+- `/trading` - Trading system
 
 ## Prioritized Backlog
 
 ### P0 (Next Sprint)
-- [ ] Make D-pad/joystick functional with movement
-- [ ] Multiplayer chat UI (WebSocket backend exists)
+- [ ] Multiplayer chat UI with channel selection
 - [ ] Travel distance tracking for land discovery
+- [ ] Demon combat visual effects
 
 ### P1 (Near Future)
-- [ ] Demon combat UI in frontend
-- [ ] Guild management UI
-- [ ] AI villager conversation UI showing mood
+- [ ] Day/night visual effects in game view
+- [ ] AI villager dialogue based on mood
+- [ ] Equipment inventory UI
 
 ### P2 (Future)
-- [ ] Day/night visual effects in game view
-- [ ] Demon infestation visual indicators
 - [ ] Guild halls as buildable structures
+- [ ] PvP combat between players
+- [ ] Mount system for faster travel
 
 ### P3 (VR Phase)
-- [ ] Voice input/output integration
+- [ ] Voice input/output
 - [ ] 3D environment rendering
 - [ ] VR controller integration
+
+## Technical Notes
+- Backend: FastAPI, MongoDB (motor), WebSockets
+- Frontend: React, TailwindCSS, Shadcn/UI
+- AI: GPT-5.2 via Emergent Integrations
+- Auth: bcrypt password hashing
+- Location: Uses ONLY approximate (timezone), NEVER precise coordinates
