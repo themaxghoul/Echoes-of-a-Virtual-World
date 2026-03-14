@@ -46,29 +46,67 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ============ Permission Levels ============
+# ============ Permission Levels & Rankings ============
 PERMISSION_LEVELS = {
     "basic": {
         "level": 1,
         "abilities": ["explore", "talk", "trade", "view_quests"],
-        "description": "Standard player abilities"
+        "description": "Standard player abilities",
+        "chat_access": ["local"]
     },
     "advanced": {
         "level": 2,
         "abilities": ["craft", "teach_ai", "create_quests", "mentor"],
-        "description": "Experienced player abilities"
+        "description": "Experienced player abilities",
+        "chat_access": ["local", "city"]
     },
     "admin": {
         "level": 3,
         "abilities": ["modify_world", "spawn_npcs", "manage_users", "allocate_resources"],
-        "description": "Administrator abilities"
+        "description": "Administrator abilities",
+        "chat_access": ["local", "city", "state"]
     },
     "sirix_1": {
         "level": 999,
         "abilities": ["all", "immutable", "supreme_override"],
-        "description": "Supreme authority - cannot be overwritten"
+        "description": "Supreme authority - cannot be overwritten",
+        "chat_access": ["local", "city", "state", "country", "global"]
     }
 }
+
+# Official Rankings (for government/leadership roles)
+OFFICIAL_RANKINGS = {
+    # City Level Officials
+    "citizen": {"tier": "city", "rank": 1, "chat_access": ["local"], "title": "Citizen"},
+    "merchant": {"tier": "city", "rank": 2, "chat_access": ["local", "city"], "title": "Merchant"},
+    "guild_member": {"tier": "city", "rank": 3, "chat_access": ["local", "city"], "title": "Guild Member"},
+    "guild_master": {"tier": "city", "rank": 4, "chat_access": ["local", "city"], "title": "Guild Master"},
+    "city_council": {"tier": "city", "rank": 5, "chat_access": ["local", "city"], "title": "City Council"},
+    "mayor": {"tier": "city", "rank": 6, "chat_access": ["local", "city", "state"], "title": "Mayor"},
+    
+    # State Level Officials
+    "state_delegate": {"tier": "state", "rank": 7, "chat_access": ["local", "city", "state"], "title": "State Delegate"},
+    "state_senator": {"tier": "state", "rank": 8, "chat_access": ["local", "city", "state"], "title": "State Senator"},
+    "governor": {"tier": "state", "rank": 9, "chat_access": ["local", "city", "state", "country"], "title": "Governor"},
+    
+    # Country Level Officials
+    "ambassador": {"tier": "country", "rank": 10, "chat_access": ["local", "city", "state", "country"], "title": "Ambassador"},
+    "minister": {"tier": "country", "rank": 11, "chat_access": ["local", "city", "state", "country"], "title": "Minister"},
+    "high_council": {"tier": "country", "rank": 12, "chat_access": ["local", "city", "state", "country", "global"], "title": "High Council"},
+    "sovereign": {"tier": "country", "rank": 13, "chat_access": ["all"], "title": "Sovereign"},
+}
+
+# Standing system (reputation-based)
+STANDING_LEVELS = [
+    {"name": "Outcast", "min_rep": -1000, "max_rep": -100},
+    {"name": "Distrusted", "min_rep": -99, "max_rep": -1},
+    {"name": "Neutral", "min_rep": 0, "max_rep": 99},
+    {"name": "Respected", "min_rep": 100, "max_rep": 499},
+    {"name": "Honored", "min_rep": 500, "max_rep": 999},
+    {"name": "Revered", "min_rep": 1000, "max_rep": 4999},
+    {"name": "Exalted", "min_rep": 5000, "max_rep": 9999},
+    {"name": "Legendary", "min_rep": 10000, "max_rep": 999999},
+]
 
 # ============ Models ============
 
@@ -78,6 +116,8 @@ class UserProfile(BaseModel):
     username: str
     display_name: str
     permission_level: str = "basic"
+    official_rank: str = "citizen"  # From OFFICIAL_RANKINGS
+    reputation: int = 0  # For standing calculation
     resources: Dict[str, int] = Field(default_factory=lambda: {"gold": 100, "essence": 10, "artifacts": 0})
     xp: int = 0
     characters: List[str] = []
@@ -95,6 +135,8 @@ class Character(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
     name: str
+    position: Dict[str, float] = Field(default_factory=lambda: {"x": 0.0, "y": 0.0, "z": 0.0})
+    rotation: float = 0.0  # Facing direction in degrees
     background: str
     traits: List[str] = []
     appearance: str = ""
@@ -968,12 +1010,137 @@ async def get_user_permissions(user_id: str):
         raise HTTPException(status_code=404, detail="User not found")
     
     perm_level = user.get("permission_level", "basic")
+    official_rank = user.get("official_rank", "citizen")
+    rank_data = OFFICIAL_RANKINGS.get(official_rank, OFFICIAL_RANKINGS["citizen"])
+    
+    # Get standing from reputation
+    reputation = user.get("reputation", 0)
+    standing = "Neutral"
+    for level in STANDING_LEVELS:
+        if level["min_rep"] <= reputation <= level["max_rep"]:
+            standing = level["name"]
+            break
+    
+    # Combine chat access from permission level and official rank
+    perm_chat = PERMISSION_LEVELS.get(perm_level, PERMISSION_LEVELS["basic"]).get("chat_access", ["local"])
+    rank_chat = rank_data.get("chat_access", ["local"])
+    chat_access = list(set(perm_chat + rank_chat))
+    
     return {
         "user_id": user_id,
         "permission_level": perm_level,
         "abilities": PERMISSION_LEVELS.get(perm_level, PERMISSION_LEVELS["basic"])["abilities"],
+        "official_rank": official_rank,
+        "rank_title": rank_data["title"],
+        "rank_tier": rank_data["tier"],
+        "standing": standing,
+        "reputation": reputation,
+        "chat_access": chat_access,
         "is_immutable": user.get("is_immutable", False)
     }
+
+# Rankings Routes
+@api_router.get("/rankings")
+async def get_all_rankings():
+    return {
+        "official_rankings": OFFICIAL_RANKINGS,
+        "standing_levels": STANDING_LEVELS
+    }
+
+@api_router.put("/users/{user_id}/rank")
+async def update_user_rank(user_id: str, new_rank: str, promoter_id: str):
+    # Check if promoter has authority
+    promoter = await db.user_profiles.find_one({"id": promoter_id})
+    if not promoter:
+        raise HTTPException(status_code=404, detail="Promoter not found")
+    
+    promoter_rank = OFFICIAL_RANKINGS.get(promoter.get("official_rank", "citizen"), OFFICIAL_RANKINGS["citizen"])
+    new_rank_data = OFFICIAL_RANKINGS.get(new_rank)
+    
+    if not new_rank_data:
+        raise HTTPException(status_code=400, detail="Invalid rank")
+    
+    # Only higher ranks can promote, Sirix-1 can do anything
+    if promoter.get("permission_level") != "sirix_1" and promoter_rank["rank"] <= new_rank_data["rank"]:
+        raise HTTPException(status_code=403, detail="Insufficient authority to assign this rank")
+    
+    user = await db.user_profiles.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.get("is_immutable"):
+        raise HTTPException(status_code=403, detail="Cannot modify immutable user")
+    
+    await db.user_profiles.update_one(
+        {"id": user_id},
+        {"$set": {"official_rank": new_rank}}
+    )
+    return {"status": "success", "new_rank": new_rank, "title": new_rank_data["title"]}
+
+@api_router.put("/users/{user_id}/reputation")
+async def update_user_reputation(user_id: str, amount: int):
+    user = await db.user_profiles.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    new_rep = user.get("reputation", 0) + amount
+    await db.user_profiles.update_one(
+        {"id": user_id},
+        {"$set": {"reputation": new_rep}}
+    )
+    
+    # Calculate new standing
+    standing = "Neutral"
+    for level in STANDING_LEVELS:
+        if level["min_rep"] <= new_rep <= level["max_rep"]:
+            standing = level["name"]
+            break
+    
+    return {"status": "success", "reputation": new_rep, "standing": standing}
+
+# Character position updates
+@api_router.put("/character/{character_id}/position")
+async def update_character_position(character_id: str, x: float, y: float, z: float, rotation: float = 0):
+    result = await db.characters.update_one(
+        {"id": character_id},
+        {"$set": {"position": {"x": x, "y": y, "z": z}, "rotation": rotation}}
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Character not found")
+    return {"status": "success"}
+
+# Chat channels by access level
+@api_router.get("/chat/channels/{user_id}")
+async def get_available_chat_channels(user_id: str):
+    user = await db.user_profiles.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    perm_level = user.get("permission_level", "basic")
+    official_rank = user.get("official_rank", "citizen")
+    
+    perm_chat = PERMISSION_LEVELS.get(perm_level, PERMISSION_LEVELS["basic"]).get("chat_access", ["local"])
+    rank_data = OFFICIAL_RANKINGS.get(official_rank, OFFICIAL_RANKINGS["citizen"])
+    rank_chat = rank_data.get("chat_access", ["local"])
+    
+    available_channels = list(set(perm_chat + rank_chat))
+    
+    channels = []
+    channel_info = {
+        "local": {"name": "Local", "description": "Chat with nearby players", "color": "#E1E1E3"},
+        "city": {"name": "City", "description": "City-wide announcements", "color": "#D4AF37"},
+        "state": {"name": "State", "description": "State official communications", "color": "#7B68EE"},
+        "country": {"name": "Country", "description": "National broadcasts", "color": "#FF6B6B"},
+        "global": {"name": "Global", "description": "World-wide messages", "color": "#00CED1"},
+    }
+    
+    for ch in available_channels:
+        if ch in channel_info:
+            channels.append({"id": ch, **channel_info[ch]})
+        elif ch == "all":
+            channels = [{"id": k, **v} for k, v in channel_info.items()]
+            break
+    
+    return {"channels": channels, "rank_title": rank_data["title"]}
 
 # WebSocket for real-time multiplayer
 @app.websocket("/ws/{location_id}/{user_id}")

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Sparkles, Compass, BookOpen } from 'lucide-react';
+import { Sparkles, Compass, BookOpen, Gamepad2, MessageSquare } from 'lucide-react';
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -46,24 +46,43 @@ const LandingPage = () => {
         </p>
 
         {/* Main CTA */}
-        <Button
-          data-testid="enter-world-btn"
-          onClick={() => navigate('/create-character')}
-          className="group bg-gold text-black font-cinzel font-bold text-lg uppercase tracking-widest px-12 py-6 hover:bg-gold-light transition-all duration-300 shadow-[0_0_30px_rgba(212,175,55,0.3)] hover:shadow-[0_0_50px_rgba(212,175,55,0.5)] rounded-sm"
-        >
-          <Sparkles className="w-5 h-5 mr-3 group-hover:animate-pulse" />
-          Enter The Echoes
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-4 mb-8">
+          <Button
+            data-testid="enter-world-btn"
+            onClick={() => navigate('/create-character')}
+            className="group bg-gold text-black font-cinzel font-bold text-lg uppercase tracking-widest px-12 py-6 hover:bg-gold-light transition-all duration-300 shadow-[0_0_30px_rgba(212,175,55,0.3)] hover:shadow-[0_0_50px_rgba(212,175,55,0.5)] rounded-sm"
+          >
+            <Sparkles className="w-5 h-5 mr-3 group-hover:animate-pulse" />
+            Enter The Echoes
+          </Button>
+          
+          <Button
+            data-testid="play-game-btn"
+            onClick={() => navigate('/play')}
+            className="group bg-slate-blue text-white font-cinzel font-bold text-lg uppercase tracking-widest px-12 py-6 hover:bg-slate-blue-light transition-all duration-300 shadow-[0_0_30px_rgba(123,104,238,0.3)] hover:shadow-[0_0_50px_rgba(123,104,238,0.5)] rounded-sm"
+          >
+            <Gamepad2 className="w-5 h-5 mr-3 group-hover:animate-pulse" />
+            First Person Mode
+          </Button>
+        </div>
 
         {/* Secondary Actions */}
-        <div className="flex flex-wrap gap-6 mt-12 justify-center">
+        <div className="flex flex-wrap gap-6 mt-6 justify-center">
           <button 
             data-testid="continue-journey-btn"
             onClick={() => navigate('/village')}
             className="flex items-center gap-2 text-muted-foreground hover:text-gold transition-colors duration-300 font-manrope"
           >
+            <MessageSquare className="w-4 h-4" />
+            Story Mode
+          </button>
+          <button 
+            data-testid="continue-play-btn"
+            onClick={() => navigate('/play')}
+            className="flex items-center gap-2 text-muted-foreground hover:text-slate-blue transition-colors duration-300 font-manrope"
+          >
             <Compass className="w-4 h-4" />
-            Continue Journey
+            Continue Playing
           </button>
           <button 
             data-testid="view-dataspace-btn"

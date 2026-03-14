@@ -496,7 +496,7 @@ class AIVillageAPITester:
         )
         
         if success and isinstance(response, dict):
-            required_fields = ['user_id', 'permission_level', 'abilities', 'is_immutable']
+            required_fields = ['user_id', 'permission_level', 'abilities', 'is_immutable', 'official_rank', 'standing', 'reputation', 'chat_access']
             for field in required_fields:
                 if field in response:
                     print(f"   ✅ {field}: {response[field]}")
@@ -511,6 +511,147 @@ class AIVillageAPITester:
                     print(f"   ✅ Basic user has correct abilities")
                 else:
                     print(f"   ⚠️  Basic abilities mismatch. Expected: {expected_abilities}, Got: {user_abilities}")
+            
+            # Check official rank and standing system
+            official_rank = response.get('official_rank', 'unknown')
+            standing = response.get('standing', 'unknown')
+            reputation = response.get('reputation', 0)
+            print(f"   Official Rank: {official_rank}, Standing: {standing}, Reputation: {reputation}")
+            
+            # Check chat access
+            chat_access = response.get('chat_access', [])
+            if isinstance(chat_access, list) and 'local' in chat_access:
+                print(f"   ✅ Chat access includes 'local': {chat_access}")
+            else:
+                print(f"   ⚠️  Chat access missing 'local': {chat_access}")
+        
+        return success, response
+
+    def test_rankings_endpoint(self):
+        """Test GET /api/rankings returns official rankings and standing levels"""
+        success, response = self.run_test(
+            "Get Rankings System",
+            "GET",
+            "rankings",
+            200
+        )
+        
+        if success and isinstance(response, dict):
+            # Check for official rankings
+            if 'official_rankings' in response:
+                rankings = response['official_rankings']
+                print(f"   Found {len(rankings)} official rankings")
+                
+                # Check for specific ranks
+                expected_ranks = ['citizen', 'mayor', 'governor', 'sovereign']
+                for rank in expected_ranks:
+                    if rank in rankings:
+                        rank_data = rankings[rank]
+                        tier = rank_data.get('tier', 'unknown')
+                        rank_num = rank_data.get('rank', 0)
+                        title = rank_data.get('title', 'Unknown')
+                        print(f"   ✅ {rank}: Tier={tier}, Rank={rank_num}, Title={title}")
+                    else:
+                        print(f"   ❌ Missing rank: {rank}")
+                
+                # Check tiers are correct
+                city_ranks = [r for r, data in rankings.items() if data.get('tier') == 'city']
+                state_ranks = [r for r, data in rankings.items() if data.get('tier') == 'state']
+                country_ranks = [r for r, data in rankings.items() if data.get('tier') == 'country']
+                
+                print(f"   City tier ranks: {len(city_ranks)}")
+                print(f"   State tier ranks: {len(state_ranks)}")
+                print(f"   Country tier ranks: {len(country_ranks)}")
+                
+                if len(city_ranks) >= 4 and len(state_ranks) >= 2 and len(country_ranks) >= 3:
+                    print(f"   ✅ All tiers have appropriate number of ranks")
+                else:
+                    print(f"   ⚠️  Tier distribution may be incorrect")
+            else:
+                print(f"   ❌ Missing 'official_rankings' field")
+            
+            # Check for standing levels
+            if 'standing_levels' in response:
+                standings = response['standing_levels']
+                print(f"   Found {len(standings)} standing levels")
+                
+                expected_standings = ['Outcast', 'Neutral', 'Respected', 'Legendary']
+                found_standings = [s.get('name', 'Unknown') for s in standings]
+                
+                for expected in expected_standings:
+                    if expected in found_standings:
+                        print(f"   ✅ Standing level: {expected}")
+                    else:
+                        print(f"   ❌ Missing standing level: {expected}")
+                        
+                # Check standing levels are ordered by reputation
+                prev_max = float('-inf')
+                standings_ordered = True
+                for standing in standings:
+                    min_rep = standing.get('min_rep', 0)
+                    if min_rep < prev_max:
+                        standings_ordered = False
+                        break
+                    prev_max = standing.get('max_rep', 0)
+                
+                if standings_ordered:
+                    print(f"   ✅ Standing levels properly ordered by reputation")
+                else:
+                    print(f"   ⚠️  Standing levels may not be properly ordered")
+            else:
+                print(f"   ❌ Missing 'standing_levels' field")
+        
+        return success, response
+
+    def test_chat_channels_endpoint(self):
+        """Test GET /api/chat/channels/{user_id} returns available chat channels based on rank"""
+        if not self.user_id:
+            print("❌ Cannot test chat channels - No user ID available")
+            return False, {}
+            
+        success, response = self.run_test(
+            "Get Available Chat Channels",
+            "GET",
+            f"chat/channels/{self.user_id}",
+            200
+        )
+        
+        if success and isinstance(response, dict):
+            if 'channels' in response:
+                channels = response['channels']
+                print(f"   Found {len(channels)} available chat channels")
+                
+                # Check each channel has required fields
+                for channel in channels:
+                    if all(field in channel for field in ['id', 'name', 'description', 'color']):
+                        print(f"   ✅ Channel '{channel['id']}': {channel['name']}")
+                    else:
+                        print(f"   ⚠️  Channel missing fields: {channel}")
+                
+                # Basic user should have at least 'local' access
+                channel_ids = [ch.get('id') for ch in channels]
+                if 'local' in channel_ids:
+                    print(f"   ✅ Basic user has 'local' chat access")
+                else:
+                    print(f"   ❌ Basic user missing 'local' chat access")
+                    
+                # Should not have high-level channels for basic user
+                high_level_channels = ['country', 'global']
+                found_high_level = [ch for ch in channel_ids if ch in high_level_channels]
+                if not found_high_level:
+                    print(f"   ✅ Basic user correctly restricted from high-level channels")
+                else:
+                    print(f"   ⚠️  Basic user has unexpected high-level access: {found_high_level}")
+                    
+            else:
+                print(f"   ❌ Missing 'channels' field")
+            
+            # Check rank title is provided
+            if 'rank_title' in response:
+                rank_title = response['rank_title']
+                print(f"   User rank title: {rank_title}")
+            else:
+                print(f"   ⚠️  Missing 'rank_title' field")
         
         return success, response
 
@@ -529,6 +670,7 @@ def main():
         tester.test_sirix_1_user,  # NEW: Test Sirix-1 supreme user
         tester.test_get_all_npcs,  # NEW: Test 8 NPCs including Oracle Veythra
         tester.test_permission_system,  # NEW: Test 4-tier permission system
+        tester.test_rankings_endpoint,  # NEW: Test official rankings and standing levels
         tester.test_create_user_profile,  # NEW: Test user profile creation
         tester.test_create_character,
         tester.test_get_character,
@@ -540,7 +682,8 @@ def main():
         tester.test_news_endpoint,  # Test news integration
         tester.test_chat_with_news_query,  # Test AI + news
         tester.test_quest_system,  # NEW: Test quest creation/retrieval
-        tester.test_user_permissions_endpoint,  # NEW: Test user-specific permissions
+        tester.test_user_permissions_endpoint,  # NEW: Test user-specific permissions with ranking
+        tester.test_chat_channels_endpoint,  # NEW: Test chat channels based on rank
     ]
     
     # Execute tests

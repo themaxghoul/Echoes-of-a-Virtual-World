@@ -7,6 +7,7 @@ import VillageExplorer from "@/pages/VillageExplorer";
 import DataspaceView from "@/pages/DataspaceView";
 import QuestBoard from "@/pages/QuestBoard";
 import UserProfilePage from "@/pages/UserProfilePage";
+import FirstPersonView from "@/pages/FirstPersonView";
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/create-character" element={<CharacterCreation />} />
           <Route path="/village" element={<VillageExplorer />} />
+          <Route path="/play" element={<FirstPersonView />} />
           <Route path="/dataspace" element={<DataspaceView />} />
           <Route path="/quests" element={<QuestBoard />} />
           <Route path="/profile" element={<UserProfilePage />} />
