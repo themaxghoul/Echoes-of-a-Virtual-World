@@ -9,10 +9,11 @@ import {
   Menu, X, Hand, MessageCircle, Users, Settings,
   ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
   Pause, Play, Volume2, VolumeX, Eye, Send,
-  MapPin, Compass, Crown, Shield
+  MapPin, Compass, Crown, Shield, Zap
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
+import AIHelperPanel from '@/components/AIHelperPanel';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -117,6 +118,7 @@ const FirstPersonView = () => {
   const navigate = useNavigate();
   const gameLoopRef = useRef(null);
   const wsRef = useRef(null);
+  const staminaRegenRef = useRef(null);
   
   // Game state
   const [character, setCharacter] = useState(null);
@@ -126,9 +128,23 @@ const FirstPersonView = () => {
   const [playerRotation, setPlayerRotation] = useState(0);
   const [nearbyInteractable, setNearbyInteractable] = useState(null);
   
+  // Combat state
+  const [combatStats, setCombatStats] = useState({
+    health: 100, maxHealth: 100,
+    stamina: 100, maxStamina: 100,
+    strength: 10, endurance: 10, agility: 10, vitality: 10
+  });
+  const [isBlocking, setIsBlocking] = useState(false);
+  const [isSprinting, setIsSprinting] = useState(false);
+  const [inCombat, setInCombat] = useState(false);
+  const [activeDemons, setActiveDemons] = useState([]);
+  const [combatLog, setCombatLog] = useState([]);
+  
   // UI state
   const [isPaused, setIsPaused] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [showCombatUI, setShowCombatUI] = useState(false);
+  const [showAIHelper, setShowAIHelper] = useState(false);
   const [chatChannel, setChatChannel] = useState('local');
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
@@ -154,10 +170,12 @@ const FirstPersonView = () => {
       }
       
       try {
-        const [charRes, userRes, channelsRes] = await Promise.all([
+        const [charRes, userRes, channelsRes, combatRes, demonsRes] = await Promise.all([
           axios.get(`${API}/character/${charId}`),
           userId ? axios.get(`${API}/users/id/${userId}`) : null,
-          userId ? axios.get(`${API}/chat/channels/${userId}`) : null,
+          userId ? axios.get(`${API}/chat/channels/${userId}`).catch(() => null) : null,
+          axios.get(`${API}/character/${charId}/combat-stats`).catch(() => null),
+          axios.get(`${API}/demons/active/${charRes?.data?.current_location || 'village_square'}`).catch(() => null),
         ]);
         
         setCharacter(charRes.data);
@@ -168,6 +186,31 @@ const FirstPersonView = () => {
         
         if (userRes?.data) setUserProfile(userRes.data);
         if (channelsRes?.data) setAvailableChannels(channelsRes.data.channels || []);
+        
+        // Load combat stats
+        if (combatRes?.data) {
+          setCombatStats({
+            health: combatRes.data.health || 100,
+            maxHealth: combatRes.data.max_health || 100,
+            stamina: combatRes.data.stamina || 100,
+            maxStamina: combatRes.data.max_stamina || 100,
+            strength: combatRes.data.stats?.strength || 10,
+            endurance: combatRes.data.stats?.endurance || 10,
+            agility: combatRes.data.stats?.agility || 10,
+            vitality: combatRes.data.stats?.vitality || 10,
+            sprintDrain: combatRes.data.derived_stats?.sprint_stamina_drain_per_second || 2
+          });
+          setIsBlocking(combatRes.data.combat_state?.is_blocking || false);
+          setIsSprinting(combatRes.data.combat_state?.is_sprinting || false);
+          setInCombat(combatRes.data.combat_state?.in_combat || false);
+        }
+        
+        // Load active demons
+        if (demonsRes?.data && demonsRes.data.length > 0) {
+          setActiveDemons(demonsRes.data);
+          setInCombat(true);
+          setShowCombatUI(true);
+        }
       } catch (error) {
         console.error('Failed to load:', error);
       }
@@ -176,26 +219,48 @@ const FirstPersonView = () => {
     loadData();
   }, [navigate]);
   
-  // Game loop
+  // Game loop with sprint stamina drain
   useEffect(() => {
     if (isPaused) return;
     
-    const moveSpeed = 0.5;
+    const baseMoveSpeed = 0.5;
+    const sprintMultiplier = 2.0;
     
     gameLoopRef.current = setInterval(() => {
+      const isMoving = movement.up || movement.down || movement.left || movement.right || joystickActive;
+      const currentSpeed = (isSprinting && combatStats.stamina > 0) ? baseMoveSpeed * sprintMultiplier : baseMoveSpeed;
+      
+      // Drain stamina while sprinting and moving
+      if (isSprinting && isMoving && combatStats.stamina > 0) {
+        const drainRate = combatStats.sprintDrain || 2;
+        setCombatStats(prev => ({
+          ...prev,
+          stamina: Math.max(0, prev.stamina - (drainRate * 0.016)) // ~60fps
+        }));
+      }
+      
+      // Regenerate stamina when not sprinting (and not in combat)
+      if (!isSprinting && !inCombat && combatStats.stamina < combatStats.maxStamina) {
+        const regenRate = combatStats.endurance * 0.05;
+        setCombatStats(prev => ({
+          ...prev,
+          stamina: Math.min(prev.maxStamina, prev.stamina + (regenRate * 0.016))
+        }));
+      }
+      
       setPlayerPosition(prev => {
         let newX = prev.x;
         let newY = prev.y;
         
-        if (movement.up) newY = Math.max(10, prev.y - moveSpeed);
-        if (movement.down) newY = Math.min(90, prev.y + moveSpeed);
-        if (movement.left) newX = Math.max(5, prev.x - moveSpeed);
-        if (movement.right) newX = Math.min(95, prev.x + moveSpeed);
+        if (movement.up) newY = Math.max(10, prev.y - currentSpeed);
+        if (movement.down) newY = Math.min(90, prev.y + currentSpeed);
+        if (movement.left) newX = Math.max(5, prev.x - currentSpeed);
+        if (movement.right) newX = Math.min(95, prev.x + currentSpeed);
         
         // Joystick movement
         if (joystickActive) {
-          newX = Math.max(5, Math.min(95, prev.x + joystickPosition.x * moveSpeed));
-          newY = Math.max(10, Math.min(90, prev.y + joystickPosition.y * moveSpeed));
+          newX = Math.max(5, Math.min(95, prev.x + joystickPosition.x * currentSpeed));
+          newY = Math.max(10, Math.min(90, prev.y + joystickPosition.y * currentSpeed));
         }
         
         return { x: newX, y: newY };
@@ -203,7 +268,7 @@ const FirstPersonView = () => {
     }, 16);
     
     return () => clearInterval(gameLoopRef.current);
-  }, [movement, joystickActive, joystickPosition, isPaused]);
+  }, [movement, joystickActive, joystickPosition, isPaused, isSprinting, combatStats.stamina, combatStats.sprintDrain, combatStats.endurance, combatStats.maxStamina, inCombat]);
   
   // Check for nearby interactables
   useEffect(() => {
@@ -304,6 +369,118 @@ const FirstPersonView = () => {
     setJoystickActive(false);
     setJoystickPosition({ x: 0, y: 0 });
   };
+  
+  // Combat action handlers
+  const handleAttack = async (isHeavy = false) => {
+    if (!character) return;
+    const action = isHeavy ? 'heavy_attack' : 'attack';
+    const staminaCost = isHeavy ? 25 : 10;
+    
+    if (combatStats.stamina < staminaCost) {
+      toast.error('Not enough stamina!');
+      return;
+    }
+    
+    try {
+      const targetId = activeDemons.length > 0 ? activeDemons[0].id : null;
+      const res = await axios.post(`${API}/character/${character.id}/action`, {
+        character_id: character.id,
+        action: action,
+        target_id: targetId
+      });
+      
+      setCombatStats(prev => ({ ...prev, stamina: res.data.remaining_stamina }));
+      
+      const logMsg = res.data.is_critical 
+        ? `⚔️ CRITICAL HIT! ${res.data.damage_dealt} damage!`
+        : `⚔️ Attack dealt ${res.data.damage_dealt} damage`;
+      setCombatLog(prev => [...prev.slice(-4), logMsg]);
+      
+      if (res.data.target_defeated) {
+        toast.success(`Victory! Drops: ${JSON.stringify(res.data.drops)}`);
+        setActiveDemons(prev => prev.filter(d => d.id !== targetId));
+        if (activeDemons.length <= 1) {
+          setInCombat(false);
+          setShowCombatUI(false);
+        }
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Attack failed');
+    }
+  };
+  
+  const handleBlock = async (start = true) => {
+    if (!character) return;
+    
+    try {
+      if (start) {
+        await axios.post(`${API}/character/${character.id}/action`, {
+          character_id: character.id,
+          action: 'block'
+        });
+        setIsBlocking(true);
+        setCombatLog(prev => [...prev.slice(-4), '🛡️ Blocking...']);
+      } else {
+        await axios.post(`${API}/character/${character.id}/stop-action?action=block`);
+        setIsBlocking(false);
+      }
+    } catch (error) {
+      console.error('Block action failed:', error);
+    }
+  };
+  
+  const handleDodge = async () => {
+    if (!character) return;
+    const staminaCost = 15;
+    
+    if (combatStats.stamina < staminaCost) {
+      toast.error('Not enough stamina to dodge!');
+      return;
+    }
+    
+    try {
+      const res = await axios.post(`${API}/character/${character.id}/action`, {
+        character_id: character.id,
+        action: 'dodge'
+      });
+      
+      setCombatStats(prev => ({ ...prev, stamina: res.data.remaining_stamina }));
+      
+      const logMsg = res.data.dodge_success 
+        ? '💨 Dodge successful!'
+        : '💨 Dodge failed!';
+      setCombatLog(prev => [...prev.slice(-4), logMsg]);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Dodge failed');
+    }
+  };
+  
+  const handleSprint = (start = true) => {
+    if (start && combatStats.stamina < 5) {
+      toast.error('Not enough stamina to sprint!');
+      return;
+    }
+    setIsSprinting(start);
+  };
+  
+  // Check for demon encounters when entering new locations
+  useEffect(() => {
+    const checkForDemons = async () => {
+      if (!currentLocation) return;
+      try {
+        const res = await axios.get(`${API}/demons/active/${currentLocation}`);
+        if (res.data && res.data.length > 0) {
+          setActiveDemons(res.data);
+          setInCombat(true);
+          setShowCombatUI(true);
+          toast.warning(`⚠️ ${res.data.length} demon(s) detected!`);
+        }
+      } catch (error) {
+        console.error('Failed to check demons:', error);
+      }
+    };
+    checkForDemons();
+  }, [currentLocation]);
   
   // Send chat message
   const handleSendChat = async () => {
@@ -428,6 +605,84 @@ const FirstPersonView = () => {
         </div>
       </div>
       
+      {/* Health & Stamina Bars */}
+      <div className="absolute top-16 left-4 z-40 space-y-2 w-64">
+        {/* Health Bar */}
+        <div className="glass rounded-sm p-2">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-mono text-red-400">HP</span>
+            <span className="text-xs font-mono text-foreground">{Math.round(combatStats.health)}/{combatStats.maxHealth}</span>
+          </div>
+          <div className="h-3 bg-black/50 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-red-700 to-red-500 transition-all duration-300"
+              style={{ width: `${(combatStats.health / combatStats.maxHealth) * 100}%` }}
+            />
+          </div>
+        </div>
+        
+        {/* Stamina Bar */}
+        <div className="glass rounded-sm p-2">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-mono text-green-400">STAMINA</span>
+            <span className="text-xs font-mono text-foreground">{Math.round(combatStats.stamina)}/{combatStats.maxStamina}</span>
+          </div>
+          <div className="h-3 bg-black/50 rounded-full overflow-hidden">
+            <div 
+              className={`h-full transition-all duration-100 ${isSprinting ? 'bg-gradient-to-r from-yellow-600 to-yellow-400' : 'bg-gradient-to-r from-green-700 to-green-500'}`}
+              style={{ width: `${(combatStats.stamina / combatStats.maxStamina) * 100}%` }}
+            />
+          </div>
+          {isSprinting && <span className="text-xs text-yellow-400 mt-1">SPRINTING</span>}
+        </div>
+        
+        {/* Combat Status */}
+        {inCombat && (
+          <div className="glass rounded-sm p-2 border border-red-500/50">
+            <div className="text-xs font-mono text-red-400 flex items-center gap-2">
+              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+              IN COMBAT - {activeDemons.length} threat(s)
+            </div>
+          </div>
+        )}
+        
+        {/* Blocking Status */}
+        {isBlocking && (
+          <Badge className="bg-blue-500/30 text-blue-300 border border-blue-500">
+            <Shield className="w-3 h-3 mr-1" /> BLOCKING
+          </Badge>
+        )}
+      </div>
+      
+      {/* Combat Log */}
+      {showCombatUI && combatLog.length > 0 && (
+        <div className="absolute top-16 right-4 z-40 w-64 glass rounded-sm p-2">
+          <div className="text-xs font-mono text-gold mb-1">Combat Log</div>
+          <div className="space-y-1">
+            {combatLog.map((log, i) => (
+              <div key={i} className="text-xs font-mono text-foreground/80">{log}</div>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {/* Active Demon Display */}
+      {activeDemons.length > 0 && (
+        <div className="absolute top-40 left-1/2 -translate-x-1/2 z-40 glass rounded-sm p-3 border border-red-500/50">
+          <div className="text-center">
+            <div className="text-red-400 font-cinzel text-lg">{activeDemons[0].demon_details?.name || 'Unknown Demon'}</div>
+            <div className="text-xs text-muted-foreground">{activeDemons[0].demon_details?.rank} demon</div>
+            <div className="mt-2 w-48 h-2 bg-black/50 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-purple-700 to-red-500 transition-all"
+                style={{ width: `${(activeDemons[0].health_remaining / (activeDemons[0].demon_details?.health || 100)) * 100}%` }}
+              />
+            </div>
+            <div className="text-xs font-mono mt-1">{activeDemons[0].health_remaining} HP</div>
+          </div>
+        </div>
+      )}
+      
       {/* HUD - Bottom Controls */}
       <div className="absolute bottom-0 left-0 right-0 p-4 flex justify-between items-end z-40">
         {/* D-Pad / Joystick */}
@@ -513,7 +768,76 @@ const FirstPersonView = () => {
               {nearbyInteractable.target ? 'Enter' : nearbyInteractable.npc ? 'Talk' : 'Examine'}
             </Badge>
           )}
+          
+          {/* Sprint Button */}
+          <Button
+            data-testid="sprint-btn"
+            onMouseDown={() => handleSprint(true)}
+            onMouseUp={() => handleSprint(false)}
+            onTouchStart={() => handleSprint(true)}
+            onTouchEnd={() => handleSprint(false)}
+            className={`w-14 h-14 rounded-full ${
+              isSprinting 
+                ? 'bg-yellow-500 text-black' 
+                : 'bg-white/10 text-foreground hover:bg-white/20'
+            }`}
+          >
+            <span className="text-xs font-bold">RUN</span>
+          </Button>
         </div>
+      </div>
+      
+      {/* Combat Action Buttons - Right side */}
+      <div className="absolute bottom-4 right-4 z-40 flex flex-col gap-2 items-center">
+        {/* Attack Button */}
+        <Button
+          data-testid="attack-btn"
+          onClick={() => handleAttack(false)}
+          disabled={combatStats.stamina < 10}
+          className="w-16 h-16 rounded-full bg-red-600 hover:bg-red-500 text-white"
+        >
+          <span className="text-lg">⚔️</span>
+        </Button>
+        <span className="text-xs font-mono text-foreground/50">Attack</span>
+        
+        {/* Heavy Attack Button */}
+        <Button
+          data-testid="heavy-attack-btn"
+          onClick={() => handleAttack(true)}
+          disabled={combatStats.stamina < 25}
+          className="w-14 h-14 rounded-full bg-red-800 hover:bg-red-700 text-white"
+        >
+          <span className="text-sm">💥</span>
+        </Button>
+        <span className="text-xs font-mono text-foreground/50">Heavy</span>
+        
+        {/* Block Button */}
+        <Button
+          data-testid="block-btn"
+          onMouseDown={() => handleBlock(true)}
+          onMouseUp={() => handleBlock(false)}
+          onTouchStart={() => handleBlock(true)}
+          onTouchEnd={() => handleBlock(false)}
+          className={`w-14 h-14 rounded-full ${
+            isBlocking 
+              ? 'bg-blue-500 text-white' 
+              : 'bg-blue-800 hover:bg-blue-700 text-white'
+          }`}
+        >
+          <Shield className="w-6 h-6" />
+        </Button>
+        <span className="text-xs font-mono text-foreground/50">Block</span>
+        
+        {/* Dodge Button */}
+        <Button
+          data-testid="dodge-btn"
+          onClick={handleDodge}
+          disabled={combatStats.stamina < 15}
+          className="w-14 h-14 rounded-full bg-purple-700 hover:bg-purple-600 text-white"
+        >
+          <span className="text-lg">💨</span>
+        </Button>
+        <span className="text-xs font-mono text-foreground/50">Dodge</span>
       </div>
       
       {/* Pause Menu */}
@@ -571,10 +895,28 @@ const FirstPersonView = () => {
                 </Button>
                 
                 <Button
+                  onClick={() => navigate('/guilds')}
+                  className="w-full justify-start bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 rounded-sm"
+                >
+                  <Users className="w-5 h-5 mr-3" />
+                  Guild Hall
+                </Button>
+                
+                <Button
+                  data-testid="ai-helper-btn"
+                  onClick={() => setShowAIHelper(true)}
+                  className="w-full justify-start bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30 rounded-sm"
+                >
+                  <Zap className="w-5 h-5 mr-3" />
+                  AI Helper
+                  <Badge className="ml-auto bg-yellow-500/30 text-yellow-300 text-xs">TEST</Badge>
+                </Button>
+                
+                <Button
                   onClick={() => navigate('/profile')}
                   className="w-full justify-start bg-white/10 text-foreground hover:bg-white/20 rounded-sm"
                 >
-                  <Users className="w-5 h-5 mr-3" />
+                  <Crown className="w-5 h-5 mr-3" />
                   Profile
                 </Button>
                 
@@ -694,6 +1036,18 @@ const FirstPersonView = () => {
               </Button>
             </div>
           </Card>
+        </div>
+      )}
+      
+      {/* AI Helper Panel */}
+      {showAIHelper && (
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="w-full max-w-lg">
+            <AIHelperPanel 
+              userId={userProfile?.id} 
+              onClose={() => setShowAIHelper(false)} 
+            />
+          </div>
         </div>
       )}
     </div>

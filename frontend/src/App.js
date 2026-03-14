@@ -12,6 +12,7 @@ import QuestBoard from "@/pages/QuestBoard";
 import UserProfilePage from "@/pages/UserProfilePage";
 import BuildingPage from "@/pages/BuildingPage";
 import TradingPage from "@/pages/TradingPage";
+import GuildPage from "@/pages/GuildPage";
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
           <Route path="/profile" element={<UserProfilePage />} />
           <Route path="/building" element={<BuildingPage />} />
           <Route path="/trading" element={<TradingPage />} />
+          <Route path="/guilds" element={<GuildPage />} />
         </Routes>
       </BrowserRouter>
       <Toaster 

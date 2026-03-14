@@ -352,6 +352,122 @@ MOOD_EVENTS = {
     "saved_from_demon": {"mood_change": 40, "description": "Was saved from demons"}
 }
 
+# ============ Combat & Stats System ============
+# Player combat stats and stamina system
+# Stamina equation: stamina_loss_per_second = (armor_weight * 0.5) * (1 / (strength * 0.75 / endurance))
+# Simplified: higher strength + endurance = less stamina drain, heavier armor = more drain
+
+BASE_STATS = {
+    "health": 100,
+    "max_health": 100,
+    "stamina": 100,
+    "max_stamina": 100,
+    "strength": 10,      # Affects damage and stamina efficiency
+    "endurance": 10,     # Affects stamina recovery and drain reduction
+    "agility": 10,       # Affects dodge chance and movement speed
+    "vitality": 10,      # Affects max health
+    "armor_weight": 0,   # Weight of equipped armor
+    "damage_bonus": 0,
+    "defense_bonus": 0
+}
+
+COMBAT_ACTIONS = {
+    "attack": {
+        "name": "Attack",
+        "stamina_cost": 10,
+        "base_damage": 15,
+        "cooldown": 1.0,  # seconds
+        "description": "Strike your enemy"
+    },
+    "heavy_attack": {
+        "name": "Heavy Attack",
+        "stamina_cost": 25,
+        "base_damage": 35,
+        "cooldown": 2.5,
+        "description": "A powerful but slow strike"
+    },
+    "block": {
+        "name": "Block",
+        "stamina_cost": 5,  # per second while blocking
+        "damage_reduction": 0.7,  # 70% damage reduction
+        "description": "Raise your guard to reduce incoming damage"
+    },
+    "dodge": {
+        "name": "Dodge",
+        "stamina_cost": 15,
+        "invulnerability_frames": 0.5,  # seconds of invulnerability
+        "cooldown": 1.5,
+        "description": "Roll to evade attacks"
+    },
+    "sprint": {
+        "name": "Sprint",
+        "stamina_cost_base": 0.5,  # Base cost per second
+        "speed_multiplier": 2.0,
+        "description": "Run faster at the cost of stamina"
+    }
+}
+
+# Armor types and their weights
+ARMOR_TYPES = {
+    "none": {"name": "Unarmored", "weight": 0, "defense": 0},
+    "cloth": {"name": "Cloth Armor", "weight": 2, "defense": 5},
+    "leather": {"name": "Leather Armor", "weight": 5, "defense": 15},
+    "chain": {"name": "Chainmail", "weight": 12, "defense": 30},
+    "plate": {"name": "Plate Armor", "weight": 25, "defense": 50},
+    "legendary": {"name": "Void Armor", "weight": 15, "defense": 75}
+}
+
+# Weapon types
+WEAPON_TYPES = {
+    "fists": {"name": "Bare Fists", "damage": 5, "speed": 1.5},
+    "dagger": {"name": "Dagger", "damage": 12, "speed": 1.8},
+    "sword": {"name": "Iron Sword", "damage": 20, "speed": 1.2},
+    "greatsword": {"name": "Greatsword", "damage": 40, "speed": 0.7},
+    "mace": {"name": "Mace", "damage": 25, "speed": 1.0},
+    "spear": {"name": "Spear", "damage": 22, "speed": 1.1},
+    "staff": {"name": "Magic Staff", "damage": 15, "speed": 1.3, "magic_bonus": 20}
+}
+
+def calculate_sprint_stamina_drain(strength: int, endurance: int, armor_weight: float) -> float:
+    """
+    Calculate stamina drain per second while sprinting
+    Formula: stamina_loss = (armor_weight * 0.5) / ((strength/endurance) * 0.75)
+    Higher strength/endurance ratio = less drain
+    Heavier armor = more drain
+    """
+    if endurance <= 0:
+        endurance = 1
+    if strength <= 0:
+        strength = 1
+    
+    stat_efficiency = (strength / endurance) * 0.75
+    if stat_efficiency <= 0:
+        stat_efficiency = 0.1
+    
+    base_drain = COMBAT_ACTIONS["sprint"]["stamina_cost_base"]
+    weight_penalty = armor_weight * 0.5
+    
+    # Final formula: base_drain + (weight_penalty / stat_efficiency)
+    stamina_drain = base_drain + (weight_penalty / stat_efficiency)
+    
+    return max(0.1, min(stamina_drain, 20.0))  # Clamp between 0.1 and 20
+
+def calculate_damage(base_damage: int, strength: int, weapon_damage: int, is_critical: bool = False) -> int:
+    """Calculate total damage dealt"""
+    strength_bonus = strength * 0.5
+    total = base_damage + weapon_damage + strength_bonus
+    if is_critical:
+        total *= 1.5
+    return int(total)
+
+def calculate_damage_taken(incoming_damage: int, defense: int, is_blocking: bool = False) -> int:
+    """Calculate damage after defense and blocking"""
+    defense_reduction = defense * 0.3
+    reduced = incoming_damage - defense_reduction
+    if is_blocking:
+        reduced *= (1 - COMBAT_ACTIONS["block"]["damage_reduction"])
+    return max(1, int(reduced))  # Always take at least 1 damage
+
 # ============ AI Villager Professions/Roles ============
 AI_PROFESSIONS = {
     # Commoner Tier
@@ -912,6 +1028,24 @@ class Character(BaseModel):
     traits: List[str] = []
     appearance: str = ""
     current_location: str = "village_square"
+    # Combat Stats
+    health: int = 100
+    max_health: int = 100
+    stamina: float = 100.0
+    max_stamina: float = 100.0
+    strength: int = 10
+    endurance: int = 10
+    agility: int = 10
+    vitality: int = 10
+    # Equipment
+    equipped_weapon: str = "fists"
+    equipped_armor: str = "none"
+    armor_weight: float = 0.0
+    # Combat state
+    is_blocking: bool = False
+    is_sprinting: bool = False
+    last_dodge_time: Optional[datetime] = None
+    in_combat: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class CharacterCreate(BaseModel):
@@ -1065,6 +1199,23 @@ class TradeOfferCreate(BaseModel):
     offering: Dict[str, int]
     requesting: Dict[str, int]
 
+# ============ Combat Models ============
+
+class CombatAction(BaseModel):
+    character_id: str
+    action: str  # attack, heavy_attack, block, dodge, sprint
+    target_id: Optional[str] = None  # For attacks
+
+class MovementUpdate(BaseModel):
+    character_id: str
+    direction: str  # up, down, left, right, up-left, up-right, down-left, down-right
+    is_sprinting: bool = False
+
+class EquipmentChange(BaseModel):
+    character_id: str
+    slot: str  # weapon, armor
+    item_type: str  # weapon or armor type key
+
 # ============ Guild Models ============
 
 class Guild(BaseModel):
@@ -1215,6 +1366,81 @@ class PlayerHouse(BaseModel):
     residents: List[str] = Field(default_factory=list)  # villager IDs living here
     storage: Dict[str, int] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+# ============ AI Helper Device Access (Test Feature - Sirix-1 Only) ============
+
+class DeviceAccessRequest(BaseModel):
+    """Request for AI helper to access device capabilities"""
+    user_id: str
+    device_type: str  # mobile, tablet, desktop
+    is_mobile: bool = False
+    capability: str  # geolocation_approximate, vibration, notification, orientation, battery, network
+    action: str  # request, query, execute
+    parameters: Dict[str, Any] = Field(default_factory=dict)
+
+class AIHelperCommand(BaseModel):
+    """Command from AI helper to device"""
+    user_id: str
+    command_type: str
+    payload: Dict[str, Any] = Field(default_factory=dict)
+
+# Allowed device capabilities for the AI Helper (test feature)
+AI_HELPER_CAPABILITIES = {
+    "geolocation_approximate": {
+        "description": "Access approximate location (city-level only, NEVER precise)",
+        "requires_permission": True,
+        "mobile_only": False,
+        "data_returned": ["timezone_offset", "region_name"]
+    },
+    "vibration": {
+        "description": "Haptic feedback for game events",
+        "requires_permission": False,
+        "mobile_only": True,
+        "patterns": {
+            "alert": [200, 100, 200],
+            "success": [100],
+            "damage": [50, 50, 50, 50],
+            "critical": [500],
+            "heartbeat": [100, 200, 100, 200, 100, 500]
+        }
+    },
+    "notification": {
+        "description": "Send game notifications",
+        "requires_permission": True,
+        "mobile_only": False,
+        "types": ["demon_alert", "trade_complete", "quest_update", "villager_message"]
+    },
+    "orientation": {
+        "description": "Device orientation for immersive controls",
+        "requires_permission": False,
+        "mobile_only": True,
+        "data_returned": ["alpha", "beta", "gamma"]
+    },
+    "battery": {
+        "description": "Battery status for power-saving mode",
+        "requires_permission": False,
+        "mobile_only": True,
+        "data_returned": ["level", "charging"]
+    },
+    "network": {
+        "description": "Network type for quality adjustment",
+        "requires_permission": False,
+        "mobile_only": False,
+        "data_returned": ["type", "effective_type", "downlink"]
+    },
+    "wake_lock": {
+        "description": "Keep screen on during gameplay",
+        "requires_permission": False,
+        "mobile_only": True,
+        "data_returned": ["active"]
+    },
+    "clipboard": {
+        "description": "Copy game data to clipboard",
+        "requires_permission": True,
+        "mobile_only": False,
+        "data_returned": ["success"]
+    }
+}
 
 class CharacterCustomization(BaseModel):
     body_color: str = "#D4AF37"
@@ -2733,6 +2959,354 @@ async def get_character_model(user_id: str):
         "body_type": "standard"
     })
 
+# ============ Combat & Movement Routes ============
+
+@api_router.get("/combat/stats")
+async def get_combat_definitions():
+    """Get all combat-related definitions"""
+    return {
+        "actions": COMBAT_ACTIONS,
+        "armor_types": ARMOR_TYPES,
+        "weapon_types": WEAPON_TYPES,
+        "base_stats": BASE_STATS
+    }
+
+@api_router.get("/character/{character_id}/combat-stats")
+async def get_character_combat_stats(character_id: str):
+    """Get a character's combat statistics"""
+    character = await db.characters.find_one({"id": character_id}, {"_id": 0})
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    weapon = WEAPON_TYPES.get(character.get("equipped_weapon", "fists"), WEAPON_TYPES["fists"])
+    armor = ARMOR_TYPES.get(character.get("equipped_armor", "none"), ARMOR_TYPES["none"])
+    
+    strength = character.get("strength", 10)
+    endurance = character.get("endurance", 10)
+    armor_weight = armor["weight"]
+    
+    sprint_drain = calculate_sprint_stamina_drain(strength, endurance, armor_weight)
+    
+    return {
+        "character_id": character_id,
+        "name": character.get("name"),
+        "health": character.get("health", 100),
+        "max_health": character.get("max_health", 100),
+        "stamina": character.get("stamina", 100.0),
+        "max_stamina": character.get("max_stamina", 100.0),
+        "stats": {
+            "strength": strength,
+            "endurance": endurance,
+            "agility": character.get("agility", 10),
+            "vitality": character.get("vitality", 10)
+        },
+        "equipment": {
+            "weapon": weapon,
+            "weapon_key": character.get("equipped_weapon", "fists"),
+            "armor": armor,
+            "armor_key": character.get("equipped_armor", "none")
+        },
+        "derived_stats": {
+            "sprint_stamina_drain_per_second": sprint_drain,
+            "total_defense": armor["defense"],
+            "total_damage": weapon["damage"] + (strength * 0.5),
+            "dodge_chance": min(0.5, character.get("agility", 10) * 0.02)
+        },
+        "combat_state": {
+            "is_blocking": character.get("is_blocking", False),
+            "is_sprinting": character.get("is_sprinting", False),
+            "in_combat": character.get("in_combat", False)
+        }
+    }
+
+@api_router.post("/character/{character_id}/equip")
+async def equip_item(character_id: str, equipment: EquipmentChange):
+    """Equip a weapon or armor"""
+    character = await db.characters.find_one({"id": character_id}, {"_id": 0})
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    if equipment.slot == "weapon":
+        if equipment.item_type not in WEAPON_TYPES:
+            raise HTTPException(status_code=400, detail=f"Invalid weapon type. Valid: {list(WEAPON_TYPES.keys())}")
+        await db.characters.update_one(
+            {"id": character_id},
+            {"$set": {"equipped_weapon": equipment.item_type}}
+        )
+        return {"status": "success", "equipped_weapon": WEAPON_TYPES[equipment.item_type]}
+    
+    elif equipment.slot == "armor":
+        if equipment.item_type not in ARMOR_TYPES:
+            raise HTTPException(status_code=400, detail=f"Invalid armor type. Valid: {list(ARMOR_TYPES.keys())}")
+        armor = ARMOR_TYPES[equipment.item_type]
+        await db.characters.update_one(
+            {"id": character_id},
+            {"$set": {"equipped_armor": equipment.item_type, "armor_weight": armor["weight"]}}
+        )
+        return {"status": "success", "equipped_armor": armor}
+    
+    raise HTTPException(status_code=400, detail="Invalid equipment slot. Use 'weapon' or 'armor'")
+
+@api_router.post("/character/{character_id}/action")
+async def perform_combat_action(character_id: str, action: CombatAction):
+    """Perform a combat action (attack, block, dodge, sprint)"""
+    import random
+    
+    character = await db.characters.find_one({"id": character_id}, {"_id": 0})
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    current_stamina = character.get("stamina", 100.0)
+    action_data = COMBAT_ACTIONS.get(action.action)
+    
+    if not action_data:
+        raise HTTPException(status_code=400, detail=f"Invalid action. Valid: {list(COMBAT_ACTIONS.keys())}")
+    
+    response = {"action": action.action, "character_id": character_id}
+    
+    # Handle different actions
+    if action.action == "attack" or action.action == "heavy_attack":
+        stamina_cost = action_data["stamina_cost"]
+        if current_stamina < stamina_cost:
+            raise HTTPException(status_code=400, detail=f"Not enough stamina. Need {stamina_cost}, have {current_stamina}")
+        
+        # Calculate damage
+        weapon = WEAPON_TYPES.get(character.get("equipped_weapon", "fists"), WEAPON_TYPES["fists"])
+        strength = character.get("strength", 10)
+        is_critical = random.random() < 0.1  # 10% crit chance
+        
+        damage = calculate_damage(action_data["base_damage"], strength, weapon["damage"], is_critical)
+        
+        # Deduct stamina
+        new_stamina = current_stamina - stamina_cost
+        await db.characters.update_one(
+            {"id": character_id},
+            {"$set": {"stamina": new_stamina, "in_combat": True}}
+        )
+        
+        response.update({
+            "damage_dealt": damage,
+            "is_critical": is_critical,
+            "stamina_cost": stamina_cost,
+            "remaining_stamina": new_stamina,
+            "cooldown": action_data["cooldown"]
+        })
+        
+        # If there's a target, apply damage to them
+        if action.target_id:
+            target = await db.demon_encounters.find_one({"id": action.target_id, "is_active": True}, {"_id": 0})
+            if target:
+                new_health = target["health_remaining"] - damage
+                if new_health <= 0:
+                    demon_data = BIBLICAL_DEMONS.get(target["demon_type"], {})
+                    await db.demon_encounters.update_one(
+                        {"id": action.target_id},
+                        {"$set": {"health_remaining": 0, "is_active": False, "killed_by": character_id}}
+                    )
+                    response["target_defeated"] = True
+                    response["drops"] = demon_data.get("drops", {})
+                else:
+                    await db.demon_encounters.update_one(
+                        {"id": action.target_id},
+                        {"$set": {"health_remaining": new_health}}
+                    )
+                    response["target_health_remaining"] = new_health
+    
+    elif action.action == "block":
+        await db.characters.update_one(
+            {"id": character_id},
+            {"$set": {"is_blocking": True}}
+        )
+        response.update({
+            "blocking": True,
+            "damage_reduction": action_data["damage_reduction"],
+            "stamina_drain_per_second": action_data["stamina_cost"]
+        })
+    
+    elif action.action == "dodge":
+        stamina_cost = action_data["stamina_cost"]
+        if current_stamina < stamina_cost:
+            raise HTTPException(status_code=400, detail=f"Not enough stamina. Need {stamina_cost}, have {current_stamina}")
+        
+        agility = character.get("agility", 10)
+        dodge_success = random.random() < min(0.8, 0.5 + agility * 0.02)
+        
+        new_stamina = current_stamina - stamina_cost
+        await db.characters.update_one(
+            {"id": character_id},
+            {"$set": {"stamina": new_stamina, "last_dodge_time": datetime.now(timezone.utc).isoformat()}}
+        )
+        
+        response.update({
+            "dodge_success": dodge_success,
+            "invulnerability_frames": action_data["invulnerability_frames"] if dodge_success else 0,
+            "stamina_cost": stamina_cost,
+            "remaining_stamina": new_stamina,
+            "cooldown": action_data["cooldown"]
+        })
+    
+    elif action.action == "sprint":
+        strength = character.get("strength", 10)
+        endurance = character.get("endurance", 10)
+        armor_weight = character.get("armor_weight", 0)
+        
+        drain_rate = calculate_sprint_stamina_drain(strength, endurance, armor_weight)
+        
+        await db.characters.update_one(
+            {"id": character_id},
+            {"$set": {"is_sprinting": True}}
+        )
+        
+        response.update({
+            "sprinting": True,
+            "stamina_drain_per_second": drain_rate,
+            "speed_multiplier": action_data["speed_multiplier"],
+            "formula_breakdown": {
+                "strength": strength,
+                "endurance": endurance,
+                "armor_weight": armor_weight,
+                "base_drain": action_data["stamina_cost_base"]
+            }
+        })
+    
+    return response
+
+@api_router.post("/character/{character_id}/stop-action")
+async def stop_combat_action(character_id: str, action: str):
+    """Stop a continuous action (block, sprint)"""
+    character = await db.characters.find_one({"id": character_id}, {"_id": 0})
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    if action == "block":
+        await db.characters.update_one({"id": character_id}, {"$set": {"is_blocking": False}})
+        return {"status": "success", "stopped": "blocking"}
+    elif action == "sprint":
+        await db.characters.update_one({"id": character_id}, {"$set": {"is_sprinting": False}})
+        return {"status": "success", "stopped": "sprinting"}
+    
+    raise HTTPException(status_code=400, detail="Invalid action to stop. Use 'block' or 'sprint'")
+
+@api_router.post("/character/{character_id}/move")
+async def move_character(character_id: str, movement: MovementUpdate):
+    """Move character in a direction with optional sprinting"""
+    character = await db.characters.find_one({"id": character_id}, {"_id": 0})
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    # Direction vectors
+    directions = {
+        "up": {"x": 0, "y": -1},
+        "down": {"x": 0, "y": 1},
+        "left": {"x": -1, "y": 0},
+        "right": {"x": 1, "y": 0},
+        "up-left": {"x": -0.707, "y": -0.707},
+        "up-right": {"x": 0.707, "y": -0.707},
+        "down-left": {"x": -0.707, "y": 0.707},
+        "down-right": {"x": 0.707, "y": 0.707}
+    }
+    
+    if movement.direction not in directions:
+        raise HTTPException(status_code=400, detail=f"Invalid direction. Valid: {list(directions.keys())}")
+    
+    direction = directions[movement.direction]
+    current_pos = character.get("position", {"x": 0, "y": 0, "z": 0})
+    current_stamina = character.get("stamina", 100.0)
+    
+    # Calculate speed based on sprinting
+    base_speed = 5.0
+    speed = base_speed
+    stamina_used = 0
+    
+    if movement.is_sprinting:
+        strength = character.get("strength", 10)
+        endurance = character.get("endurance", 10)
+        armor_weight = character.get("armor_weight", 0)
+        
+        stamina_drain = calculate_sprint_stamina_drain(strength, endurance, armor_weight)
+        
+        if current_stamina < stamina_drain:
+            # Not enough stamina to sprint, use walk speed
+            speed = base_speed
+        else:
+            speed = base_speed * COMBAT_ACTIONS["sprint"]["speed_multiplier"]
+            stamina_used = stamina_drain
+    
+    # Update position
+    new_pos = {
+        "x": current_pos.get("x", 0) + direction["x"] * speed,
+        "y": current_pos.get("y", 0) + direction["y"] * speed,
+        "z": current_pos.get("z", 0)
+    }
+    
+    new_stamina = max(0, current_stamina - stamina_used)
+    
+    await db.characters.update_one(
+        {"id": character_id},
+        {"$set": {
+            "position": new_pos,
+            "stamina": new_stamina,
+            "is_sprinting": movement.is_sprinting and stamina_used > 0
+        }}
+    )
+    
+    return {
+        "character_id": character_id,
+        "new_position": new_pos,
+        "direction": movement.direction,
+        "speed": speed,
+        "is_sprinting": movement.is_sprinting and stamina_used > 0,
+        "stamina_used": stamina_used,
+        "remaining_stamina": new_stamina
+    }
+
+@api_router.post("/character/{character_id}/regenerate")
+async def regenerate_stats(character_id: str):
+    """Regenerate health and stamina (when out of combat)"""
+    character = await db.characters.find_one({"id": character_id}, {"_id": 0})
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    if character.get("in_combat"):
+        return {"status": "in_combat", "message": "Cannot regenerate while in combat"}
+    
+    current_health = character.get("health", 100)
+    max_health = character.get("max_health", 100)
+    current_stamina = character.get("stamina", 100.0)
+    max_stamina = character.get("max_stamina", 100.0)
+    endurance = character.get("endurance", 10)
+    vitality = character.get("vitality", 10)
+    
+    # Regeneration rates based on stats
+    health_regen = vitality * 0.5
+    stamina_regen = endurance * 1.0
+    
+    new_health = min(max_health, current_health + health_regen)
+    new_stamina = min(max_stamina, current_stamina + stamina_regen)
+    
+    await db.characters.update_one(
+        {"id": character_id},
+        {"$set": {"health": int(new_health), "stamina": new_stamina}}
+    )
+    
+    return {
+        "health": int(new_health),
+        "max_health": max_health,
+        "health_regenerated": new_health - current_health,
+        "stamina": new_stamina,
+        "max_stamina": max_stamina,
+        "stamina_regenerated": new_stamina - current_stamina
+    }
+
+@api_router.post("/character/{character_id}/exit-combat")
+async def exit_combat(character_id: str):
+    """Exit combat mode to allow regeneration"""
+    await db.characters.update_one(
+        {"id": character_id},
+        {"$set": {"in_combat": False, "is_blocking": False}}
+    )
+    return {"status": "success", "message": "Exited combat mode"}
+
 # ============ AI Villager Routes ============
 
 @api_router.get("/professions")
@@ -3750,6 +4324,169 @@ async def decay_all_moods():
         updated += 1
     
     return {"status": "success", "villagers_updated": updated}
+
+# ============ AI Helper Device Access Routes (Test Feature - Sirix-1 Mobile Only) ============
+
+async def verify_sirix_access(user_id: str) -> bool:
+    """Verify the user is Sirix-1 for test features"""
+    if user_id != "sirix_1_supreme":
+        return False
+    user = await db.user_profiles.find_one({"id": user_id}, {"_id": 0})
+    return user and user.get("is_transcendent", False)
+
+@api_router.get("/ai-helper/capabilities")
+async def get_ai_helper_capabilities(user_id: str, is_mobile: bool = False):
+    """Get available AI helper capabilities - returns full list for Sirix-1, limited for others"""
+    is_sirix = await verify_sirix_access(user_id)
+    
+    if not is_sirix:
+        return {
+            "available": False,
+            "reason": "AI Helper device access is a test feature currently restricted to Sirix-1",
+            "capabilities": {}
+        }
+    
+    # Filter capabilities based on device type
+    available_caps = {}
+    for cap_id, cap_data in AI_HELPER_CAPABILITIES.items():
+        if cap_data.get("mobile_only") and not is_mobile:
+            continue
+        available_caps[cap_id] = cap_data
+    
+    return {
+        "available": True,
+        "is_test_feature": True,
+        "warning": "This feature accesses device capabilities. Use responsibly.",
+        "capabilities": available_caps,
+        "device_type": "mobile" if is_mobile else "desktop"
+    }
+
+@api_router.post("/ai-helper/request-access")
+async def request_device_access(request: DeviceAccessRequest):
+    """Request AI helper access to a device capability - Sirix-1 mobile only"""
+    is_sirix = await verify_sirix_access(request.user_id)
+    
+    if not is_sirix:
+        raise HTTPException(
+            status_code=403, 
+            detail="AI Helper device access is a test feature restricted to Sirix-1"
+        )
+    
+    capability = AI_HELPER_CAPABILITIES.get(request.capability)
+    if not capability:
+        raise HTTPException(status_code=400, detail=f"Unknown capability: {request.capability}")
+    
+    if capability.get("mobile_only") and not request.is_mobile:
+        raise HTTPException(status_code=400, detail="This capability requires a mobile device")
+    
+    # Return the permission request details for the frontend to handle
+    return {
+        "status": "permission_required" if capability.get("requires_permission") else "granted",
+        "capability": request.capability,
+        "description": capability["description"],
+        "requires_user_consent": capability.get("requires_permission", False),
+        "instructions": {
+            "geolocation_approximate": "Will request approximate location only (city-level). NEVER precise coordinates.",
+            "vibration": "Ready to use. Call execute with pattern name.",
+            "notification": "Will request notification permission from browser/device.",
+            "orientation": "Ready to use. Will stream device orientation data.",
+            "battery": "Ready to use. Will return current battery status.",
+            "network": "Ready to use. Will return network connection info.",
+            "wake_lock": "Will request screen wake lock to prevent sleep.",
+            "clipboard": "Will request clipboard access for copying game data."
+        }.get(request.capability, "Ready to use.")
+    }
+
+@api_router.post("/ai-helper/execute")
+async def execute_ai_helper_command(command: AIHelperCommand):
+    """Execute an AI helper command - Sirix-1 only"""
+    is_sirix = await verify_sirix_access(command.user_id)
+    
+    if not is_sirix:
+        raise HTTPException(
+            status_code=403,
+            detail="AI Helper commands are restricted to Sirix-1"
+        )
+    
+    # Handle different command types
+    if command.command_type == "vibrate":
+        pattern_name = command.payload.get("pattern", "alert")
+        patterns = AI_HELPER_CAPABILITIES["vibration"]["patterns"]
+        pattern = patterns.get(pattern_name, patterns["alert"])
+        
+        return {
+            "status": "execute",
+            "command": "vibrate",
+            "pattern": pattern,
+            "pattern_name": pattern_name,
+            "frontend_action": f"navigator.vibrate({pattern})"
+        }
+    
+    elif command.command_type == "notify":
+        return {
+            "status": "execute",
+            "command": "notification",
+            "title": command.payload.get("title", "AI Village"),
+            "body": command.payload.get("body", ""),
+            "icon": command.payload.get("icon", "/favicon.ico"),
+            "tag": command.payload.get("tag", "ai-village-notification"),
+            "frontend_action": "new Notification(title, {body, icon, tag})"
+        }
+    
+    elif command.command_type == "wake_lock":
+        action = command.payload.get("action", "request")
+        return {
+            "status": "execute",
+            "command": "wake_lock",
+            "action": action,
+            "frontend_action": f"navigator.wakeLock.{'request' if action == 'request' else 'release'}('screen')"
+        }
+    
+    elif command.command_type == "clipboard_write":
+        return {
+            "status": "execute",
+            "command": "clipboard_write",
+            "data": command.payload.get("data", ""),
+            "frontend_action": "navigator.clipboard.writeText(data)"
+        }
+    
+    elif command.command_type == "query_battery":
+        return {
+            "status": "query",
+            "command": "battery",
+            "frontend_action": "navigator.getBattery().then(b => ({level: b.level, charging: b.charging}))"
+        }
+    
+    elif command.command_type == "query_network":
+        return {
+            "status": "query", 
+            "command": "network",
+            "frontend_action": "({type: navigator.connection?.type, effectiveType: navigator.connection?.effectiveType, downlink: navigator.connection?.downlink})"
+        }
+    
+    elif command.command_type == "query_orientation":
+        return {
+            "status": "stream",
+            "command": "orientation",
+            "frontend_action": "window.addEventListener('deviceorientation', (e) => ({alpha: e.alpha, beta: e.beta, gamma: e.gamma}))"
+        }
+    
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown command type: {command.command_type}")
+
+@api_router.get("/ai-helper/status")
+async def get_ai_helper_status(user_id: str):
+    """Check AI helper availability and current status"""
+    is_sirix = await verify_sirix_access(user_id)
+    
+    return {
+        "enabled": is_sirix,
+        "is_test_feature": True,
+        "user_authorized": is_sirix,
+        "version": "0.1.0-alpha",
+        "disclaimer": "This is an experimental feature. Device access capabilities are used to enhance gameplay experience.",
+        "privacy_note": "Location access uses APPROXIMATE data only (timezone/region). Precise coordinates are NEVER collected."
+    }
 
 # ============ Scan/View Profile Routes (with Sirix-1 Protection) ============
 
