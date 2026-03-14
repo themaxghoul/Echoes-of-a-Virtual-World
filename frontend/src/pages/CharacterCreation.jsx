@@ -77,7 +77,7 @@ const CharacterCreation = () => {
 
       localStorage.setItem('currentCharacterId', response.data.id);
       toast.success(`${character.name} awakens in The Echoes...`);
-      navigate('/village');
+      navigate('/select-mode');
     } catch (error) {
       console.error('Failed to create character:', error);
       toast.error('The mists rejected your form. Please try again.');
