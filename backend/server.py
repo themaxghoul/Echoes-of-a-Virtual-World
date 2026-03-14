@@ -108,6 +108,255 @@ STANDING_LEVELS = [
     {"name": "Legendary", "min_rep": 10000, "max_rep": 999999},
 ]
 
+# ============ Building Materials ============
+MATERIALS = {
+    "wood": {
+        "name": "Timber",
+        "description": "Basic building material from the Shadow Grove",
+        "strength": 20,
+        "durability": 30,
+        "rarity": "common",
+        "gather_locations": ["shadow_grove", "wanderers_rest"],
+        "color": "#8B4513"
+    },
+    "stone": {
+        "name": "Cobblestone",
+        "description": "Sturdy stone quarried from the village foundations",
+        "strength": 50,
+        "durability": 60,
+        "rarity": "common",
+        "gather_locations": ["village_square", "watchtower"],
+        "color": "#696969"
+    },
+    "iron": {
+        "name": "Forged Iron",
+        "description": "Metal refined in the Ember Forge",
+        "strength": 75,
+        "durability": 50,
+        "rarity": "uncommon",
+        "gather_locations": ["the_forge"],
+        "color": "#434343"
+    },
+    "crystal": {
+        "name": "Echo Crystal",
+        "description": "Mystical crystals from the Oracle's Sanctum",
+        "strength": 40,
+        "durability": 80,
+        "rarity": "rare",
+        "gather_locations": ["oracle_sanctum", "ancient_library"],
+        "color": "#00CED1"
+    },
+    "obsidian": {
+        "name": "Void Obsidian",
+        "description": "The strongest material, found in the deepest shadows",
+        "strength": 95,
+        "durability": 90,
+        "rarity": "legendary",
+        "gather_locations": ["watchtower"],
+        "color": "#1a1a2e"
+    }
+}
+
+# ============ Building Schematics ============
+SCHEMATICS = {
+    # Basic Tier (requires contribution level 0)
+    "torch": {
+        "name": "Flickering Torch",
+        "tier": "basic",
+        "contribution_required": 0,
+        "materials": {"wood": 2},
+        "description": "A simple light source",
+        "build_time": 5,
+        "category": "decoration"
+    },
+    "sign": {
+        "name": "Wooden Sign",
+        "tier": "basic",
+        "contribution_required": 0,
+        "materials": {"wood": 3},
+        "description": "Mark locations or leave messages",
+        "build_time": 10,
+        "category": "utility"
+    },
+    "bench": {
+        "name": "Resting Bench",
+        "tier": "basic",
+        "contribution_required": 10,
+        "materials": {"wood": 5},
+        "description": "A place for travelers to rest",
+        "build_time": 15,
+        "category": "furniture"
+    },
+    "fence": {
+        "name": "Wooden Fence",
+        "tier": "basic",
+        "contribution_required": 10,
+        "materials": {"wood": 4},
+        "description": "Basic perimeter marker",
+        "build_time": 10,
+        "category": "structure"
+    },
+    "crate": {
+        "name": "Storage Crate",
+        "tier": "basic",
+        "contribution_required": 20,
+        "materials": {"wood": 6, "iron": 1},
+        "description": "Store your materials safely",
+        "build_time": 20,
+        "category": "storage"
+    },
+    
+    # Intermediate Tier
+    "wall": {
+        "name": "Stone Wall",
+        "tier": "intermediate",
+        "contribution_required": 50,
+        "materials": {"stone": 8, "wood": 2},
+        "description": "Solid defensive wall section",
+        "build_time": 30,
+        "category": "structure"
+    },
+    "floor": {
+        "name": "Paved Floor",
+        "tier": "intermediate",
+        "contribution_required": 50,
+        "materials": {"stone": 6},
+        "description": "Sturdy flooring for buildings",
+        "build_time": 25,
+        "category": "structure"
+    },
+    "door": {
+        "name": "Reinforced Door",
+        "tier": "intermediate",
+        "contribution_required": 75,
+        "materials": {"wood": 4, "iron": 3},
+        "description": "Secure entrance with iron reinforcement",
+        "build_time": 35,
+        "category": "structure"
+    },
+    "window": {
+        "name": "Crystal Window",
+        "tier": "intermediate",
+        "contribution_required": 75,
+        "materials": {"crystal": 2, "wood": 2},
+        "description": "Let light in while staying protected",
+        "build_time": 30,
+        "category": "structure"
+    },
+    "stairs": {
+        "name": "Stone Stairs",
+        "tier": "intermediate",
+        "contribution_required": 100,
+        "materials": {"stone": 10, "iron": 2},
+        "description": "Ascend to higher levels",
+        "build_time": 40,
+        "category": "structure"
+    },
+    "lantern": {
+        "name": "Crystal Lantern",
+        "tier": "intermediate",
+        "contribution_required": 100,
+        "materials": {"crystal": 3, "iron": 2},
+        "description": "Magical light that never fades",
+        "build_time": 35,
+        "category": "decoration"
+    },
+    
+    # Advanced Tier
+    "tower": {
+        "name": "Watchtower",
+        "tier": "advanced",
+        "contribution_required": 200,
+        "materials": {"stone": 20, "wood": 10, "iron": 5},
+        "description": "Tall structure for observation",
+        "build_time": 120,
+        "category": "building"
+    },
+    "bridge": {
+        "name": "Stone Bridge",
+        "tier": "advanced",
+        "contribution_required": 200,
+        "materials": {"stone": 25, "iron": 8},
+        "description": "Connect distant areas",
+        "build_time": 150,
+        "category": "structure"
+    },
+    "shelter": {
+        "name": "Traveler's Shelter",
+        "tier": "advanced",
+        "contribution_required": 250,
+        "materials": {"wood": 15, "stone": 10, "iron": 5},
+        "description": "Basic housing for weary travelers",
+        "build_time": 180,
+        "category": "building"
+    },
+    "workshop": {
+        "name": "Crafting Workshop",
+        "tier": "advanced",
+        "contribution_required": 300,
+        "materials": {"stone": 15, "iron": 10, "crystal": 3},
+        "description": "A place to craft and create",
+        "build_time": 200,
+        "category": "building"
+    },
+    
+    # Master Tier
+    "fortress_wall": {
+        "name": "Fortress Wall",
+        "tier": "master",
+        "contribution_required": 500,
+        "materials": {"stone": 40, "iron": 15, "obsidian": 5},
+        "description": "Impenetrable defensive barrier",
+        "build_time": 300,
+        "category": "fortification"
+    },
+    "grand_gate": {
+        "name": "Grand Gate",
+        "tier": "master",
+        "contribution_required": 500,
+        "materials": {"iron": 25, "obsidian": 8, "crystal": 5},
+        "description": "Magnificent entrance worthy of legends",
+        "build_time": 350,
+        "category": "fortification"
+    },
+    "monument": {
+        "name": "Hero's Monument",
+        "tier": "master",
+        "contribution_required": 750,
+        "materials": {"stone": 30, "crystal": 10, "obsidian": 10},
+        "description": "Eternal tribute to great contributors",
+        "build_time": 400,
+        "category": "decoration"
+    },
+    "sanctuary": {
+        "name": "Oracle's Sanctuary",
+        "tier": "master",
+        "contribution_required": 1000,
+        "materials": {"crystal": 20, "obsidian": 15, "stone": 25},
+        "description": "Sacred space for communion with the Oracle",
+        "build_time": 500,
+        "category": "building"
+    }
+}
+
+# ============ Reward Types ============
+REWARD_TYPES = {
+    "material_wood": {"type": "material", "material": "wood", "amount": 5},
+    "material_stone": {"type": "material", "material": "stone", "amount": 5},
+    "material_iron": {"type": "material", "material": "iron", "amount": 3},
+    "material_crystal": {"type": "material", "material": "crystal", "amount": 2},
+    "material_obsidian": {"type": "material", "material": "obsidian", "amount": 1},
+    "gold_small": {"type": "gold", "amount": 25},
+    "gold_medium": {"type": "gold", "amount": 50},
+    "gold_large": {"type": "gold", "amount": 100},
+    "xp_small": {"type": "xp", "amount": 10},
+    "xp_medium": {"type": "xp", "amount": 25},
+    "xp_large": {"type": "xp", "amount": 50},
+    "contribution_small": {"type": "contribution", "amount": 5},
+    "contribution_medium": {"type": "contribution", "amount": 15},
+    "contribution_large": {"type": "contribution", "amount": 30},
+}
+
 # ============ Models ============
 
 class UserProfile(BaseModel):
@@ -116,9 +365,24 @@ class UserProfile(BaseModel):
     username: str
     display_name: str
     permission_level: str = "basic"
-    official_rank: str = "citizen"  # From OFFICIAL_RANKINGS
-    reputation: int = 0  # For standing calculation
+    official_rank: str = "citizen"
+    reputation: int = 0
+    contribution_points: int = 0  # For building permissions
     resources: Dict[str, int] = Field(default_factory=lambda: {"gold": 100, "essence": 10, "artifacts": 0})
+    materials: Dict[str, int] = Field(default_factory=lambda: {"wood": 10, "stone": 5, "iron": 0, "crystal": 0, "obsidian": 0})
+    unlocked_schematics: List[str] = Field(default_factory=lambda: ["torch", "sign"])
+    xp: int = 0
+    characters: List[str] = []
+    # Character customization
+    character_model: Dict[str, Any] = Field(default_factory=lambda: {
+        "body_color": "#D4AF37",
+        "accent_color": "#7B68EE",
+        "eye_color": "#00CED1",
+        "body_type": "standard"
+    })
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    last_active: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    is_immutable: bool = False
     xp: int = 0
     characters: List[str] = []
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -245,10 +509,10 @@ class DataspaceEntry(BaseModel):
     key: str
     value: str
     learned_from: str
-    learned_by: str = "system"  # who learned this - can be npc_id
+    learned_by: str = "system"
     connections: List[str] = []
     strength: float = 1.0
-    source_type: str = "player_interaction"  # player_interaction, ai_observation, world_data
+    source_type: str = "player_interaction"
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class DataspaceEntryCreate(BaseModel):
@@ -257,6 +521,54 @@ class DataspaceEntryCreate(BaseModel):
     value: str
     learned_from: str
     connections: List[str] = []
+
+# ============ Building & Trading Models ============
+
+class PlacedBuilding(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    schematic_id: str
+    builder_id: str
+    builder_name: str
+    location_id: str
+    position: Dict[str, float] = Field(default_factory=lambda: {"x": 50.0, "y": 50.0})
+    rotation: float = 0.0
+    health: int = 100
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class BuildRequest(BaseModel):
+    schematic_id: str
+    user_id: str
+    location_id: str
+    position_x: float = 50.0
+    position_y: float = 50.0
+
+class TradeOffer(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    seller_id: str
+    seller_name: str
+    offering: Dict[str, int] = {}  # material_type: amount
+    requesting: Dict[str, int] = {}  # material_type: amount or gold: amount
+    status: str = "open"  # open, accepted, cancelled, expired
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class TradeOfferCreate(BaseModel):
+    seller_id: str
+    offering: Dict[str, int]
+    requesting: Dict[str, int]
+
+class CharacterCustomization(BaseModel):
+    body_color: str = "#D4AF37"
+    accent_color: str = "#7B68EE"
+    eye_color: str = "#00CED1"
+    body_type: str = "standard"  # standard, slim, robust
+    learned_from: str
+    learned_by: str = "system"  # who learned this - can be npc_id
+    connections: List[str] = []
+    strength: float = 1.0
+    source_type: str = "player_interaction"  # player_interaction, ai_observation, world_data
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 # ============ Village Locations & NPCs ============
 
@@ -1141,6 +1453,392 @@ async def get_available_chat_channels(user_id: str):
             break
     
     return {"channels": channels, "rank_title": rank_data["title"]}
+
+# ============ Building & Crafting Routes ============
+
+@api_router.get("/materials")
+async def get_all_materials():
+    """Get all available building materials"""
+    return MATERIALS
+
+@api_router.get("/schematics")
+async def get_all_schematics():
+    """Get all building schematics"""
+    return SCHEMATICS
+
+@api_router.get("/schematics/available/{user_id}")
+async def get_available_schematics(user_id: str):
+    """Get schematics available to user based on contribution"""
+    user = await db.user_profiles.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    contribution = user.get("contribution_points", 0)
+    unlocked = user.get("unlocked_schematics", ["torch", "sign"])
+    
+    available = {}
+    locked = {}
+    
+    for schematic_id, schematic in SCHEMATICS.items():
+        if schematic["contribution_required"] <= contribution or schematic_id in unlocked:
+            available[schematic_id] = {**schematic, "unlocked": True}
+        else:
+            locked[schematic_id] = {**schematic, "unlocked": False}
+    
+    return {
+        "available": available,
+        "locked": locked,
+        "contribution_points": contribution,
+        "total_schematics": len(SCHEMATICS)
+    }
+
+@api_router.get("/inventory/{user_id}")
+async def get_user_inventory(user_id: str):
+    """Get user's materials inventory"""
+    user = await db.user_profiles.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    materials = user.get("materials", {"wood": 10, "stone": 5, "iron": 0, "crystal": 0, "obsidian": 0})
+    
+    # Add material details
+    inventory = {}
+    for mat_id, amount in materials.items():
+        if mat_id in MATERIALS:
+            inventory[mat_id] = {
+                **MATERIALS[mat_id],
+                "amount": amount
+            }
+    
+    return {
+        "materials": inventory,
+        "contribution_points": user.get("contribution_points", 0),
+        "gold": user.get("resources", {}).get("gold", 0)
+    }
+
+@api_router.post("/build")
+async def build_structure(request: BuildRequest):
+    """Build a structure using materials"""
+    user = await db.user_profiles.find_one({"id": request.user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    schematic = SCHEMATICS.get(request.schematic_id)
+    if not schematic:
+        raise HTTPException(status_code=404, detail="Schematic not found")
+    
+    # Check contribution requirement
+    contribution = user.get("contribution_points", 0)
+    if contribution < schematic["contribution_required"]:
+        raise HTTPException(status_code=403, detail=f"Need {schematic['contribution_required']} contribution points")
+    
+    # Check materials
+    user_materials = user.get("materials", {})
+    for mat_id, required_amount in schematic["materials"].items():
+        if user_materials.get(mat_id, 0) < required_amount:
+            raise HTTPException(status_code=400, detail=f"Not enough {MATERIALS.get(mat_id, {}).get('name', mat_id)}")
+    
+    # Deduct materials
+    new_materials = user_materials.copy()
+    for mat_id, required_amount in schematic["materials"].items():
+        new_materials[mat_id] = new_materials.get(mat_id, 0) - required_amount
+    
+    await db.user_profiles.update_one(
+        {"id": request.user_id},
+        {"$set": {"materials": new_materials}}
+    )
+    
+    # Create placed building
+    building = {
+        "id": str(uuid.uuid4()),
+        "schematic_id": request.schematic_id,
+        "builder_id": request.user_id,
+        "builder_name": user.get("display_name", "Unknown"),
+        "location_id": request.location_id,
+        "position": {"x": request.position_x, "y": request.position_y},
+        "rotation": 0.0,
+        "health": 100,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    result = await db.buildings.insert_one(building)
+    
+    # Award contribution for building
+    contribution_gain = schematic["contribution_required"] // 10 + 5
+    await db.user_profiles.update_one(
+        {"id": request.user_id},
+        {"$inc": {"contribution_points": contribution_gain}}
+    )
+    
+    # Return building without MongoDB ObjectId
+    building_response = building.copy()
+    return {
+        "status": "success", 
+        "building": building_response,
+        "contribution_gained": contribution_gain,
+        "remaining_materials": new_materials
+    }
+
+@api_router.get("/buildings/{location_id}")
+async def get_location_buildings(location_id: str):
+    """Get all buildings at a location"""
+    buildings = await db.buildings.find({"location_id": location_id}, {"_id": 0}).to_list(100)
+    
+    # Add schematic details to each building
+    for building in buildings:
+        schematic = SCHEMATICS.get(building.get("schematic_id"))
+        if schematic:
+            building["schematic"] = schematic
+    
+    return buildings
+
+@api_router.get("/buildings/global")
+async def get_all_buildings():
+    """Get all buildings in the world"""
+    buildings = await db.buildings.find({}, {"_id": 0}).to_list(500)
+    
+    # Group by location
+    by_location = {}
+    for building in buildings:
+        loc = building.get("location_id", "unknown")
+        if loc not in by_location:
+            by_location[loc] = []
+        schematic = SCHEMATICS.get(building.get("schematic_id"))
+        if schematic:
+            building["schematic"] = schematic
+        by_location[loc].append(building)
+    
+    return {
+        "total": len(buildings),
+        "by_location": by_location
+    }
+
+# ============ Trading Routes ============
+
+@api_router.post("/trade/offer")
+async def create_trade_offer(offer: TradeOfferCreate):
+    """Create a trade offer"""
+    user = await db.user_profiles.find_one({"id": offer.seller_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify user has the materials to offer
+    user_materials = user.get("materials", {})
+    for mat_id, amount in offer.offering.items():
+        if mat_id != "gold" and user_materials.get(mat_id, 0) < amount:
+            raise HTTPException(status_code=400, detail=f"Insufficient {mat_id}")
+        if mat_id == "gold" and user.get("resources", {}).get("gold", 0) < amount:
+            raise HTTPException(status_code=400, detail="Insufficient gold")
+    
+    trade = {
+        "id": str(uuid.uuid4()),
+        "seller_id": offer.seller_id,
+        "seller_name": user.get("display_name", "Unknown"),
+        "offering": offer.offering,
+        "requesting": offer.requesting,
+        "status": "open",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    result = await db.trades.insert_one(trade)
+    
+    # Return trade without MongoDB ObjectId
+    trade_response = trade.copy()
+    return trade_response
+
+@api_router.get("/trade/offers")
+async def get_open_trades():
+    """Get all open trade offers"""
+    trades = await db.trades.find({"status": "open"}, {"_id": 0}).to_list(100)
+    return trades
+
+@api_router.put("/trade/{trade_id}/accept")
+async def accept_trade(trade_id: str, buyer_id: str):
+    """Accept a trade offer"""
+    trade = await db.trades.find_one({"id": trade_id}, {"_id": 0})
+    if not trade:
+        raise HTTPException(status_code=404, detail="Trade not found")
+    if trade["status"] != "open":
+        raise HTTPException(status_code=400, detail="Trade no longer available")
+    if trade["seller_id"] == buyer_id:
+        raise HTTPException(status_code=400, detail="Cannot accept your own trade")
+    
+    buyer = await db.user_profiles.find_one({"id": buyer_id}, {"_id": 0})
+    seller = await db.user_profiles.find_one({"id": trade["seller_id"]}, {"_id": 0})
+    
+    if not buyer or not seller:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify buyer has what seller is requesting
+    buyer_materials = buyer.get("materials", {})
+    buyer_gold = buyer.get("resources", {}).get("gold", 0)
+    
+    for mat_id, amount in trade["requesting"].items():
+        if mat_id == "gold":
+            if buyer_gold < amount:
+                raise HTTPException(status_code=400, detail="Insufficient gold")
+        elif buyer_materials.get(mat_id, 0) < amount:
+            raise HTTPException(status_code=400, detail=f"Insufficient {mat_id}")
+    
+    # Execute trade
+    # Update buyer
+    new_buyer_materials = buyer_materials.copy()
+    new_buyer_gold = buyer_gold
+    
+    for mat_id, amount in trade["requesting"].items():
+        if mat_id == "gold":
+            new_buyer_gold -= amount
+        else:
+            new_buyer_materials[mat_id] = new_buyer_materials.get(mat_id, 0) - amount
+    
+    for mat_id, amount in trade["offering"].items():
+        if mat_id == "gold":
+            new_buyer_gold += amount
+        else:
+            new_buyer_materials[mat_id] = new_buyer_materials.get(mat_id, 0) + amount
+    
+    await db.user_profiles.update_one(
+        {"id": buyer_id},
+        {"$set": {"materials": new_buyer_materials, "resources.gold": new_buyer_gold}}
+    )
+    
+    # Update seller
+    seller_materials = seller.get("materials", {})
+    seller_gold = seller.get("resources", {}).get("gold", 0)
+    
+    for mat_id, amount in trade["offering"].items():
+        if mat_id == "gold":
+            seller_gold -= amount
+        else:
+            seller_materials[mat_id] = seller_materials.get(mat_id, 0) - amount
+    
+    for mat_id, amount in trade["requesting"].items():
+        if mat_id == "gold":
+            seller_gold += amount
+        else:
+            seller_materials[mat_id] = seller_materials.get(mat_id, 0) + amount
+    
+    await db.user_profiles.update_one(
+        {"id": trade["seller_id"]},
+        {"$set": {"materials": seller_materials, "resources.gold": seller_gold}}
+    )
+    
+    # Update trade status
+    await db.trades.update_one({"id": trade_id}, {"$set": {"status": "accepted"}})
+    
+    return {"status": "success", "message": "Trade completed!"}
+
+@api_router.put("/trade/{trade_id}/cancel")
+async def cancel_trade(trade_id: str, user_id: str):
+    """Cancel a trade offer (only by creator)"""
+    trade = await db.trades.find_one({"id": trade_id})
+    if not trade:
+        raise HTTPException(status_code=404, detail="Trade not found")
+    if trade["seller_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Only the creator can cancel")
+    
+    await db.trades.update_one({"id": trade_id}, {"$set": {"status": "cancelled"}})
+    return {"status": "success"}
+
+# ============ Rewards & Contribution ============
+
+@api_router.post("/reward/{user_id}")
+async def give_reward(user_id: str, reward_type: str):
+    """Give a reward to user (from AI/quest completion)"""
+    user = await db.user_profiles.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    reward = REWARD_TYPES.get(reward_type)
+    if not reward:
+        raise HTTPException(status_code=400, detail="Invalid reward type")
+    
+    update_ops = {}
+    
+    if reward["type"] == "material":
+        mat = reward["material"]
+        current = user.get("materials", {}).get(mat, 0)
+        update_ops[f"materials.{mat}"] = current + reward["amount"]
+    elif reward["type"] == "gold":
+        current = user.get("resources", {}).get("gold", 0)
+        update_ops["resources.gold"] = current + reward["amount"]
+    elif reward["type"] == "xp":
+        current = user.get("xp", 0)
+        update_ops["xp"] = current + reward["amount"]
+    elif reward["type"] == "contribution":
+        current = user.get("contribution_points", 0)
+        update_ops["contribution_points"] = current + reward["amount"]
+    
+    await db.user_profiles.update_one({"id": user_id}, {"$set": update_ops})
+    
+    return {"status": "success", "reward": reward}
+
+@api_router.get("/contribution/{user_id}")
+async def get_contribution_status(user_id: str):
+    """Get user's contribution status and unlocks"""
+    user = await db.user_profiles.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    contribution = user.get("contribution_points", 0)
+    
+    # Count buildings by this user
+    building_count = await db.buildings.count_documents({"builder_id": user_id})
+    
+    # Next unlock
+    next_unlock = None
+    next_contribution_needed = None
+    for schematic_id, schematic in sorted(SCHEMATICS.items(), key=lambda x: x[1]["contribution_required"]):
+        if schematic["contribution_required"] > contribution:
+            next_unlock = schematic_id
+            next_contribution_needed = schematic["contribution_required"] - contribution
+            break
+    
+    return {
+        "contribution_points": contribution,
+        "buildings_placed": building_count,
+        "schematics_unlocked": sum(1 for s in SCHEMATICS.values() if s["contribution_required"] <= contribution),
+        "total_schematics": len(SCHEMATICS),
+        "next_unlock": next_unlock,
+        "contribution_to_next": next_contribution_needed
+    }
+
+# ============ Character Customization ============
+
+@api_router.put("/users/{user_id}/customize")
+async def customize_character(user_id: str, customization: CharacterCustomization):
+    """Update character model customization"""
+    user = await db.user_profiles.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    model_data = {
+        "body_color": customization.body_color,
+        "accent_color": customization.accent_color,
+        "eye_color": customization.eye_color,
+        "body_type": customization.body_type
+    }
+    
+    await db.user_profiles.update_one(
+        {"id": user_id},
+        {"$set": {"character_model": model_data}}
+    )
+    
+    return {"status": "success", "character_model": model_data}
+
+@api_router.get("/users/{user_id}/model")
+async def get_character_model(user_id: str):
+    """Get character model customization"""
+    user = await db.user_profiles.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return user.get("character_model", {
+        "body_color": "#D4AF37",
+        "accent_color": "#7B68EE",
+        "eye_color": "#00CED1",
+        "body_type": "standard"
+    })
 
 # WebSocket for real-time multiplayer
 @app.websocket("/ws/{location_id}/{user_id}")

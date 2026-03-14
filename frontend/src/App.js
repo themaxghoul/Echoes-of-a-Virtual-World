@@ -10,6 +10,8 @@ import FirstPersonView from "@/pages/FirstPersonView";
 import DataspaceView from "@/pages/DataspaceView";
 import QuestBoard from "@/pages/QuestBoard";
 import UserProfilePage from "@/pages/UserProfilePage";
+import BuildingPage from "@/pages/BuildingPage";
+import TradingPage from "@/pages/TradingPage";
 
 function App() {
   return (
@@ -25,6 +27,8 @@ function App() {
           <Route path="/dataspace" element={<DataspaceView />} />
           <Route path="/quests" element={<QuestBoard />} />
           <Route path="/profile" element={<UserProfilePage />} />
+          <Route path="/building" element={<BuildingPage />} />
+          <Route path="/trading" element={<TradingPage />} />
         </Routes>
       </BrowserRouter>
       <Toaster 

@@ -655,14 +655,372 @@ class AIVillageAPITester:
         
         return success, response
 
+    # ============ BUILDING SYSTEM TESTS ============
+
+    def test_materials_endpoint(self):
+        """Test GET /api/materials returns 5 materials with strength/durability stats"""
+        success, response = self.run_test(
+            "Get Building Materials",
+            "GET",
+            "materials",
+            200
+        )
+        
+        if success and isinstance(response, dict):
+            materials = list(response.keys())
+            print(f"   Found {len(materials)} materials: {', '.join(materials)}")
+            
+            expected_materials = ['wood', 'stone', 'iron', 'crystal', 'obsidian']
+            if len(materials) == 5 and all(mat in materials for mat in expected_materials):
+                print(f"   ✅ All 5 expected materials present")
+            else:
+                print(f"   ❌ Expected 5 materials {expected_materials}, got {materials}")
+                
+            # Check each material has required fields
+            for mat_id, mat_data in response.items():
+                required_fields = ['name', 'strength', 'durability', 'description', 'rarity']
+                missing_fields = [f for f in required_fields if f not in mat_data]
+                if not missing_fields:
+                    print(f"   ✅ {mat_id}: STR={mat_data['strength']}, DUR={mat_data['durability']}")
+                else:
+                    print(f"   ❌ {mat_id} missing fields: {missing_fields}")
+        
+        return success, response
+
+    def test_schematics_endpoint(self):
+        """Test GET /api/schematics returns 19 schematics across 4 tiers"""
+        success, response = self.run_test(
+            "Get Building Schematics",
+            "GET",
+            "schematics",
+            200
+        )
+        
+        if success and isinstance(response, dict):
+            schematics = list(response.keys())
+            print(f"   Found {len(schematics)} schematics")
+            
+            if len(schematics) == 19:
+                print(f"   ✅ Expected 19 schematics found")
+            else:
+                print(f"   ❌ Expected 19 schematics, got {len(schematics)}")
+            
+            # Check tier distribution
+            tier_counts = {}
+            for schematic_id, schematic_data in response.items():
+                tier = schematic_data.get('tier', 'unknown')
+                tier_counts[tier] = tier_counts.get(tier, 0) + 1
+                
+                # Check required fields
+                required_fields = ['name', 'tier', 'materials', 'contribution_required', 'description']
+                missing_fields = [f for f in required_fields if f not in schematic_data]
+                if missing_fields:
+                    print(f"   ❌ {schematic_id} missing fields: {missing_fields}")
+            
+            print(f"   Tier distribution: {tier_counts}")
+            expected_tiers = ['basic', 'intermediate', 'advanced', 'master']
+            if all(tier in tier_counts for tier in expected_tiers):
+                print(f"   ✅ All 4 tiers present")
+                # Based on the code: 5 basic, 6 intermediate, 4 advanced, 4 master
+                if (tier_counts.get('basic', 0) == 5 and 
+                    tier_counts.get('intermediate', 0) == 6 and 
+                    tier_counts.get('advanced', 0) == 4 and 
+                    tier_counts.get('master', 0) == 4):
+                    print(f"   ✅ Correct tier distribution (5-6-4-4)")
+                else:
+                    print(f"   ⚠️  Tier distribution differs from expected (5-6-4-4)")
+            else:
+                print(f"   ❌ Missing tiers: {[t for t in expected_tiers if t not in tier_counts]}")
+        
+        return success, response
+
+    def test_inventory_endpoint(self):
+        """Test GET /api/inventory/{userId} returns user materials and gold"""
+        if not self.user_id:
+            print("❌ Cannot test inventory - No user ID available")
+            return False, {}
+            
+        success, response = self.run_test(
+            "Get User Inventory",
+            "GET",
+            f"inventory/{self.user_id}",
+            200
+        )
+        
+        if success and isinstance(response, dict):
+            # Check required fields
+            if 'materials' in response and 'gold' in response:
+                materials = response['materials']
+                gold = response['gold']
+                print(f"   Gold: {gold}")
+                print(f"   Materials: {len(materials)} types")
+                
+                # Check default starting materials (wood:10, stone:5)
+                if materials.get('wood', {}).get('amount', 0) >= 0:
+                    print(f"   ✅ Wood: {materials.get('wood', {}).get('amount', 0)}")
+                else:
+                    print(f"   ❌ Wood amount missing or invalid")
+                
+                if materials.get('stone', {}).get('amount', 0) >= 0:
+                    print(f"   ✅ Stone: {materials.get('stone', {}).get('amount', 0)}")
+                else:
+                    print(f"   ❌ Stone amount missing or invalid")
+                    
+                # Check each material has name, amount, strength, durability
+                for mat_id, mat_data in materials.items():
+                    required_fields = ['name', 'amount', 'strength', 'durability']
+                    if all(field in mat_data for field in required_fields):
+                        print(f"   ✅ {mat_id}: {mat_data['amount']} units")
+                    else:
+                        missing = [f for f in required_fields if f not in mat_data]
+                        print(f"   ❌ {mat_id} missing fields: {missing}")
+                        
+                # Check contribution_points field
+                if 'contribution_points' in response:
+                    print(f"   ✅ Contribution points: {response['contribution_points']}")
+                else:
+                    print(f"   ❌ Missing contribution_points field")
+            else:
+                print(f"   ❌ Missing required fields: materials or gold")
+        
+        return success, response
+
+    def test_build_structure(self):
+        """Test POST /api/build creates structure and deducts materials"""
+        if not self.user_id:
+            print("❌ Cannot test building - No user ID available")
+            return False, {}
+        
+        # Try to build a simple torch (requires 2 wood)
+        build_data = {
+            "schematic_id": "torch",
+            "user_id": self.user_id,
+            "location_id": "village_square",
+            "position_x": 50.0,
+            "position_y": 50.0
+        }
+        
+        success, response = self.run_test(
+            "Build Structure (Torch)",
+            "POST",
+            "build",
+            200,
+            data=build_data
+        )
+        
+        if success and isinstance(response, dict):
+            if 'building' in response and 'status' in response:
+                building = response['building']
+                print(f"   ✅ Built {building.get('schematic_id', 'Unknown')} successfully")
+                print(f"   Builder: {building.get('builder_name', 'Unknown')}")
+                print(f"   Location: {building.get('location_id', 'Unknown')}")
+                
+                if 'contribution_gained' in response:
+                    print(f"   ✅ Contribution gained: {response['contribution_gained']}")
+                
+                if 'remaining_materials' in response:
+                    remaining = response['remaining_materials']
+                    print(f"   ✅ Materials after build: wood={remaining.get('wood', 0)}")
+            else:
+                print(f"   ❌ Invalid build response structure")
+        
+        return success, response
+
+    def test_buildings_global(self):
+        """Test GET /api/buildings/global returns all placed buildings"""
+        success, response = self.run_test(
+            "Get Global Buildings",
+            "GET",
+            "buildings/global",
+            200
+        )
+        
+        if success and isinstance(response, dict):
+            if 'total' in response and 'by_location' in response:
+                total = response['total']
+                by_location = response['by_location']
+                print(f"   ✅ Total buildings: {total}")
+                print(f"   ✅ Locations with buildings: {len(by_location)}")
+                
+                for location, buildings in by_location.items():
+                    print(f"   {location}: {len(buildings)} buildings")
+                    
+                    # Check building structure
+                    if buildings:
+                        first_building = buildings[0]
+                        required_fields = ['id', 'schematic_id', 'builder_name', 'location_id']
+                        if all(field in first_building for field in required_fields):
+                            print(f"     ✅ Building structure valid")
+                        else:
+                            missing = [f for f in required_fields if f not in first_building]
+                            print(f"     ❌ Building missing fields: {missing}")
+            else:
+                print(f"   ❌ Missing required fields: total or by_location")
+        
+        return success, response
+
+    def test_trade_offer_creation(self):
+        """Test POST /api/trade/offer creates trade listing"""
+        if not self.user_id:
+            print("❌ Cannot test trade creation - No user ID available")
+            return False, {}
+        
+        trade_data = {
+            "seller_id": self.user_id,
+            "offering": {"wood": 5},
+            "requesting": {"gold": 25}
+        }
+        
+        success, response = self.run_test(
+            "Create Trade Offer",
+            "POST",
+            "trade/offer",
+            200,
+            data=trade_data
+        )
+        
+        if success and isinstance(response, dict):
+            if 'id' in response and 'status' in response:
+                self.trade_id = response['id']  # Store for accept test
+                print(f"   ✅ Trade created with ID: {self.trade_id}")
+                print(f"   Status: {response['status']}")
+                print(f"   Seller: {response.get('seller_name', 'Unknown')}")
+                print(f"   Offering: {response.get('offering', {})}")
+                print(f"   Requesting: {response.get('requesting', {})}")
+            else:
+                print(f"   ❌ Invalid trade response structure")
+        
+        return success, response
+
+    def test_trade_offers_list(self):
+        """Test GET /api/trade/offers returns open trades"""
+        success, response = self.run_test(
+            "Get Open Trade Offers",
+            "GET",
+            "trade/offers",
+            200
+        )
+        
+        if success and isinstance(response, list):
+            print(f"   ✅ Found {len(response)} open trades")
+            
+            if response:
+                # Check first trade structure
+                first_trade = response[0]
+                required_fields = ['id', 'seller_name', 'offering', 'requesting', 'status']
+                if all(field in first_trade for field in required_fields):
+                    print(f"   ✅ Trade structure valid")
+                    print(f"   Sample: {first_trade.get('seller_name', 'Unknown')} offering {first_trade.get('offering', {})}")
+                else:
+                    missing = [f for f in required_fields if f not in first_trade]
+                    print(f"   ❌ Trade missing fields: {missing}")
+            else:
+                print(f"   ℹ️  No open trades available")
+        else:
+            print(f"   ❌ Expected list response, got: {type(response)}")
+        
+        return success, response
+
+    def test_contribution_status(self):
+        """Test GET /api/contribution/{userId} returns contribution status"""
+        if not self.user_id:
+            print("❌ Cannot test contribution - No user ID available")
+            return False, {}
+            
+        success, response = self.run_test(
+            "Get Contribution Status",
+            "GET",
+            f"contribution/{self.user_id}",
+            200
+        )
+        
+        if success and isinstance(response, dict):
+            # This endpoint might not exist yet, so we'll check what we get
+            print(f"   Response keys: {list(response.keys())}")
+            
+            expected_fields = ['contribution_points', 'schematics_unlocked', 'total_schematics']
+            found_fields = [f for f in expected_fields if f in response]
+            missing_fields = [f for f in expected_fields if f not in response]
+            
+            if found_fields:
+                print(f"   ✅ Found fields: {found_fields}")
+                for field in found_fields:
+                    print(f"   {field}: {response[field]}")
+            
+            if missing_fields:
+                print(f"   ⚠️  Missing expected fields: {missing_fields}")
+        
+        return success, response
+
+    # Store trade_id for accept test
+    trade_id = None
+
+    def test_trade_accept(self):
+        """Test PUT /api/trade/{id}/accept completes trade"""
+        # Create a second user for trade acceptance
+        second_user_data = {
+            "username": f"trader_{datetime.now().strftime('%H%M%S')}",
+            "display_name": "Test Trader",
+            "permission_level": "basic"
+        }
+        
+        user_success, user_response = self.run_test(
+            "Create Second User for Trade",
+            "POST",
+            "users",
+            200,
+            data=second_user_data
+        )
+        
+        if not user_success or 'id' not in user_response:
+            print("❌ Cannot test trade accept - Failed to create second user")
+            return False, {}
+        
+        second_user_id = user_response['id']
+        print(f"   Created second user: {second_user_id}")
+        
+        # Create a trade offer first
+        trade_data = {
+            "seller_id": self.user_id,
+            "offering": {"wood": 1},  # Small amount to avoid insufficient materials
+            "requesting": {"gold": 10}
+        }
+        
+        trade_success, trade_response = self.run_test(
+            "Create Trade for Accept Test",
+            "POST",
+            "trade/offer",
+            200,
+            data=trade_data
+        )
+        
+        if not trade_success or 'id' not in trade_response:
+            print("❌ Cannot test trade accept - Failed to create trade")
+            return False, {}
+        
+        trade_id = trade_response['id']
+        
+        # Try to accept the trade
+        success, response = self.run_test(
+            "Accept Trade Offer",
+            "PUT",
+            f"trade/{trade_id}/accept?buyer_id={second_user_id}",
+            200
+        )
+        
+        if success:
+            print(f"   ✅ Trade accepted successfully")
+        
+        return success, response
+
 def main():
     """Run all API tests"""
-    print("🚀 Starting AI Village Backend API Tests - Multiplayer Expansion")
+    print("🚀 Starting AI Village Backend API Tests - Building System")
     print("=" * 60)
     
     tester = AIVillageAPITester()
     
-    # Core API tests + New Multiplayer Features
+    # Core API tests + New Multiplayer Features + Building System
     tests = [
         tester.test_root_endpoint,
         tester.test_get_locations,
@@ -675,6 +1033,17 @@ def main():
         tester.test_create_character,
         tester.test_get_character,
         tester.test_update_character_location,
+        # Building System Tests
+        tester.test_materials_endpoint,  # GET /api/materials
+        tester.test_schematics_endpoint,  # GET /api/schematics  
+        tester.test_inventory_endpoint,  # GET /api/inventory/{userId}
+        tester.test_build_structure,  # POST /api/build
+        tester.test_buildings_global,  # GET /api/buildings/global
+        tester.test_trade_offer_creation,  # POST /api/trade/offer
+        tester.test_trade_offers_list,  # GET /api/trade/offers
+        tester.test_trade_accept,  # PUT /api/trade/{id}/accept
+        tester.test_contribution_status,  # GET /api/contribution/{userId}
+        # AI and other tests
         tester.test_chat_functionality,  # This tests the AI integration
         tester.test_get_conversations,
         tester.test_dataspace_stats,

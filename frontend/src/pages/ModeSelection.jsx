@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { 
   Gamepad2, MessageSquare, User, Sparkles, 
-  ArrowRight, Settings, LogOut 
+  ArrowRight, Settings, LogOut, Hammer, ArrowLeftRight
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -215,11 +215,27 @@ const ModeSelection = () => {
         </div>
 
         {/* Additional Options */}
-        <div className="flex gap-4 mt-12">
+        <div className="flex flex-wrap gap-4 mt-12 justify-center">
+          <Button
+            variant="ghost"
+            onClick={() => navigate('/building')}
+            className="text-muted-foreground hover:text-gold"
+          >
+            <Hammer className="w-4 h-4 mr-2" />
+            Building Workshop
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => navigate('/trading')}
+            className="text-muted-foreground hover:text-amber-400"
+          >
+            <ArrowLeftRight className="w-4 h-4 mr-2" />
+            Trading Post
+          </Button>
           <Button
             variant="ghost"
             onClick={() => navigate('/quests')}
-            className="text-muted-foreground hover:text-gold"
+            className="text-muted-foreground hover:text-purple-400"
           >
             <Sparkles className="w-4 h-4 mr-2" />
             Quest Board
