@@ -3241,14 +3241,49 @@ async def move_character(character_id: str, movement: MovementUpdate):
     
     new_stamina = max(0, current_stamina - stamina_used)
     
+    # Calculate distance traveled for land discovery
+    import math
+    distance_moved = math.sqrt(
+        (new_pos["x"] - current_pos.get("x", 0))**2 + 
+        (new_pos["y"] - current_pos.get("y", 0))**2
+    )
+    total_distance = character.get("total_distance_traveled", 0) + distance_moved
+    
     await db.characters.update_one(
         {"id": character_id},
         {"$set": {
             "position": new_pos,
             "stamina": new_stamina,
-            "is_sprinting": movement.is_sprinting and stamina_used > 0
+            "is_sprinting": movement.is_sprinting and stamina_used > 0,
+            "total_distance_traveled": total_distance
         }}
     )
+    
+    # Check for land discoveries
+    discoveries = []
+    user_id = character.get("user_id")
+    if user_id:
+        for land_id, land_data in DISCOVERABLE_LANDS.items():
+            if land_data.get("discovery_method") == "travel":
+                required_distance = land_data.get("travel_distance", 1000)
+                if total_distance >= required_distance:
+                    # Check if not already discovered
+                    existing = await db.land_discoveries.find_one({"user_id": user_id, "land_id": land_id})
+                    if not existing:
+                        discovery_doc = {
+                            "id": str(uuid.uuid4()),
+                            "user_id": user_id,
+                            "land_id": land_id,
+                            "discovered_at": datetime.now(timezone.utc).isoformat(),
+                            "locations_unlocked": land_data["new_locations"]
+                        }
+                        await db.land_discoveries.insert_one(discovery_doc)
+                        await db.user_profiles.update_one({"id": user_id}, {"$inc": {"xp": 100}})
+                        discoveries.append({
+                            "land_id": land_id,
+                            "land_name": land_data["name"],
+                            "new_locations": land_data["new_locations"]
+                        })
     
     return {
         "character_id": character_id,
@@ -3257,7 +3292,10 @@ async def move_character(character_id: str, movement: MovementUpdate):
         "speed": speed,
         "is_sprinting": movement.is_sprinting and stamina_used > 0,
         "stamina_used": stamina_used,
-        "remaining_stamina": new_stamina
+        "remaining_stamina": new_stamina,
+        "distance_moved": distance_moved,
+        "total_distance_traveled": total_distance,
+        "discoveries": discoveries
     }
 
 @api_router.post("/character/{character_id}/regenerate")
@@ -3306,6 +3344,220 @@ async def exit_combat(character_id: str):
         {"$set": {"in_combat": False, "is_blocking": False}}
     )
     return {"status": "success", "message": "Exited combat mode"}
+
+# ============ PvP Combat System ============
+
+class PvPChallenge(BaseModel):
+    challenger_id: str
+    target_id: str
+
+class PvPAttack(BaseModel):
+    attacker_id: str
+    defender_id: str
+    action: str  # attack, heavy_attack
+
+@api_router.post("/pvp/challenge")
+async def challenge_to_pvp(challenge: PvPChallenge):
+    """Challenge another player to PvP combat"""
+    challenger = await db.characters.find_one({"id": challenge.challenger_id}, {"_id": 0})
+    target = await db.characters.find_one({"id": challenge.target_id}, {"_id": 0})
+    
+    if not challenger:
+        raise HTTPException(status_code=404, detail="Challenger not found")
+    if not target:
+        raise HTTPException(status_code=404, detail="Target not found")
+    
+    # Check they're in the same location
+    if challenger.get("current_location") != target.get("current_location"):
+        raise HTTPException(status_code=400, detail="Players must be in the same location")
+    
+    # Create PvP session
+    pvp_session = {
+        "id": str(uuid.uuid4()),
+        "challenger_id": challenge.challenger_id,
+        "challenger_name": challenger.get("name"),
+        "target_id": challenge.target_id,
+        "target_name": target.get("name"),
+        "status": "pending",  # pending, active, completed
+        "location": challenger.get("current_location"),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "winner_id": None,
+        "combat_log": []
+    }
+    
+    pvp_response = pvp_session.copy()
+    await db.pvp_sessions.insert_one(pvp_session)
+    
+    return {
+        "status": "challenge_sent",
+        "session": pvp_response,
+        "message": f"{challenger.get('name')} challenges {target.get('name')} to combat!"
+    }
+
+@api_router.post("/pvp/{session_id}/accept")
+async def accept_pvp_challenge(session_id: str, target_id: str):
+    """Accept a PvP challenge"""
+    session = await db.pvp_sessions.find_one({"id": session_id}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=404, detail="PvP session not found")
+    
+    if session["target_id"] != target_id:
+        raise HTTPException(status_code=403, detail="Only the challenged player can accept")
+    
+    if session["status"] != "pending":
+        raise HTTPException(status_code=400, detail="Challenge already responded to")
+    
+    await db.pvp_sessions.update_one(
+        {"id": session_id},
+        {"$set": {"status": "active"}}
+    )
+    
+    # Put both players in combat
+    await db.characters.update_many(
+        {"id": {"$in": [session["challenger_id"], session["target_id"]]}},
+        {"$set": {"in_combat": True, "pvp_session_id": session_id}}
+    )
+    
+    return {
+        "status": "accepted",
+        "message": "PvP combat begins!",
+        "session_id": session_id
+    }
+
+@api_router.post("/pvp/{session_id}/decline")
+async def decline_pvp_challenge(session_id: str, target_id: str):
+    """Decline a PvP challenge"""
+    session = await db.pvp_sessions.find_one({"id": session_id}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=404, detail="PvP session not found")
+    
+    if session["target_id"] != target_id:
+        raise HTTPException(status_code=403, detail="Only the challenged player can decline")
+    
+    await db.pvp_sessions.update_one(
+        {"id": session_id},
+        {"$set": {"status": "declined"}}
+    )
+    
+    return {"status": "declined", "message": "Challenge declined"}
+
+@api_router.post("/pvp/{session_id}/attack")
+async def pvp_attack(session_id: str, attack: PvPAttack):
+    """Execute an attack in PvP combat"""
+    import random
+    
+    session = await db.pvp_sessions.find_one({"id": session_id}, {"_id": 0})
+    if not session:
+        raise HTTPException(status_code=404, detail="PvP session not found")
+    
+    if session["status"] != "active":
+        raise HTTPException(status_code=400, detail="Combat not active")
+    
+    if attack.attacker_id not in [session["challenger_id"], session["target_id"]]:
+        raise HTTPException(status_code=403, detail="You are not in this fight")
+    
+    attacker = await db.characters.find_one({"id": attack.attacker_id}, {"_id": 0})
+    defender = await db.characters.find_one({"id": attack.defender_id}, {"_id": 0})
+    
+    if not attacker or not defender:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    # Get action data
+    action_data = COMBAT_ACTIONS.get(attack.action)
+    if not action_data or attack.action not in ["attack", "heavy_attack"]:
+        raise HTTPException(status_code=400, detail="Invalid attack action")
+    
+    # Check stamina
+    attacker_stamina = attacker.get("stamina", 100)
+    if attacker_stamina < action_data["stamina_cost"]:
+        raise HTTPException(status_code=400, detail="Not enough stamina")
+    
+    # Calculate damage
+    weapon = WEAPON_TYPES.get(attacker.get("equipped_weapon", "fists"), WEAPON_TYPES["fists"])
+    strength = attacker.get("strength", 10)
+    is_critical = random.random() < 0.1
+    
+    damage = calculate_damage(action_data["base_damage"], strength, weapon["damage"], is_critical)
+    
+    # Apply defender's defense and blocking
+    defender_armor = ARMOR_TYPES.get(defender.get("equipped_armor", "none"), ARMOR_TYPES["none"])
+    is_blocking = defender.get("is_blocking", False)
+    final_damage = calculate_damage_taken(damage, defender_armor["defense"], is_blocking)
+    
+    # Update characters
+    new_attacker_stamina = attacker_stamina - action_data["stamina_cost"]
+    new_defender_health = max(0, defender.get("health", 100) - final_damage)
+    
+    await db.characters.update_one({"id": attack.attacker_id}, {"$set": {"stamina": new_attacker_stamina}})
+    await db.characters.update_one({"id": attack.defender_id}, {"$set": {"health": new_defender_health}})
+    
+    # Log combat
+    log_entry = f"{attacker.get('name')} hits {defender.get('name')} for {final_damage} damage"
+    if is_critical:
+        log_entry += " (CRITICAL!)"
+    if is_blocking:
+        log_entry += " (blocked)"
+    
+    await db.pvp_sessions.update_one(
+        {"id": session_id},
+        {"$push": {"combat_log": log_entry}}
+    )
+    
+    result = {
+        "attacker": attacker.get("name"),
+        "defender": defender.get("name"),
+        "damage": final_damage,
+        "is_critical": is_critical,
+        "was_blocked": is_blocking,
+        "defender_health_remaining": new_defender_health,
+        "attacker_stamina_remaining": new_attacker_stamina
+    }
+    
+    # Check for victory
+    if new_defender_health <= 0:
+        await db.pvp_sessions.update_one(
+            {"id": session_id},
+            {"$set": {"status": "completed", "winner_id": attack.attacker_id}}
+        )
+        await db.characters.update_many(
+            {"id": {"$in": [session["challenger_id"], session["target_id"]]}},
+            {"$set": {"in_combat": False}, "$unset": {"pvp_session_id": ""}}
+        )
+        
+        # Reset defender health to 1 (not permadeath)
+        await db.characters.update_one({"id": attack.defender_id}, {"$set": {"health": 1}})
+        
+        # Award XP to winner
+        await db.characters.update_one({"id": attack.attacker_id}, {"$inc": {"xp": 50}})
+        
+        result["victory"] = True
+        result["winner"] = attacker.get("name")
+        result["message"] = f"{attacker.get('name')} is victorious!"
+    
+    return result
+
+@api_router.get("/pvp/active/{character_id}")
+async def get_active_pvp(character_id: str):
+    """Get active PvP session for a character"""
+    session = await db.pvp_sessions.find_one({
+        "$or": [{"challenger_id": character_id}, {"target_id": character_id}],
+        "status": "active"
+    }, {"_id": 0})
+    
+    if not session:
+        return {"active": False}
+    
+    return {"active": True, "session": session}
+
+@api_router.get("/pvp/pending/{character_id}")
+async def get_pending_challenges(character_id: str):
+    """Get pending PvP challenges for a character"""
+    challenges = await db.pvp_sessions.find({
+        "target_id": character_id,
+        "status": "pending"
+    }, {"_id": 0}).to_list(10)
+    
+    return challenges
 
 # ============ AI Villager Routes ============
 
@@ -4324,6 +4576,85 @@ async def decay_all_moods():
         updated += 1
     
     return {"status": "success", "villagers_updated": updated}
+
+# Mood-based dialogue templates
+MOOD_DIALOGUES = {
+    "joyful": {
+        "greeting": ["Welcome, welcome! What a fine day!", "Ah, my favorite customer! What can I do for you?", "The spirits are high today! How may I serve you?"],
+        "trade": ["For you? A special price!", "Take your pick, friend!", "Business is a pleasure with you!"],
+        "farewell": ["Come back soon!", "May fortune smile upon you!", "Safe travels, dear friend!"]
+    },
+    "content": {
+        "greeting": ["Good day to you.", "Welcome to my shop.", "How can I help you today?"],
+        "trade": ["Fair prices for fair goods.", "See anything you like?", "Quality craftsmanship here."],
+        "farewell": ["Take care now.", "Until next time.", "Good day."]
+    },
+    "neutral": {
+        "greeting": ["Yes?", "What do you need?", "Can I help you?"],
+        "trade": ["Here's what I have.", "Standard prices.", "Looking to trade?"],
+        "farewell": ["Goodbye.", "Farewell.", "Be on your way."]
+    },
+    "annoyed": {
+        "greeting": ["*sigh* What is it?", "Make it quick.", "I'm busy."],
+        "trade": ["Prices are what they are.", "Take it or leave it.", "No bargaining today."],
+        "farewell": ["Just go.", "Finally.", "*grumbles*"]
+    },
+    "angry": {
+        "greeting": ["What do YOU want?", "You've got nerve coming here.", "State your business and leave."],
+        "trade": ["Premium prices. Take it or leave.", "Not in the mood for haggling.", "Prices went up. Deal with it."],
+        "farewell": ["Get out.", "Don't come back.", "Leave. Now."]
+    },
+    "furious": {
+        "greeting": ["GET OUT OF MY SHOP!", "I won't serve the likes of you!", "The audacity! LEAVE!"],
+        "trade": ["SHOP'S CLOSED!", "I SAID NO!", "Are you deaf? GET OUT!"],
+        "farewell": ["AND STAY OUT!", "If I see you again...", "GUARDS!"]
+    }
+}
+
+@api_router.get("/villagers/{villager_id}/dialogue")
+async def get_villager_dialogue(villager_id: str, player_id: str, dialogue_type: str = "greeting"):
+    """Get mood-based dialogue from a villager"""
+    import random
+    
+    villager = await db.ai_villagers.find_one({"id": villager_id}, {"_id": 0})
+    if not villager:
+        raise HTTPException(status_code=404, detail="Villager not found")
+    
+    mood_state = villager.get("mood_state", {"current_mood": "neutral"})
+    current_mood = mood_state.get("current_mood", "neutral")
+    refuses_service = mood_state.get("refuses_service_to", [])
+    
+    # Check if villager refuses service to this player
+    if player_id in refuses_service:
+        return {
+            "villager_name": villager["name"],
+            "mood": current_mood,
+            "refuses_service": True,
+            "dialogue": f"{villager['name']} glares at you and turns away, refusing to speak.",
+            "dialogue_tone": "hostile"
+        }
+    
+    # Get dialogue based on mood
+    mood_dialogues = MOOD_DIALOGUES.get(current_mood, MOOD_DIALOGUES["neutral"])
+    dialogue_options = mood_dialogues.get(dialogue_type, mood_dialogues["greeting"])
+    
+    selected_dialogue = random.choice(dialogue_options)
+    
+    # Add profession flavor
+    profession = AI_PROFESSIONS.get(villager.get("profession", ""), {})
+    profession_name = profession.get("name", "Villager")
+    
+    mood_data = AI_MOODS.get(current_mood, AI_MOODS["neutral"])
+    
+    return {
+        "villager_name": villager["name"],
+        "profession": profession_name,
+        "mood": current_mood,
+        "dialogue_tone": mood_data["dialogue_tone"],
+        "dialogue": selected_dialogue,
+        "will_trade": mood_data["will_help"] and mood_state.get("shop_open", True),
+        "trade_modifier": mood_data.get("trade_bonus", 1.0)
+    }
 
 # ============ AI Helper Device Access Routes (Test Feature - Sirix-1 Mobile Only) ============
 

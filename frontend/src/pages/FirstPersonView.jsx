@@ -9,11 +9,12 @@ import {
   Menu, X, Hand, MessageCircle, Users, Settings,
   ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
   Pause, Play, Volume2, VolumeX, Eye, Send,
-  MapPin, Compass, Crown, Shield, Zap
+  MapPin, Compass, Crown, Shield, Zap, Package, Swords
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
 import AIHelperPanel from '@/components/AIHelperPanel';
+import MultiplayerChat from '@/components/MultiplayerChat';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -145,12 +146,17 @@ const FirstPersonView = () => {
   const [showChat, setShowChat] = useState(false);
   const [showCombatUI, setShowCombatUI] = useState(false);
   const [showAIHelper, setShowAIHelper] = useState(false);
+  const [showMultiplayerChat, setShowMultiplayerChat] = useState(false);
   const [chatChannel, setChatChannel] = useState('local');
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [availableChannels, setAvailableChannels] = useState([]);
   const [onlinePlayers, setOnlinePlayers] = useState([]);
   const [isMuted, setIsMuted] = useState(false);
+  
+  // Day/Night state
+  const [timePhase, setTimePhase] = useState('morning');
+  const [dangerLevel, setDangerLevel] = useState(0.1);
   
   // Movement state
   const [movement, setMovement] = useState({ up: false, down: false, left: false, right: false });
@@ -210,6 +216,14 @@ const FirstPersonView = () => {
           setActiveDemons(demonsRes.data);
           setInCombat(true);
           setShowCombatUI(true);
+        }
+        
+        // Load time phase
+        const timezoneOffset = new Date().getTimezoneOffset() / -60;
+        const timeRes = await axios.post(`${API}/time/phase`, { timezone_offset: timezoneOffset });
+        if (timeRes?.data) {
+          setTimePhase(timeRes.data.phase);
+          setDangerLevel(timeRes.data.danger_level);
         }
       } catch (error) {
         console.error('Failed to load:', error);
@@ -507,6 +521,28 @@ const FirstPersonView = () => {
   
   const scene = LOCATION_SCENES[currentLocation] || LOCATION_SCENES['village_square'];
   
+  // Day/Night visual overlay based on time phase
+  const getTimeOverlay = () => {
+    switch(timePhase) {
+      case 'dawn':
+        return 'bg-gradient-to-b from-orange-900/30 via-purple-900/20 to-transparent';
+      case 'morning':
+        return 'bg-gradient-to-b from-blue-400/10 via-transparent to-transparent';
+      case 'afternoon':
+        return 'bg-gradient-to-b from-yellow-200/5 via-transparent to-transparent';
+      case 'dusk':
+        return 'bg-gradient-to-b from-orange-600/30 via-purple-900/30 to-transparent';
+      case 'night':
+        return 'bg-gradient-to-b from-indigo-900/50 via-blue-900/40 to-black/60';
+      case 'witching_hour':
+        return 'bg-gradient-to-b from-purple-900/60 via-red-900/30 to-black/70';
+      case 'pre_dawn':
+        return 'bg-gradient-to-b from-indigo-900/40 via-purple-900/30 to-black/50';
+      default:
+        return '';
+    }
+  };
+  
   return (
     <div className="h-screen w-screen overflow-hidden bg-obsidian relative">
       {/* Game View */}
@@ -514,6 +550,15 @@ const FirstPersonView = () => {
         className="absolute inset-0"
         style={{ background: scene.background }}
       >
+        {/* Day/Night Overlay */}
+        <div className={`absolute inset-0 pointer-events-none z-10 transition-all duration-1000 ${getTimeOverlay()}`} />
+        
+        {/* Danger overlay during high danger phases */}
+        {dangerLevel > 0.5 && (
+          <div className="absolute inset-0 pointer-events-none z-10 animate-pulse" 
+               style={{ boxShadow: `inset 0 0 100px ${dangerLevel > 0.7 ? 'rgba(139, 0, 0, 0.3)' : 'rgba(139, 69, 19, 0.2)'}` }} />
+        )}
+        
         {/* Sky/Ceiling gradient */}
         <div className="absolute top-0 left-0 right-0 h-1/3 bg-gradient-to-b from-black/50 to-transparent" />
         
@@ -913,6 +958,22 @@ const FirstPersonView = () => {
                 </Button>
                 
                 <Button
+                  onClick={() => navigate('/inventory')}
+                  className="w-full justify-start bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 rounded-sm"
+                >
+                  <Package className="w-5 h-5 mr-3" />
+                  Inventory & Equipment
+                </Button>
+                
+                <Button
+                  onClick={() => setShowMultiplayerChat(true)}
+                  className="w-full justify-start bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 rounded-sm"
+                >
+                  <MessageCircle className="w-5 h-5 mr-3" />
+                  Multiplayer Chat
+                </Button>
+                
+                <Button
                   onClick={() => navigate('/profile')}
                   className="w-full justify-start bg-white/10 text-foreground hover:bg-white/20 rounded-sm"
                 >
@@ -939,6 +1000,19 @@ const FirstPersonView = () => {
                 </Button>
               </div>
               
+              {/* Day/Night Indicator */}
+              <div className={`mt-4 p-3 rounded-sm border ${
+                dangerLevel > 0.5 ? 'bg-red-900/20 border-red-500/30' : 'bg-surface/30 border-border/30'
+              }`}>
+                <div className="text-xs text-muted-foreground mb-1">Current Time Phase</div>
+                <div className="font-cinzel capitalize text-foreground">{timePhase.replace('_', ' ')}</div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Danger Level: <span className={dangerLevel > 0.5 ? 'text-red-400' : 'text-green-400'}>
+                    {Math.round(dangerLevel * 100)}%
+                  </span>
+                </div>
+              </div>
+              
               <Button
                 data-testid="resume-game-btn"
                 onClick={() => { setIsPaused(false); setShowChat(false); }}
@@ -951,6 +1025,16 @@ const FirstPersonView = () => {
           </Card>
         </div>
       )}
+      
+      {/* Multiplayer Chat */}
+      <MultiplayerChat 
+        userId={userProfile?.id}
+        characterId={character?.id}
+        location={currentLocation}
+        availableChannels={availableChannels}
+        isOpen={showMultiplayerChat}
+        onClose={() => setShowMultiplayerChat(false)}
+      />
       
       {/* Chat Panel */}
       {showChat && (

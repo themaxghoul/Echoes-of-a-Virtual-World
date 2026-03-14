@@ -13,6 +13,7 @@ import UserProfilePage from "@/pages/UserProfilePage";
 import BuildingPage from "@/pages/BuildingPage";
 import TradingPage from "@/pages/TradingPage";
 import GuildPage from "@/pages/GuildPage";
+import InventoryPage from "@/pages/InventoryPage";
 
 function App() {
   return (
@@ -31,6 +32,7 @@ function App() {
           <Route path="/building" element={<BuildingPage />} />
           <Route path="/trading" element={<TradingPage />} />
           <Route path="/guilds" element={<GuildPage />} />
+          <Route path="/inventory" element={<InventoryPage />} />
         </Routes>
       </BrowserRouter>
       <Toaster 
