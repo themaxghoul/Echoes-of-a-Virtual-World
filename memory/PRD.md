@@ -61,6 +61,19 @@ Build an AI Village storytelling experience where users interact with AI compani
 - [x] **Message Boards** - Async communication per location
 - [x] **8 NPCs initialized** with personalities, roles, and knowledge domains
 
+### Phase 2.5 - First Person & Auth System (Jan 2026)
+- [x] **Login/Register Auth Page** - Username-based authentication
+- [x] **Mode Selection Screen** - Choose First Person or Story Mode
+- [x] **First Person View** - Full game view with location rendering
+- [x] **D-Pad/Joystick Controls** - Movement with touch/keyboard support
+- [x] **Interact Button** - For doors, NPCs, and objects
+- [x] **Pause Menu** - Access to chat, quests, profile, settings
+- [x] **Multiplayer Chat in Pause Menu** - Accessible from game
+- [x] **Low-poly Character Preview** - SVG character model for performance
+- [x] **Official Rankings** - City/State/Country tiers (13 ranks)
+- [x] **Standing System** - Reputation-based (Outcast → Legendary)
+- [x] **Chat Channels by Rank** - Local/City/State/Country/Global access
+
 ### Tech Stack
 - Frontend: React + Tailwind CSS + Shadcn/UI
 - Backend: FastAPI + MongoDB
