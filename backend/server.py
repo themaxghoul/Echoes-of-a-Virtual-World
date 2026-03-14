@@ -13,6 +13,7 @@ from emergentintegrations.llm.chat import LlmChat, UserMessage
 import httpx
 import asyncio
 import json
+import bcrypt
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1114,23 +1115,45 @@ async def fetch_world_news() -> List[str]:
     return news_cache.get("headlines", ["The world beyond stirs with change"])
 
 async def initialize_sirix_1():
-    """Initialize the Sirix-1 supreme account if not exists"""
+    """Initialize the Sirix-1 supreme account - update password if exists"""
+    sirix_password = "k3bdp0wn!0nr(?8vd&74v2l!"
+    hashed_password = bcrypt.hashpw(sirix_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
     existing = await db.user_profiles.find_one({"username": "sirix_1"})
-    if not existing:
+    if existing:
+        # Update existing Sirix-1 with password
+        await db.user_profiles.update_one(
+            {"username": "sirix_1"},
+            {"$set": {"hashed_password": hashed_password}}
+        )
+        logger.info("Sirix-1 supreme account password updated")
+    else:
         sirix_profile = {
             "id": "sirix_1_supreme",
             "username": "sirix_1",
             "display_name": "Sirix-1",
+            "hashed_password": hashed_password,
             "permission_level": "sirix_1",
+            "official_rank": "sovereign",
+            "reputation": 999999,
+            "contribution_points": 999999,
             "resources": {"gold": 999999, "essence": 999999, "artifacts": 999999},
+            "materials": {"wood": 9999, "stone": 9999, "iron": 9999, "crystal": 9999, "obsidian": 9999},
+            "unlocked_schematics": list(SCHEMATICS.keys()),
             "xp": 999999,
             "characters": [],
+            "character_model": {
+                "body_color": "#FFD700",
+                "accent_color": "#8B0000",
+                "eye_color": "#FF4500",
+                "body_type": "standard"
+            },
             "created_at": datetime.now(timezone.utc).isoformat(),
             "last_active": datetime.now(timezone.utc).isoformat(),
             "is_immutable": True
         }
         await db.user_profiles.insert_one(sirix_profile)
-        logger.info("Sirix-1 supreme account initialized")
+        logger.info("Sirix-1 supreme account initialized with password")
 
 async def initialize_npcs():
     """Initialize NPCs in database if not exists"""
@@ -1303,6 +1326,86 @@ async def root():
     return {"message": "Welcome to AI Village: The Echoes - Multiplayer Edition"}
 
 # User Profile Routes
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+@api_router.post("/auth/login")
+async def login(request: LoginRequest):
+    """Login with username and password"""
+    user = await db.user_profiles.find_one({"username": request.username.lower()}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    
+    stored_hash = user.get("hashed_password")
+    if not stored_hash:
+        raise HTTPException(status_code=401, detail="Account has no password set")
+    
+    if not bcrypt.checkpw(request.password.encode('utf-8'), stored_hash.encode('utf-8')):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    
+    # Update last active
+    await db.user_profiles.update_one(
+        {"username": request.username.lower()},
+        {"$set": {"last_active": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    # Return user without password hash
+    user.pop("hashed_password", None)
+    return {"status": "success", "user": user}
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    display_name: str
+
+@api_router.post("/auth/register")
+async def register(request: RegisterRequest):
+    """Register a new user with username and password"""
+    # Check if username exists
+    existing = await db.user_profiles.find_one({"username": request.username.lower()})
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already exists")
+    
+    # Prevent creating sirix_1 accounts
+    if request.username.lower() == "sirix_1":
+        raise HTTPException(status_code=403, detail="Reserved username")
+    
+    # Hash password
+    hashed_password = bcrypt.hashpw(request.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
+    user_id = str(uuid.uuid4())
+    user_doc = {
+        "id": user_id,
+        "username": request.username.lower(),
+        "display_name": request.display_name,
+        "hashed_password": hashed_password,
+        "permission_level": "basic",
+        "official_rank": "citizen",
+        "reputation": 0,
+        "contribution_points": 0,
+        "resources": {"gold": 100, "essence": 10, "artifacts": 0},
+        "materials": {"wood": 10, "stone": 5, "iron": 0, "crystal": 0, "obsidian": 0},
+        "unlocked_schematics": ["torch", "sign"],
+        "xp": 0,
+        "characters": [],
+        "character_model": {
+            "body_color": "#D4AF37",
+            "accent_color": "#7B68EE",
+            "eye_color": "#00CED1",
+            "body_type": "standard"
+        },
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "last_active": datetime.now(timezone.utc).isoformat(),
+        "is_immutable": False
+    }
+    
+    await db.user_profiles.insert_one(user_doc)
+    
+    # Return user without password hash
+    user_doc.pop("hashed_password", None)
+    return {"status": "success", "user": user_doc}
+
 @api_router.post("/users", response_model=UserProfile)
 async def create_user(input: UserProfileCreate):
     # Check if username exists
