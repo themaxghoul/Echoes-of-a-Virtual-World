@@ -6330,6 +6330,210 @@ async def uninstall_ai_app(app_id: str, user_id: str):
     
     return {"app_id": app_id, "uninstalled": True}
 
+# ============ Notification System ============
+class NotificationCreate(BaseModel):
+    user_id: str
+    title: str
+    message: str
+    notification_type: str = "system"  # message, guild, combat, gift, system
+
+@api_router.get("/notifications/{user_id}")
+async def get_notifications(user_id: str, limit: int = 50):
+    """Get notifications for a user"""
+    notifications = await db.notifications.find(
+        {"user_id": user_id},
+        {"_id": 0}
+    ).sort("timestamp", -1).limit(limit).to_list(limit)
+    
+    unread_count = await db.notifications.count_documents({
+        "user_id": user_id,
+        "read": False
+    })
+    
+    return {
+        "notifications": notifications,
+        "unread_count": unread_count
+    }
+
+@api_router.post("/notifications")
+async def create_notification(notification: NotificationCreate):
+    """Create a notification for a user"""
+    notif_data = {
+        "id": str(uuid.uuid4()),
+        "user_id": notification.user_id,
+        "title": notification.title,
+        "message": notification.message,
+        "type": notification.notification_type,
+        "read": False,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.notifications.insert_one(notif_data)
+    return {"notification_id": notif_data["id"], "created": True}
+
+@api_router.put("/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: str):
+    """Mark a notification as read"""
+    await db.notifications.update_one(
+        {"id": notification_id},
+        {"$set": {"read": True}}
+    )
+    return {"notification_id": notification_id, "read": True}
+
+@api_router.delete("/notifications/{notification_id}")
+async def delete_notification(notification_id: str):
+    """Delete a notification"""
+    await db.notifications.delete_one({"id": notification_id})
+    return {"notification_id": notification_id, "deleted": True}
+
+# ============ Location-Based Discovery System ============
+class LocationDiscoveryRequest(BaseModel):
+    user_id: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    use_simulation: bool = False
+
+@api_router.post("/discovery/check")
+async def check_location_discovery(request: LocationDiscoveryRequest):
+    """Check if user can discover new areas based on location"""
+    user = await db.user_profiles.find_one({"id": request.user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    discovered_locations = user.get("discovered_locations", ["village_square"])
+    character = await db.characters.find_one({"user_id": request.user_id})
+    
+    # All available locations
+    all_locations = [
+        "village_square", "the_forge", "oracle_sanctum", 
+        "ancient_library", "wanderers_rest", "shadow_grove", "watchtower"
+    ]
+    
+    undiscovered = [loc for loc in all_locations if loc not in discovered_locations]
+    
+    if not undiscovered:
+        return {
+            "discovered": False,
+            "message": "All areas have been discovered!",
+            "total_discovered": len(discovered_locations)
+        }
+    
+    # Check if Sirix-1 (has access to all)
+    if user.get("is_transcendent") or user.get("permission_level") == "sirix_1":
+        return {
+            "discovered": False,
+            "all_accessible": True,
+            "accessible_locations": all_locations,
+            "message": "Transcendent being - all areas accessible"
+        }
+    
+    discovery_chance = 0.0
+    discovery_method = ""
+    
+    # Real GPS-based discovery
+    if request.latitude is not None and request.longitude is not None:
+        # Calculate "exploration factor" based on GPS movement
+        last_coords = user.get("last_gps_coords", {"lat": 0, "lng": 0})
+        
+        if last_coords["lat"] != 0:
+            # Calculate rough distance moved (simplified)
+            lat_diff = abs(request.latitude - last_coords["lat"])
+            lng_diff = abs(request.longitude - last_coords["lng"])
+            distance_factor = (lat_diff + lng_diff) * 111000  # Rough meters
+            
+            # More movement = higher discovery chance
+            if distance_factor > 100:  # Moved at least 100m
+                discovery_chance = min(0.5, distance_factor / 1000)
+                discovery_method = "gps_exploration"
+        
+        # Update last coordinates
+        await db.user_profiles.update_one(
+            {"id": request.user_id},
+            {"$set": {"last_gps_coords": {"lat": request.latitude, "lng": request.longitude}}}
+        )
+    
+    # Simulated exploration based on in-game distance
+    if request.use_simulation or discovery_chance == 0:
+        travel_distance = character.get("total_distance_traveled", 0) if character else 0
+        conversations = user.get("conversation_count", 0)
+        
+        # Base chance from exploration
+        discovery_chance = min(0.3, (travel_distance / 500) * 0.1 + (conversations / 20) * 0.1)
+        discovery_method = "simulated_exploration"
+    
+    # Roll for discovery
+    import random
+    if random.random() < discovery_chance and undiscovered:
+        new_location = random.choice(undiscovered)
+        discovered_locations.append(new_location)
+        
+        await db.user_profiles.update_one(
+            {"id": request.user_id},
+            {"$set": {"discovered_locations": discovered_locations}}
+        )
+        
+        # Create notification
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": request.user_id,
+            "title": "New Area Discovered!",
+            "message": f"You have discovered {new_location.replace('_', ' ').title()}!",
+            "type": "system",
+            "read": False,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+        
+        return {
+            "discovered": True,
+            "new_location": new_location,
+            "location_name": new_location.replace("_", " ").title(),
+            "method": discovery_method,
+            "total_discovered": len(discovered_locations)
+        }
+    
+    return {
+        "discovered": False,
+        "discovery_chance": round(discovery_chance * 100, 1),
+        "undiscovered_count": len(undiscovered),
+        "method": discovery_method,
+        "message": "Keep exploring to discover new areas!"
+    }
+
+@api_router.get("/discovery/locations/{user_id}")
+async def get_discovered_locations(user_id: str):
+    """Get all discovered locations for a user"""
+    user = await db.user_profiles.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    all_locations = [
+        {"id": "village_square", "name": "Village Square", "theme": "realistic"},
+        {"id": "the_forge", "name": "The Ember Forge", "theme": "realistic"},
+        {"id": "oracle_sanctum", "name": "Oracle's Sanctum", "theme": "matrix"},
+        {"id": "ancient_library", "name": "Ancient Library", "theme": "realistic"},
+        {"id": "wanderers_rest", "name": "Wanderer's Rest", "theme": "realistic"},
+        {"id": "shadow_grove", "name": "Shadow Grove", "theme": "matrix"},
+        {"id": "watchtower", "name": "The Watchtower", "theme": "realistic"},
+    ]
+    
+    discovered = user.get("discovered_locations", ["village_square"])
+    is_transcendent = user.get("is_transcendent") or user.get("permission_level") == "sirix_1"
+    
+    result = []
+    for loc in all_locations:
+        result.append({
+            **loc,
+            "discovered": loc["id"] in discovered or is_transcendent,
+            "accessible": loc["id"] in discovered or is_transcendent
+        })
+    
+    return {
+        "locations": result,
+        "discovered_count": len(discovered) if not is_transcendent else len(all_locations),
+        "total_count": len(all_locations),
+        "all_accessible": is_transcendent
+    }
+
 # WebSocket for real-time multiplayer
 @app.websocket("/ws/{location_id}/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, location_id: str, user_id: str):

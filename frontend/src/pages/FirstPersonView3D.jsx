@@ -10,12 +10,16 @@ import {
   ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
   Pause, Play, Volume2, VolumeX, Eye, Send,
   MapPin, Compass, Crown, Shield, Zap, Package, Swords,
-  Sparkles, Terminal
+  Sparkles, Terminal, Star, Map, Bell, Layout
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
 import AIHelperPanel from '@/components/AIHelperPanel';
 import MultiplayerChat from '@/components/MultiplayerChat';
+import CharacterStatsPanel from '@/components/CharacterStatsPanel';
+import InteractiveMap from '@/components/InteractiveMap';
+import LayoutCustomization, { useGameLayout } from '@/components/LayoutCustomization';
+import NotificationCenter, { NotificationBell } from '@/components/NotificationCenter';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -59,6 +63,7 @@ const LOCATION_SCENES_3D = {
     ambientLight: 0.4,
     fog: 'rgba(13, 27, 42, 0.5)',
     mystical: true,
+    matrixTheme: true,
     structures: [
       { type: 'altar', x: 50, z: 30, scale: 1.5, glow: true },
       { type: 'crystal', x: 30, z: 40, scale: 1.0, color: '#6c63ff' },
@@ -153,6 +158,7 @@ const LOCATION_SCENES_3D = {
     ambientLight: 0.3,
     fog: 'rgba(10, 26, 10, 0.6)',
     mystical: true,
+    matrixTheme: true,
     structures: [
       { type: 'tree', x: 20, z: 30, scale: 2.0 },
       { type: 'tree', x: 80, z: 25, scale: 1.8 },
@@ -502,8 +508,20 @@ const FirstPersonView3D = () => {
   const [showMultiplayerChat, setShowMultiplayerChat] = useState(false);
   const [showAIHelper, setShowAIHelper] = useState(false);
   const [showCommands, setShowCommands] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  const [showMap, setShowMap] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showLayoutSettings, setShowLayoutSettings] = useState(false);
   const [availableCommands, setAvailableCommands] = useState({});
   const [availableChannels, setAvailableChannels] = useState([]);
+  
+  // Camera state for look-around
+  const [cameraAngle, setCameraAngle] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  
+  // Layout settings
+  const gameLayout = useGameLayout();
   
   // Time state
   const [timePhase, setTimePhase] = useState('morning');
@@ -732,7 +750,49 @@ const FirstPersonView3D = () => {
     setIsSprinting(start);
   };
   
+  // Camera drag handlers for look-around
+  const handleCameraDragStart = (e) => {
+    if (e.target.closest('button') || e.target.closest('[role="button"]')) return;
+    setIsDragging(true);
+    const touch = e.touches ? e.touches[0] : e;
+    setDragStart({ x: touch.clientX, y: touch.clientY });
+  };
+  
+  const handleCameraDragMove = (e) => {
+    if (!isDragging) return;
+    const touch = e.touches ? e.touches[0] : e;
+    const deltaX = (touch.clientX - dragStart.x) * 0.3;
+    const deltaY = (touch.clientY - dragStart.y) * 0.3;
+    
+    setCameraAngle(prev => ({
+      x: Math.max(-45, Math.min(45, prev.x + deltaY)),
+      y: prev.y + deltaX
+    }));
+    
+    setDragStart({ x: touch.clientX, y: touch.clientY });
+  };
+  
+  const handleCameraDragEnd = () => {
+    setIsDragging(false);
+  };
+  
+  // Handle location change from map
+  const handleLocationChange = async (newLocation) => {
+    setCurrentLocation(newLocation);
+    setPlayerPosition({ x: 50, z: 70 });
+    setCameraAngle({ x: 0, y: 0 });
+    
+    if (character) {
+      await axios.put(`${API}/character/${character.id}/location?location_id=${newLocation}`);
+    }
+  };
+  
   const scene = LOCATION_SCENES_3D[currentLocation] || LOCATION_SCENES_3D['village_square'];
+  
+  // Button styling based on layout settings
+  const btnSize = gameLayout.buttonSize || 45;
+  const btnSpacing = gameLayout.buttonSpacing || 20;
+  const edgeMargin = gameLayout.edgeMargin || 30;
   
   // Time-based lighting
   const getTimeOverlay = () => {
@@ -763,48 +823,86 @@ const FirstPersonView3D = () => {
           0%, 100% { transform: translateY(0); }
           50% { transform: translateY(-5px); }
         }
+        @keyframes matrix-rain {
+          0% { transform: translateY(-100%); opacity: 1; }
+          100% { transform: translateY(100vh); opacity: 0; }
+        }
       `}</style>
       
-      {/* 3D Game View */}
+      {/* 3D Game View with Camera Control */}
       <div 
-        className="absolute inset-0 overflow-hidden"
+        className="absolute inset-0 overflow-hidden cursor-move"
         style={{ 
           background: scene.skyGradient,
           perspective: '1000px',
         }}
+        onMouseDown={handleCameraDragStart}
+        onMouseMove={handleCameraDragMove}
+        onMouseUp={handleCameraDragEnd}
+        onMouseLeave={handleCameraDragEnd}
+        onTouchStart={handleCameraDragStart}
+        onTouchMove={handleCameraDragMove}
+        onTouchEnd={handleCameraDragEnd}
       >
-        {/* Time overlay */}
-        <div className={`absolute inset-0 pointer-events-none z-10 bg-gradient-to-b ${getTimeOverlay()} transition-all duration-1000`} />
-        
-        {/* Fog layer */}
-        {scene.fog && (
-          <div 
-            className="absolute inset-0 pointer-events-none z-5"
-            style={{ background: scene.fog }}
-          />
-        )}
-        
-        {/* Ground plane with perspective */}
+        {/* Camera transform wrapper */}
         <div 
-          className="absolute bottom-0 left-0 right-0 h-1/2"
+          className="absolute inset-0 transition-transform duration-100"
           style={{
-            background: `linear-gradient(to top, ${scene.floorColor} 0%, transparent 100%)`,
-            transform: 'rotateX(60deg)',
-            transformOrigin: 'bottom center',
+            transform: `rotateX(${cameraAngle.x}deg) rotateY(${cameraAngle.y}deg)`,
+            transformStyle: 'preserve-3d',
           }}
         >
-          {/* Floor grid pattern */}
+          {/* Matrix theme overlay for mystical locations */}
+          {scene.matrixTheme && (
+            <div className="absolute inset-0 pointer-events-none z-5 overflow-hidden opacity-30">
+              {[...Array(20)].map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute text-green-500 font-mono text-xs"
+                  style={{
+                    left: `${Math.random() * 100}%`,
+                    animation: `matrix-rain ${3 + Math.random() * 4}s linear infinite`,
+                    animationDelay: `${Math.random() * 3}s`,
+                  }}
+                >
+                  {[...Array(10)].map(() => String.fromCharCode(0x30A0 + Math.random() * 96)).join('')}
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {/* Time overlay */}
+          <div className={`absolute inset-0 pointer-events-none z-10 bg-gradient-to-b ${getTimeOverlay()} transition-all duration-1000`} />
+          
+          {/* Fog layer */}
+          {scene.fog && (
+            <div 
+              className="absolute inset-0 pointer-events-none z-5"
+              style={{ background: scene.fog }}
+            />
+          )}
+          
+          {/* Ground plane with perspective */}
           <div 
-            className="absolute inset-0 opacity-20"
+            className="absolute bottom-0 left-0 right-0 h-1/2"
             style={{
-              backgroundImage: `
-                linear-gradient(rgba(255,215,0,0.1) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,215,0,0.1) 1px, transparent 1px)
-              `,
-              backgroundSize: '50px 50px',
+              background: `linear-gradient(to top, ${scene.floorColor} 0%, transparent 100%)`,
+              transform: 'rotateX(60deg)',
+              transformOrigin: 'bottom center',
             }}
-          />
-        </div>
+          >
+            {/* Floor grid pattern */}
+            <div 
+              className="absolute inset-0 opacity-20"
+              style={{
+                backgroundImage: `
+                  linear-gradient(rgba(255,215,0,0.1) 1px, transparent 1px),
+                  linear-gradient(90deg, rgba(255,215,0,0.1) 1px, transparent 1px)
+                `,
+                backgroundSize: '50px 50px',
+              }}
+            />
+          </div>
         
         {/* Structures */}
         {scene.structures?.map((structure, idx) => (
@@ -854,6 +952,7 @@ const FirstPersonView3D = () => {
             <div className="absolute inset-0 rounded-full bg-gold animate-ping opacity-40" />
           </div>
         </div>
+        </div>
       </div>
       
       {/* HUD - Top */}
@@ -862,10 +961,47 @@ const FirstPersonView3D = () => {
           <div className="flex items-center gap-3">
             <MapPin className="w-4 h-4 text-gold" />
             <span className="font-cinzel text-sm text-foreground">{scene.name}</span>
+            {scene.matrixTheme && (
+              <Badge className="bg-green-500/20 text-green-400 text-xs">Matrix</Badge>
+            )}
           </div>
         </div>
         
         <div className="flex gap-2">
+          {/* Stats Button (Purple Star) */}
+          <Button
+            data-testid="stats-btn"
+            onClick={() => setShowStats(true)}
+            variant="ghost"
+            size="icon"
+            className="glass rounded-sm"
+          >
+            <Star className="w-5 h-5 text-purple-400 fill-purple-400" />
+          </Button>
+          
+          {/* Map Button */}
+          <Button
+            data-testid="map-btn"
+            onClick={() => setShowMap(true)}
+            variant="ghost"
+            size="icon"
+            className="glass rounded-sm"
+          >
+            <Map className="w-5 h-5 text-gold" />
+          </Button>
+          
+          {/* Notifications */}
+          <Button
+            data-testid="notifications-btn"
+            onClick={() => setShowNotifications(!showNotifications)}
+            variant="ghost"
+            size="icon"
+            className="glass rounded-sm relative"
+          >
+            <Bell className="w-5 h-5 text-foreground" />
+          </Button>
+          
+          {/* Pause */}
           <Button
             data-testid="pause-btn"
             onClick={() => setIsPaused(true)}
@@ -988,74 +1124,99 @@ const FirstPersonView3D = () => {
         </div>
       </div>
       
-      {/* Action buttons - Right side */}
-      <div className="absolute bottom-4 right-4 z-40 flex flex-col gap-3 items-end">
-        {/* Interact */}
-        <Button
-          data-testid="interact-btn"
-          onClick={handleInteract}
-          disabled={!nearbyInteractable}
-          className={`w-16 h-16 rounded-full font-cinzel text-lg ${
-            nearbyInteractable 
-              ? 'bg-gold text-black hover:bg-gold-light animate-pulse' 
-              : 'bg-white/10 text-muted-foreground'
-          }`}
-        >
-          <Hand className="w-8 h-8" />
-        </Button>
+      {/* Action buttons - Landscape optimized layout */}
+      {/* Buttons positioned at bottom right with proper spacing */}
+      <div 
+        className="absolute z-40 flex items-center"
+        style={{ 
+          bottom: `${edgeMargin}px`, 
+          right: `${edgeMargin}px`,
+          gap: `${btnSpacing}px`
+        }}
+      >
+        {/* Combat buttons group */}
+        <div className="flex items-center" style={{ gap: `${btnSpacing}px` }}>
+          {/* Magic */}
+          <Button
+            data-testid="magic-btn"
+            disabled={combatStats.mana < 10}
+            className="rounded-full bg-purple-700 hover:bg-purple-600 text-white flex flex-col items-center justify-center"
+            style={{ width: `${btnSize}px`, height: `${btnSize}px` }}
+          >
+            <Sparkles className="w-5 h-5" />
+          </Button>
+          
+          {/* Block */}
+          <Button
+            data-testid="block-btn"
+            className={`rounded-full ${isBlocking ? 'bg-blue-500' : 'bg-blue-800 hover:bg-blue-700'} text-white`}
+            style={{ width: `${btnSize}px`, height: `${btnSize}px` }}
+          >
+            <Shield className="w-5 h-5" />
+          </Button>
+          
+          {/* Attack */}
+          <Button
+            data-testid="attack-btn"
+            onClick={() => toast.info('Combat requires a target')}
+            disabled={combatStats.stamina < 10}
+            className="rounded-full bg-red-600 hover:bg-red-500 text-white"
+            style={{ width: `${btnSize}px`, height: `${btnSize}px` }}
+          >
+            <Swords className="w-5 h-5" />
+          </Button>
+        </div>
         
-        {nearbyInteractable && (
-          <Badge className="bg-black/80 text-gold font-mono text-xs">
-            {nearbyInteractable.type === 'exit' ? 'Enter' : 'Talk'}
-          </Badge>
-        )}
+        {/* Divider */}
+        <div className="w-px h-10 bg-white/20" />
         
-        {/* Sprint */}
-        <Button
-          data-testid="sprint-btn"
-          onMouseDown={() => handleSprint(true)}
-          onMouseUp={() => handleSprint(false)}
-          onTouchStart={() => handleSprint(true)}
-          onTouchEnd={() => handleSprint(false)}
-          className={`w-14 h-14 rounded-full ${
-            isSprinting 
-              ? 'bg-yellow-500 text-black' 
-              : 'bg-white/10 text-foreground hover:bg-white/20'
-          }`}
-        >
-          <span className="text-xs font-bold">RUN</span>
-        </Button>
+        {/* Action buttons group */}
+        <div className="flex items-center" style={{ gap: `${btnSpacing}px` }}>
+          {/* Sprint */}
+          <Button
+            data-testid="sprint-btn"
+            onMouseDown={() => handleSprint(true)}
+            onMouseUp={() => handleSprint(false)}
+            onTouchStart={() => handleSprint(true)}
+            onTouchEnd={() => handleSprint(false)}
+            className={`rounded-full ${
+              isSprinting 
+                ? 'bg-yellow-500 text-black' 
+                : 'bg-white/10 text-foreground hover:bg-white/20'
+            }`}
+            style={{ width: `${btnSize}px`, height: `${btnSize}px` }}
+          >
+            <Zap className="w-5 h-5" />
+          </Button>
+          
+          {/* Interact */}
+          <Button
+            data-testid="interact-btn"
+            onClick={handleInteract}
+            disabled={!nearbyInteractable}
+            className={`rounded-full font-cinzel ${
+              nearbyInteractable 
+                ? 'bg-gold text-black hover:bg-gold-light animate-pulse' 
+                : 'bg-white/10 text-muted-foreground'
+            }`}
+            style={{ width: `${btnSize + 10}px`, height: `${btnSize + 10}px` }}
+          >
+            <Hand className="w-6 h-6" />
+          </Button>
+        </div>
       </div>
       
-      {/* Combat buttons */}
-      <div className="absolute bottom-32 right-4 z-40 flex flex-col gap-2 items-center">
-        <Button
-          data-testid="attack-btn"
-          onClick={() => toast.info('Combat requires a target')}
-          disabled={combatStats.stamina < 10}
-          className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-500 text-white"
+      {/* Interact label */}
+      {nearbyInteractable && (
+        <div 
+          className="absolute z-40"
+          style={{ bottom: `${edgeMargin + btnSize + 15}px`, right: `${edgeMargin}px` }}
         >
-          <Swords className="w-6 h-6" />
-        </Button>
-        <span className="text-xs font-mono text-foreground/50">Attack</span>
-        
-        <Button
-          data-testid="block-btn"
-          className={`w-12 h-12 rounded-full ${isBlocking ? 'bg-blue-500' : 'bg-blue-800 hover:bg-blue-700'} text-white`}
-        >
-          <Shield className="w-5 h-5" />
-        </Button>
-        <span className="text-xs font-mono text-foreground/50">Block</span>
-        
-        <Button
-          data-testid="magic-btn"
-          disabled={combatStats.mana < 10}
-          className="w-12 h-12 rounded-full bg-purple-700 hover:bg-purple-600 text-white"
-        >
-          <Sparkles className="w-5 h-5" />
-        </Button>
-        <span className="text-xs font-mono text-foreground/50">Magic</span>
-      </div>
+          <Badge className="bg-black/80 text-gold font-mono text-xs">
+            {nearbyInteractable.type === 'exit' ? 'Enter' : 'Talk'} - {nearbyInteractable.name || nearbyInteractable.label}
+          </Badge>
+        </div>
+      )}
       
       {/* Pause Menu */}
       {isPaused && (
@@ -1162,6 +1323,17 @@ const FirstPersonView3D = () => {
                 </Button>
                 
                 <Button
+                  onClick={() => {
+                    setIsPaused(false);
+                    setShowLayoutSettings(true);
+                  }}
+                  className="w-full justify-start bg-slate-500/20 text-slate-400 hover:bg-slate-500/30 rounded-sm"
+                >
+                  <Layout className="w-5 h-5 mr-3" />
+                  Layout Settings
+                </Button>
+                
+                <Button
                   onClick={() => navigate('/')}
                   variant="ghost"
                   className="w-full justify-start text-red-400 hover:text-red-300 rounded-sm"
@@ -1253,6 +1425,41 @@ const FirstPersonView3D = () => {
           </div>
         </div>
       )}
+      
+      {/* Character Stats Panel */}
+      <CharacterStatsPanel
+        characterId={character?.id}
+        userId={userProfile?.id}
+        isOpen={showStats}
+        onClose={() => setShowStats(false)}
+      />
+      
+      {/* Interactive Map */}
+      <InteractiveMap
+        currentLocation={currentLocation}
+        onLocationSelect={handleLocationChange}
+        isOpen={showMap}
+        onClose={() => setShowMap(false)}
+        isTranscendent={userProfile?.is_transcendent || userProfile?.permission_level === 'sirix_1'}
+      />
+      
+      {/* Notification Center */}
+      {showNotifications && (
+        <NotificationCenter
+          userId={userProfile?.id}
+          isOpen={showNotifications}
+          onClose={() => setShowNotifications(false)}
+        />
+      )}
+      
+      {/* Layout Customization */}
+      <LayoutCustomization
+        isOpen={showLayoutSettings}
+        onClose={() => setShowLayoutSettings(false)}
+        onSave={(newLayout) => {
+          // Layout will be picked up by useGameLayout hook on next render
+        }}
+      />
     </div>
   );
 };

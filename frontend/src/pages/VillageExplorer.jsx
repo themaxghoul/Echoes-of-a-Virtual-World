@@ -415,6 +415,14 @@ const VillageExplorer = () => {
             {/* Bottom Nav */}
             <div className="p-4 border-t border-border/30 space-y-2">
               <button
+                data-testid="nav-first-person-btn"
+                onClick={() => navigate('/play')}
+                className="w-full flex items-center gap-2 p-3 bg-gold/20 text-gold hover:bg-gold/30 rounded-sm transition-colors"
+              >
+                <Globe className="w-4 h-4" />
+                <span className="font-manrope text-sm">Switch to First Person</span>
+              </button>
+              <button
                 data-testid="nav-quests-btn"
                 onClick={() => navigate('/quests')}
                 className="w-full flex items-center gap-2 p-3 text-muted-foreground hover:text-gold transition-colors"
