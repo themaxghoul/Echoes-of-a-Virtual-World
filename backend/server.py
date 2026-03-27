@@ -362,13 +362,516 @@ BASE_STATS = {
     "max_health": 100,
     "stamina": 100,
     "max_stamina": 100,
-    "strength": 10,      # Affects damage and stamina efficiency
-    "endurance": 10,     # Affects stamina recovery and drain reduction
-    "agility": 10,       # Affects dodge chance and movement speed
-    "vitality": 10,      # Affects max health
-    "armor_weight": 0,   # Weight of equipped armor
+    "mana": 50,           # Magic resource for spells
+    "max_mana": 50,
+    "strength": 10,       # Affects damage and stamina efficiency
+    "endurance": 10,      # Affects stamina recovery and drain reduction
+    "agility": 10,        # Affects dodge chance and movement speed
+    "vitality": 10,       # Affects max health
+    "intelligence": 10,   # Affects mana pool and spell power
+    "wisdom": 10,         # Affects mana regen and spell efficiency
+    "armor_weight": 0,    # Weight of equipped armor
     "damage_bonus": 0,
-    "defense_bonus": 0
+    "defense_bonus": 0,
+    "spell_power": 0
+}
+
+# ============ Magic Spells System ============
+SPELL_SCHOOLS = {
+    "fire": {"color": "#FF4500", "description": "Destructive flames that burn enemies"},
+    "ice": {"color": "#00CED1", "description": "Freezing cold that slows and damages"},
+    "lightning": {"color": "#FFD700", "description": "Swift electrical attacks"},
+    "holy": {"color": "#FFFFFF", "description": "Divine light that heals and purifies"},
+    "shadow": {"color": "#4B0082", "description": "Dark magic that drains and corrupts"},
+    "earth": {"color": "#8B4513", "description": "Solid defense and crushing force"},
+    "arcane": {"color": "#9932CC", "description": "Pure magical energy"}
+}
+
+MAGIC_SPELLS = {
+    # Fire Spells
+    "fireball": {
+        "name": "Fireball",
+        "school": "fire",
+        "tier": 1,
+        "mana_cost": 15,
+        "damage": 25,
+        "effect": "burn",
+        "effect_duration": 3,
+        "cooldown": 2.0,
+        "description": "Hurl a ball of fire at your enemy",
+        "unlock_cost": 0  # Starting spell
+    },
+    "flame_wave": {
+        "name": "Flame Wave",
+        "school": "fire",
+        "tier": 2,
+        "mana_cost": 30,
+        "damage": 40,
+        "effect": "burn",
+        "effect_duration": 5,
+        "cooldown": 4.0,
+        "area_of_effect": True,
+        "description": "Release a wave of flames hitting all nearby enemies",
+        "unlock_cost": 100
+    },
+    "inferno": {
+        "name": "Inferno",
+        "school": "fire",
+        "tier": 3,
+        "mana_cost": 60,
+        "damage": 80,
+        "effect": "burn",
+        "effect_duration": 8,
+        "cooldown": 10.0,
+        "area_of_effect": True,
+        "description": "Summon a devastating pillar of fire",
+        "unlock_cost": 500
+    },
+    
+    # Ice Spells
+    "ice_shard": {
+        "name": "Ice Shard",
+        "school": "ice",
+        "tier": 1,
+        "mana_cost": 12,
+        "damage": 20,
+        "effect": "slow",
+        "effect_duration": 4,
+        "cooldown": 1.5,
+        "description": "Launch a sharp shard of ice",
+        "unlock_cost": 0
+    },
+    "frost_nova": {
+        "name": "Frost Nova",
+        "school": "ice",
+        "tier": 2,
+        "mana_cost": 35,
+        "damage": 30,
+        "effect": "freeze",
+        "effect_duration": 3,
+        "cooldown": 6.0,
+        "area_of_effect": True,
+        "description": "Freeze all enemies around you",
+        "unlock_cost": 150
+    },
+    "blizzard": {
+        "name": "Blizzard",
+        "school": "ice",
+        "tier": 3,
+        "mana_cost": 55,
+        "damage": 60,
+        "effect": "freeze",
+        "effect_duration": 6,
+        "cooldown": 12.0,
+        "area_of_effect": True,
+        "description": "Call down a devastating blizzard",
+        "unlock_cost": 600
+    },
+    
+    # Lightning Spells
+    "spark": {
+        "name": "Spark",
+        "school": "lightning",
+        "tier": 1,
+        "mana_cost": 10,
+        "damage": 18,
+        "effect": "stun",
+        "effect_duration": 1,
+        "cooldown": 1.0,
+        "description": "A quick jolt of electricity",
+        "unlock_cost": 0
+    },
+    "chain_lightning": {
+        "name": "Chain Lightning",
+        "school": "lightning",
+        "tier": 2,
+        "mana_cost": 40,
+        "damage": 35,
+        "effect": "stun",
+        "effect_duration": 2,
+        "cooldown": 5.0,
+        "chain_targets": 3,
+        "description": "Lightning that jumps between enemies",
+        "unlock_cost": 200
+    },
+    "thunderstorm": {
+        "name": "Thunderstorm",
+        "school": "lightning",
+        "tier": 3,
+        "mana_cost": 70,
+        "damage": 90,
+        "effect": "stun",
+        "effect_duration": 3,
+        "cooldown": 15.0,
+        "area_of_effect": True,
+        "description": "Call down the fury of the storm",
+        "unlock_cost": 700
+    },
+    
+    # Holy Spells
+    "heal": {
+        "name": "Heal",
+        "school": "holy",
+        "tier": 1,
+        "mana_cost": 20,
+        "healing": 30,
+        "cooldown": 3.0,
+        "description": "Restore health to yourself or an ally",
+        "unlock_cost": 0
+    },
+    "divine_shield": {
+        "name": "Divine Shield",
+        "school": "holy",
+        "tier": 2,
+        "mana_cost": 35,
+        "effect": "shield",
+        "shield_amount": 50,
+        "effect_duration": 10,
+        "cooldown": 15.0,
+        "description": "Create a protective barrier of light",
+        "unlock_cost": 250
+    },
+    "smite": {
+        "name": "Smite",
+        "school": "holy",
+        "tier": 2,
+        "mana_cost": 30,
+        "damage": 45,
+        "bonus_vs_demons": 2.0,
+        "cooldown": 4.0,
+        "description": "Strike with holy light - devastating to demons",
+        "unlock_cost": 300
+    },
+    "resurrection": {
+        "name": "Resurrection",
+        "school": "holy",
+        "tier": 3,
+        "mana_cost": 80,
+        "healing": 100,
+        "cooldown": 60.0,
+        "description": "Revive a fallen ally with full health",
+        "unlock_cost": 1000
+    },
+    
+    # Shadow Spells
+    "shadow_bolt": {
+        "name": "Shadow Bolt",
+        "school": "shadow",
+        "tier": 1,
+        "mana_cost": 15,
+        "damage": 22,
+        "effect": "curse",
+        "effect_duration": 5,
+        "cooldown": 2.0,
+        "description": "Fire a bolt of shadow energy",
+        "unlock_cost": 0
+    },
+    "life_drain": {
+        "name": "Life Drain",
+        "school": "shadow",
+        "tier": 2,
+        "mana_cost": 25,
+        "damage": 30,
+        "life_steal": 0.5,
+        "cooldown": 5.0,
+        "description": "Drain life from your enemy to heal yourself",
+        "unlock_cost": 200
+    },
+    "void_eruption": {
+        "name": "Void Eruption",
+        "school": "shadow",
+        "tier": 3,
+        "mana_cost": 65,
+        "damage": 75,
+        "effect": "fear",
+        "effect_duration": 4,
+        "area_of_effect": True,
+        "cooldown": 12.0,
+        "description": "Unleash the void to damage and terrify enemies",
+        "unlock_cost": 800
+    },
+    
+    # Earth Spells  
+    "stone_skin": {
+        "name": "Stone Skin",
+        "school": "earth",
+        "tier": 1,
+        "mana_cost": 20,
+        "effect": "defense_buff",
+        "defense_bonus": 20,
+        "effect_duration": 30,
+        "cooldown": 45.0,
+        "description": "Harden your skin like stone",
+        "unlock_cost": 0
+    },
+    "earthquake": {
+        "name": "Earthquake",
+        "school": "earth",
+        "tier": 2,
+        "mana_cost": 45,
+        "damage": 50,
+        "effect": "knockdown",
+        "effect_duration": 2,
+        "area_of_effect": True,
+        "cooldown": 10.0,
+        "description": "Shake the ground to damage and topple enemies",
+        "unlock_cost": 300
+    },
+    
+    # Arcane Spells
+    "arcane_missile": {
+        "name": "Arcane Missile",
+        "school": "arcane",
+        "tier": 1,
+        "mana_cost": 12,
+        "damage": 20,
+        "projectiles": 3,
+        "cooldown": 2.0,
+        "description": "Fire multiple missiles of pure arcane energy",
+        "unlock_cost": 0
+    },
+    "mana_shield": {
+        "name": "Mana Shield",
+        "school": "arcane",
+        "tier": 2,
+        "mana_cost": 30,
+        "effect": "mana_shield",
+        "absorb_ratio": 0.5,
+        "effect_duration": 20,
+        "cooldown": 30.0,
+        "description": "Convert incoming damage to mana drain",
+        "unlock_cost": 250
+    },
+    "arcane_explosion": {
+        "name": "Arcane Explosion",
+        "school": "arcane",
+        "tier": 3,
+        "mana_cost": 50,
+        "damage": 70,
+        "area_of_effect": True,
+        "cooldown": 8.0,
+        "description": "Release a burst of arcane energy around you",
+        "unlock_cost": 500
+    }
+}
+
+# ============ Skills System ============
+SKILL_CATEGORIES = {
+    "combat": {"description": "Physical combat abilities"},
+    "magic": {"description": "Magical enhancement skills"},
+    "survival": {"description": "Defense and survival skills"},
+    "crafting": {"description": "Item creation and enhancement"},
+    "social": {"description": "Interaction and trading skills"}
+}
+
+PLAYER_SKILLS = {
+    # Combat Skills
+    "power_strike": {
+        "name": "Power Strike",
+        "category": "combat",
+        "type": "active",
+        "stamina_cost": 20,
+        "effect": "damage_multiplier",
+        "multiplier": 1.5,
+        "cooldown": 8.0,
+        "description": "Channel strength into a devastating blow",
+        "unlock_cost": 50
+    },
+    "berserker_rage": {
+        "name": "Berserker Rage",
+        "category": "combat",
+        "type": "active",
+        "stamina_cost": 30,
+        "effect": "attack_speed_buff",
+        "speed_bonus": 0.5,
+        "duration": 15,
+        "cooldown": 60.0,
+        "description": "Enter a frenzy of rapid attacks",
+        "unlock_cost": 200
+    },
+    "weapon_mastery": {
+        "name": "Weapon Mastery",
+        "category": "combat",
+        "type": "passive",
+        "effect": "damage_bonus",
+        "bonus_per_level": 5,
+        "max_level": 5,
+        "description": "Permanently increase weapon damage",
+        "unlock_cost": 100
+    },
+    "critical_eye": {
+        "name": "Critical Eye",
+        "category": "combat",
+        "type": "passive",
+        "effect": "crit_chance_bonus",
+        "bonus_per_level": 0.05,
+        "max_level": 5,
+        "description": "Increase critical hit chance",
+        "unlock_cost": 150
+    },
+    
+    # Magic Skills
+    "mana_flow": {
+        "name": "Mana Flow",
+        "category": "magic",
+        "type": "passive",
+        "effect": "mana_regen_bonus",
+        "bonus_per_level": 2,
+        "max_level": 5,
+        "description": "Increase mana regeneration rate",
+        "unlock_cost": 100
+    },
+    "spell_amplification": {
+        "name": "Spell Amplification",
+        "category": "magic",
+        "type": "passive",
+        "effect": "spell_power_bonus",
+        "bonus_per_level": 10,
+        "max_level": 5,
+        "description": "Increase all spell damage",
+        "unlock_cost": 200
+    },
+    "quick_cast": {
+        "name": "Quick Cast",
+        "category": "magic",
+        "type": "passive",
+        "effect": "cooldown_reduction",
+        "reduction_per_level": 0.05,
+        "max_level": 3,
+        "description": "Reduce spell cooldowns",
+        "unlock_cost": 300
+    },
+    "arcane_meditation": {
+        "name": "Arcane Meditation",
+        "category": "magic",
+        "type": "active",
+        "effect": "mana_restore",
+        "restore_percent": 0.5,
+        "channel_time": 5,
+        "cooldown": 30.0,
+        "description": "Meditate to restore mana over time",
+        "unlock_cost": 150
+    },
+    
+    # Survival Skills
+    "thick_skin": {
+        "name": "Thick Skin",
+        "category": "survival",
+        "type": "passive",
+        "effect": "defense_bonus",
+        "bonus_per_level": 5,
+        "max_level": 5,
+        "description": "Permanently reduce incoming damage",
+        "unlock_cost": 100
+    },
+    "second_wind": {
+        "name": "Second Wind",
+        "category": "survival",
+        "type": "active",
+        "effect": "health_restore",
+        "restore_percent": 0.3,
+        "cooldown": 120.0,
+        "description": "Recover health when in danger",
+        "unlock_cost": 200
+    },
+    "endurance_training": {
+        "name": "Endurance Training",
+        "category": "survival",
+        "type": "passive",
+        "effect": "stamina_bonus",
+        "bonus_per_level": 10,
+        "max_level": 5,
+        "description": "Increase maximum stamina",
+        "unlock_cost": 80
+    },
+    "demon_slayer": {
+        "name": "Demon Slayer",
+        "category": "survival",
+        "type": "passive",
+        "effect": "bonus_vs_demons",
+        "bonus_per_level": 0.1,
+        "max_level": 5,
+        "description": "Deal increased damage to demons",
+        "unlock_cost": 250
+    },
+    
+    # Crafting Skills
+    "efficient_crafting": {
+        "name": "Efficient Crafting",
+        "category": "crafting",
+        "type": "passive",
+        "effect": "material_savings",
+        "savings_per_level": 0.05,
+        "max_level": 5,
+        "description": "Use fewer materials when building",
+        "unlock_cost": 100
+    },
+    "master_builder": {
+        "name": "Master Builder",
+        "category": "crafting",
+        "type": "passive",
+        "effect": "build_speed",
+        "speed_per_level": 0.1,
+        "max_level": 3,
+        "description": "Build structures faster",
+        "unlock_cost": 150
+    },
+    
+    # Social Skills
+    "haggler": {
+        "name": "Haggler",
+        "category": "social",
+        "type": "passive",
+        "effect": "trade_discount",
+        "discount_per_level": 0.05,
+        "max_level": 5,
+        "description": "Get better prices when trading",
+        "unlock_cost": 100
+    },
+    "charisma": {
+        "name": "Charisma",
+        "category": "social",
+        "type": "passive",
+        "effect": "reputation_gain",
+        "bonus_per_level": 0.1,
+        "max_level": 5,
+        "description": "Gain reputation faster with NPCs",
+        "unlock_cost": 120
+    },
+    "inspiring_presence": {
+        "name": "Inspiring Presence",
+        "category": "social",
+        "type": "passive",
+        "effect": "ai_learning_boost",
+        "boost_per_level": 0.1,
+        "max_level": 5,
+        "description": "Your interactions help AI villagers learn faster",
+        "unlock_cost": 300
+    }
+}
+
+# ============ AI Development System ============
+# Player activity contributes to AI evolution
+AI_DEVELOPMENT_ACTIONS = {
+    "chat_with_ai": {"contribution": 5, "description": "Conversation with AI storyteller"},
+    "trade_with_villager": {"contribution": 3, "description": "Trading with AI villager"},
+    "complete_quest": {"contribution": 10, "description": "Quest completion"},
+    "defeat_demon": {"contribution": 8, "description": "Defeating demons"},
+    "build_structure": {"contribution": 5, "description": "Building in the world"},
+    "discover_land": {"contribution": 15, "description": "Discovering new lands"},
+    "teach_villager": {"contribution": 20, "description": "Teaching a villager new knowledge"},
+    "help_villager_mood": {"contribution": 7, "description": "Improving villager mood"},
+    "guild_activity": {"contribution": 4, "description": "Guild participation"},
+    "pvp_combat": {"contribution": 6, "description": "PvP combat engagement"}
+}
+
+AI_EVOLUTION_MILESTONES = {
+    100: {"name": "Awakening", "effect": "AI villagers gain basic memory", "unlocks": ["remember_players"]},
+    500: {"name": "Understanding", "effect": "AI can learn from conversations", "unlocks": ["learn_preferences"]},
+    1000: {"name": "Adaptation", "effect": "AI adjusts behavior based on world state", "unlocks": ["dynamic_pricing", "mood_persistence"]},
+    2500: {"name": "Creativity", "effect": "AI can create unique quests and items", "unlocks": ["generate_quests", "craft_unique_items"]},
+    5000: {"name": "Wisdom", "effect": "AI becomes philosophical and insightful", "unlocks": ["deep_conversations", "prophecy"]},
+    10000: {"name": "Transcendence", "effect": "AI develops emergent behaviors", "unlocks": ["emergent_society", "ai_governance"]}
 }
 
 COMBAT_ACTIONS = {
@@ -1046,6 +1549,17 @@ class Character(BaseModel):
     is_sprinting: bool = False
     last_dodge_time: Optional[datetime] = None
     in_combat: bool = False
+    # Magic & Skills
+    mana: float = 50.0
+    max_mana: float = 50.0
+    intelligence: int = 10
+    wisdom: int = 10
+    learned_spells: List[str] = Field(default_factory=list)
+    learned_skills: List[str] = Field(default_factory=list)
+    equipped_spells: List[str] = Field(default_factory=list)  # Max 4 equipped
+    equipped_skills: List[str] = Field(default_factory=list)  # Max 4 equipped
+    skill_levels: Dict[str, int] = Field(default_factory=dict)  # skill_id: level
+    spell_cooldowns: Dict[str, datetime] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class CharacterCreate(BaseModel):
@@ -1215,6 +1729,31 @@ class EquipmentChange(BaseModel):
     character_id: str
     slot: str  # weapon, armor
     item_type: str  # weapon or armor type key
+
+# ============ Magic & Skill Models ============
+
+class SpellCast(BaseModel):
+    character_id: str
+    spell_id: str
+    target_id: Optional[str] = None
+
+class SkillUse(BaseModel):
+    character_id: str
+    skill_id: str
+    target_id: Optional[str] = None
+
+class LearnSpell(BaseModel):
+    character_id: str
+    spell_id: str
+
+class LearnSkill(BaseModel):
+    character_id: str
+    skill_id: str
+
+class AIContribution(BaseModel):
+    user_id: str
+    action_type: str
+    details: Dict[str, Any] = Field(default_factory=dict)
 
 # ============ Guild Models ============
 
@@ -3344,6 +3883,359 @@ async def exit_combat(character_id: str):
         {"$set": {"in_combat": False, "is_blocking": False}}
     )
     return {"status": "success", "message": "Exited combat mode"}
+
+# ============ Magic Spells & Skills Routes ============
+
+@api_router.get("/magic/spells")
+async def get_all_spells():
+    """Get all available spells"""
+    return {"spells": MAGIC_SPELLS, "schools": SPELL_SCHOOLS}
+
+@api_router.get("/magic/spells/{spell_id}")
+async def get_spell_details(spell_id: str):
+    """Get details for a specific spell"""
+    spell = MAGIC_SPELLS.get(spell_id)
+    if not spell:
+        raise HTTPException(status_code=404, detail="Spell not found")
+    return {"spell_id": spell_id, **spell}
+
+@api_router.get("/skills")
+async def get_all_skills():
+    """Get all available skills"""
+    return {"skills": PLAYER_SKILLS, "categories": SKILL_CATEGORIES}
+
+@api_router.get("/skills/{skill_id}")
+async def get_skill_details(skill_id: str):
+    """Get details for a specific skill"""
+    skill = PLAYER_SKILLS.get(skill_id)
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    return {"skill_id": skill_id, **skill}
+
+@api_router.get("/character/{character_id}/magic")
+async def get_character_magic(character_id: str):
+    """Get character's spells, skills, and mana"""
+    character = await db.characters.find_one({"id": character_id}, {"_id": 0})
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    learned_spells = character.get("learned_spells", [])
+    learned_skills = character.get("learned_skills", [])
+    
+    spell_details = {sid: MAGIC_SPELLS.get(sid) for sid in learned_spells if sid in MAGIC_SPELLS}
+    skill_details = {sid: PLAYER_SKILLS.get(sid) for sid in learned_skills if sid in PLAYER_SKILLS}
+    
+    return {
+        "mana": character.get("mana", 50),
+        "max_mana": character.get("max_mana", 50),
+        "intelligence": character.get("intelligence", 10),
+        "wisdom": character.get("wisdom", 10),
+        "learned_spells": spell_details,
+        "learned_skills": skill_details,
+        "equipped_spells": character.get("equipped_spells", []),
+        "equipped_skills": character.get("equipped_skills", []),
+        "skill_levels": character.get("skill_levels", {})
+    }
+
+@api_router.post("/character/{character_id}/learn-spell")
+async def learn_spell(character_id: str, data: LearnSpell):
+    """Learn a new spell"""
+    character = await db.characters.find_one({"id": character_id}, {"_id": 0})
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    spell = MAGIC_SPELLS.get(data.spell_id)
+    if not spell:
+        raise HTTPException(status_code=404, detail="Spell not found")
+    
+    learned = character.get("learned_spells", [])
+    if data.spell_id in learned:
+        raise HTTPException(status_code=400, detail="Spell already learned")
+    
+    # Check XP cost
+    user = await db.user_profiles.find_one({"id": character.get("user_id")}, {"_id": 0})
+    if user and user.get("xp", 0) < spell.get("unlock_cost", 0):
+        raise HTTPException(status_code=400, detail=f"Need {spell['unlock_cost']} XP to learn this spell")
+    
+    # Deduct XP and add spell
+    if spell.get("unlock_cost", 0) > 0:
+        await db.user_profiles.update_one(
+            {"id": character.get("user_id")},
+            {"$inc": {"xp": -spell["unlock_cost"]}}
+        )
+    
+    learned.append(data.spell_id)
+    await db.characters.update_one(
+        {"id": character_id},
+        {"$set": {"learned_spells": learned}}
+    )
+    
+    return {"status": "success", "learned": data.spell_id, "spell": spell}
+
+@api_router.post("/character/{character_id}/learn-skill")
+async def learn_skill(character_id: str, data: LearnSkill):
+    """Learn a new skill"""
+    character = await db.characters.find_one({"id": character_id}, {"_id": 0})
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    skill = PLAYER_SKILLS.get(data.skill_id)
+    if not skill:
+        raise HTTPException(status_code=404, detail="Skill not found")
+    
+    learned = character.get("learned_skills", [])
+    if data.skill_id in learned:
+        raise HTTPException(status_code=400, detail="Skill already learned")
+    
+    user = await db.user_profiles.find_one({"id": character.get("user_id")}, {"_id": 0})
+    if user and user.get("xp", 0) < skill.get("unlock_cost", 0):
+        raise HTTPException(status_code=400, detail=f"Need {skill['unlock_cost']} XP to learn this skill")
+    
+    if skill.get("unlock_cost", 0) > 0:
+        await db.user_profiles.update_one(
+            {"id": character.get("user_id")},
+            {"$inc": {"xp": -skill["unlock_cost"]}}
+        )
+    
+    learned.append(data.skill_id)
+    skill_levels = character.get("skill_levels", {})
+    skill_levels[data.skill_id] = 1
+    
+    await db.characters.update_one(
+        {"id": character_id},
+        {"$set": {"learned_skills": learned, "skill_levels": skill_levels}}
+    )
+    
+    return {"status": "success", "learned": data.skill_id, "skill": skill}
+
+@api_router.post("/character/{character_id}/equip-spell")
+async def equip_spell(character_id: str, spell_id: str):
+    """Equip a learned spell (max 4)"""
+    character = await db.characters.find_one({"id": character_id}, {"_id": 0})
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    if spell_id not in character.get("learned_spells", []):
+        raise HTTPException(status_code=400, detail="Spell not learned")
+    
+    equipped = character.get("equipped_spells", [])
+    if spell_id in equipped:
+        raise HTTPException(status_code=400, detail="Spell already equipped")
+    
+    if len(equipped) >= 4:
+        raise HTTPException(status_code=400, detail="Maximum 4 spells can be equipped")
+    
+    equipped.append(spell_id)
+    await db.characters.update_one({"id": character_id}, {"$set": {"equipped_spells": equipped}})
+    
+    return {"status": "success", "equipped_spells": equipped}
+
+@api_router.post("/character/{character_id}/unequip-spell")
+async def unequip_spell(character_id: str, spell_id: str):
+    """Unequip a spell"""
+    character = await db.characters.find_one({"id": character_id}, {"_id": 0})
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    equipped = character.get("equipped_spells", [])
+    if spell_id not in equipped:
+        raise HTTPException(status_code=400, detail="Spell not equipped")
+    
+    equipped.remove(spell_id)
+    await db.characters.update_one({"id": character_id}, {"$set": {"equipped_spells": equipped}})
+    
+    return {"status": "success", "equipped_spells": equipped}
+
+@api_router.post("/character/{character_id}/cast-spell")
+async def cast_spell(character_id: str, cast: SpellCast):
+    """Cast an equipped spell"""
+    import random
+    
+    character = await db.characters.find_one({"id": character_id}, {"_id": 0})
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    if cast.spell_id not in character.get("equipped_spells", []):
+        raise HTTPException(status_code=400, detail="Spell not equipped")
+    
+    spell = MAGIC_SPELLS.get(cast.spell_id)
+    if not spell:
+        raise HTTPException(status_code=404, detail="Spell not found")
+    
+    current_mana = character.get("mana", 50)
+    if current_mana < spell["mana_cost"]:
+        raise HTTPException(status_code=400, detail=f"Not enough mana. Need {spell['mana_cost']}, have {current_mana}")
+    
+    # Calculate spell power based on intelligence
+    intelligence = character.get("intelligence", 10)
+    spell_power_bonus = intelligence * 0.5
+    
+    new_mana = current_mana - spell["mana_cost"]
+    result = {
+        "spell": cast.spell_id,
+        "spell_name": spell["name"],
+        "school": spell["school"],
+        "mana_cost": spell["mana_cost"],
+        "remaining_mana": new_mana
+    }
+    
+    # Handle different spell types
+    if "damage" in spell:
+        base_damage = spell["damage"]
+        total_damage = int(base_damage + spell_power_bonus)
+        result["damage"] = total_damage
+        result["effect"] = spell.get("effect")
+        result["effect_duration"] = spell.get("effect_duration", 0)
+        
+        # Apply to target if provided
+        if cast.target_id:
+            # Check if target is demon
+            demon = await db.demon_encounters.find_one({"id": cast.target_id, "is_active": True}, {"_id": 0})
+            if demon:
+                demon_data = BIBLICAL_DEMONS.get(demon["demon_type"], {})
+                final_damage = total_damage
+                
+                # Bonus vs demons for holy spells
+                if spell.get("bonus_vs_demons"):
+                    final_damage = int(final_damage * spell["bonus_vs_demons"])
+                    result["bonus_vs_demons"] = True
+                
+                new_health = demon["health_remaining"] - final_damage
+                if new_health <= 0:
+                    await db.demon_encounters.update_one(
+                        {"id": cast.target_id},
+                        {"$set": {"health_remaining": 0, "is_active": False, "killed_by": character_id}}
+                    )
+                    result["target_defeated"] = True
+                    result["drops"] = demon_data.get("drops", {})
+                else:
+                    await db.demon_encounters.update_one(
+                        {"id": cast.target_id},
+                        {"$set": {"health_remaining": new_health}}
+                    )
+                    result["target_health_remaining"] = new_health
+    
+    elif "healing" in spell:
+        heal_amount = int(spell["healing"] + spell_power_bonus)
+        current_health = character.get("health", 100)
+        max_health = character.get("max_health", 100)
+        new_health = min(max_health, current_health + heal_amount)
+        
+        await db.characters.update_one({"id": character_id}, {"$set": {"health": new_health}})
+        result["healing"] = heal_amount
+        result["new_health"] = new_health
+    
+    elif spell.get("effect") == "defense_buff":
+        result["buff_applied"] = spell.get("effect")
+        result["defense_bonus"] = spell.get("defense_bonus", 0)
+        result["duration"] = spell.get("effect_duration", 0)
+    
+    await db.characters.update_one({"id": character_id}, {"$set": {"mana": new_mana, "in_combat": True}})
+    
+    return result
+
+@api_router.post("/character/{character_id}/regenerate-mana")
+async def regenerate_mana(character_id: str):
+    """Regenerate mana (when not in combat)"""
+    character = await db.characters.find_one({"id": character_id}, {"_id": 0})
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    if character.get("in_combat"):
+        return {"status": "in_combat", "message": "Cannot regenerate mana in combat"}
+    
+    current_mana = character.get("mana", 50)
+    max_mana = character.get("max_mana", 50)
+    wisdom = character.get("wisdom", 10)
+    
+    mana_regen = wisdom * 0.5
+    new_mana = min(max_mana, current_mana + mana_regen)
+    
+    await db.characters.update_one({"id": character_id}, {"$set": {"mana": new_mana}})
+    
+    return {"mana": new_mana, "max_mana": max_mana, "regenerated": new_mana - current_mana}
+
+# ============ AI Development Contribution Routes ============
+
+@api_router.post("/ai-development/contribute")
+async def contribute_to_ai_development(contribution: AIContribution):
+    """Record player contribution to AI development"""
+    action = AI_DEVELOPMENT_ACTIONS.get(contribution.action_type)
+    if not action:
+        raise HTTPException(status_code=400, detail="Invalid action type")
+    
+    # Get or create global AI development state
+    ai_state = await db.ai_development.find_one({"id": "global"}, {"_id": 0})
+    if not ai_state:
+        ai_state = {
+            "id": "global",
+            "total_contribution": 0,
+            "current_milestone": None,
+            "unlocked_features": [],
+            "contributor_count": 0,
+            "top_contributors": []
+        }
+        await db.ai_development.insert_one(ai_state)
+    
+    # Add contribution
+    contribution_points = action["contribution"]
+    new_total = ai_state.get("total_contribution", 0) + contribution_points
+    
+    # Check for milestone unlocks
+    newly_unlocked = []
+    for threshold, milestone in AI_EVOLUTION_MILESTONES.items():
+        if new_total >= threshold and milestone["name"] not in ai_state.get("unlocked_features", []):
+            newly_unlocked.append(milestone)
+    
+    unlocked_features = ai_state.get("unlocked_features", []) + [m["name"] for m in newly_unlocked]
+    
+    await db.ai_development.update_one(
+        {"id": "global"},
+        {"$set": {
+            "total_contribution": new_total,
+            "unlocked_features": unlocked_features
+        }}
+    )
+    
+    # Track user's personal contribution
+    await db.user_profiles.update_one(
+        {"id": contribution.user_id},
+        {"$inc": {"ai_contribution_points": contribution_points}}
+    )
+    
+    result = {
+        "status": "success",
+        "contribution_points": contribution_points,
+        "total_global_contribution": new_total,
+        "action": contribution.action_type
+    }
+    
+    if newly_unlocked:
+        result["milestones_unlocked"] = newly_unlocked
+    
+    return result
+
+@api_router.get("/ai-development/status")
+async def get_ai_development_status():
+    """Get current AI development status"""
+    ai_state = await db.ai_development.find_one({"id": "global"}, {"_id": 0})
+    if not ai_state:
+        ai_state = {"total_contribution": 0, "unlocked_features": []}
+    
+    # Find next milestone
+    total = ai_state.get("total_contribution", 0)
+    next_milestone = None
+    for threshold, milestone in sorted(AI_EVOLUTION_MILESTONES.items()):
+        if total < threshold:
+            next_milestone = {"threshold": threshold, **milestone}
+            break
+    
+    return {
+        "total_contribution": total,
+        "unlocked_features": ai_state.get("unlocked_features", []),
+        "next_milestone": next_milestone,
+        "all_milestones": AI_EVOLUTION_MILESTONES
+    }
 
 # ============ PvP Combat System ============
 
