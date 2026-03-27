@@ -3,7 +3,13 @@
 ## Overview
 A virtual world storytelling experience where AI companions learn and evolve through player interactions. Built for future VR Full-Dive interface integration.
 
-## Deployment Status: READY
+## Deployment Status: ✅ READY FOR PRODUCTION
+
+### PWA Support Added (March 2026)
+- **Manifest**: `/manifest.json` with app icons and shortcuts
+- **Service Worker**: Offline caching, push notifications
+- **Icons**: SVG + PNG icons (72-512px)
+- **Install Prompt**: Users can "Add to Home Screen" on mobile
 
 ## Special Accounts
 ### Sirix-1 (Supreme Account)
