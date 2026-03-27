@@ -5781,6 +5781,555 @@ async def view_profile(user_id: str, viewer_id: Optional[str] = None):
     
     return user
 
+# ============ Chat Commands System ============
+# Commands available to different permission levels
+CHAT_COMMANDS = {
+    # Help command (available to all)
+    "/help": {"min_level": 0, "description": "Show available commands", "usage": "/help"},
+    "/commands": {"min_level": 0, "description": "Show available commands", "usage": "/commands"},
+    
+    # Mod commands (level 2+)
+    "/kick": {"min_level": 2, "description": "Kick a player from the area", "usage": "/kick @username [reason]"},
+    "/mute": {"min_level": 2, "description": "Mute a player for 10 minutes", "usage": "/mute @username [reason]"},
+    "/unmute": {"min_level": 2, "description": "Unmute a player", "usage": "/unmute @username"},
+    "/warn": {"min_level": 2, "description": "Issue a warning to a player", "usage": "/warn @username [reason]"},
+    "/announce": {"min_level": 2, "description": "Make a local announcement", "usage": "/announce [message]"},
+    
+    # Admin commands (level 3+)
+    "/ban": {"min_level": 3, "description": "Ban a player temporarily", "usage": "/ban @username [duration] [reason]"},
+    "/unban": {"min_level": 3, "description": "Unban a player", "usage": "/unban @username"},
+    "/spawn": {"min_level": 3, "description": "Spawn an NPC or item", "usage": "/spawn [npc/item] [id]"},
+    "/tp": {"min_level": 3, "description": "Teleport to a location", "usage": "/tp [location_id]"},
+    "/tphere": {"min_level": 3, "description": "Teleport a player to you", "usage": "/tphere @username"},
+    "/give": {"min_level": 3, "description": "Give items to a player", "usage": "/give @username [item] [amount]"},
+    "/setrank": {"min_level": 3, "description": "Set a player's official rank", "usage": "/setrank @username [rank]"},
+    "/broadcast": {"min_level": 3, "description": "Broadcast to all locations", "usage": "/broadcast [message]"},
+    
+    # High ranker commands (guild_master+, rank 4+)
+    "/guild_announce": {"min_rank": 4, "description": "Announce to guild members", "usage": "/guild_announce [message]"},
+    "/summon": {"min_rank": 6, "description": "Summon a player to your location (mayor+)", "usage": "/summon @username"},
+    
+    # Sirix-1 exclusive commands (level 999)
+    "/god": {"min_level": 999, "description": "Toggle invincibility", "usage": "/god"},
+    "/reset_world": {"min_level": 999, "description": "Reset world state", "usage": "/reset_world [confirm]"},
+    "/override": {"min_level": 999, "description": "Override any system", "usage": "/override [system] [value]"},
+    "/reveal": {"min_level": 999, "description": "Reveal all hidden information", "usage": "/reveal"},
+}
+
+class ChatCommandRequest(BaseModel):
+    user_id: str
+    command: str
+    args: List[str] = Field(default_factory=list)
+    location_id: Optional[str] = None
+
+class ChatCommandResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[Dict[str, Any]] = None
+
+@api_router.get("/commands")
+async def get_available_commands(user_id: str):
+    """Get commands available to the user based on their permission level and rank"""
+    user = await db.user_profiles.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    perm_level = PERMISSION_LEVELS.get(user.get("permission_level", "player"), {}).get("level", 1)
+    rank_data = OFFICIAL_RANKINGS.get(user.get("official_rank", "citizen"), {})
+    user_rank = rank_data.get("rank", 1)
+    
+    available_commands = {}
+    for cmd, info in CHAT_COMMANDS.items():
+        min_level = info.get("min_level", 0)
+        min_rank = info.get("min_rank", 0)
+        
+        if perm_level >= min_level or user_rank >= min_rank:
+            available_commands[cmd] = {
+                "description": info["description"],
+                "usage": info["usage"]
+            }
+    
+    return {
+        "commands": available_commands,
+        "permission_level": user.get("permission_level", "player"),
+        "official_rank": user.get("official_rank", "citizen")
+    }
+
+@api_router.post("/commands/execute", response_model=ChatCommandResponse)
+async def execute_command(request: ChatCommandRequest):
+    """Execute a chat command"""
+    user = await db.user_profiles.find_one({"id": request.user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    perm_level = PERMISSION_LEVELS.get(user.get("permission_level", "player"), {}).get("level", 1)
+    rank_data = OFFICIAL_RANKINGS.get(user.get("official_rank", "citizen"), {})
+    user_rank = rank_data.get("rank", 1)
+    
+    cmd_info = CHAT_COMMANDS.get(request.command)
+    if not cmd_info:
+        return ChatCommandResponse(success=False, message=f"Unknown command: {request.command}")
+    
+    min_level = cmd_info.get("min_level", 0)
+    min_rank = cmd_info.get("min_rank", 0)
+    
+    if perm_level < min_level and user_rank < min_rank:
+        return ChatCommandResponse(success=False, message="Insufficient permissions for this command")
+    
+    # Execute commands
+    result_data = {}
+    
+    if request.command == "/kick":
+        if len(request.args) < 1:
+            return ChatCommandResponse(success=False, message="Usage: /kick @username [reason]")
+        target_name = request.args[0].lstrip("@")
+        reason = " ".join(request.args[1:]) if len(request.args) > 1 else "No reason provided"
+        # Add kick logic - remove from location
+        result_data = {"kicked": target_name, "reason": reason}
+        
+    elif request.command == "/mute":
+        if len(request.args) < 1:
+            return ChatCommandResponse(success=False, message="Usage: /mute @username [reason]")
+        target_name = request.args[0].lstrip("@")
+        await db.user_profiles.update_one(
+            {"username": target_name},
+            {"$set": {"muted_until": datetime.now(timezone.utc).isoformat(), "mute_duration": 600}}
+        )
+        result_data = {"muted": target_name, "duration": "10 minutes"}
+        
+    elif request.command == "/announce":
+        if len(request.args) < 1:
+            return ChatCommandResponse(success=False, message="Usage: /announce [message]")
+        message = " ".join(request.args)
+        # Broadcast to location
+        if request.location_id and request.location_id in location_connections:
+            for ws in location_connections[request.location_id].values():
+                try:
+                    await ws.send_json({
+                        "type": "announcement",
+                        "data": {"message": message, "from": user.get("display_name", "Moderator")}
+                    })
+                except Exception:
+                    pass
+        result_data = {"announced": message}
+        
+    elif request.command == "/broadcast":
+        if len(request.args) < 1:
+            return ChatCommandResponse(success=False, message="Usage: /broadcast [message]")
+        message = " ".join(request.args)
+        # Broadcast to all locations
+        for loc_id, connections in location_connections.items():
+            for ws in connections.values():
+                try:
+                    await ws.send_json({
+                        "type": "global_announcement",
+                        "data": {"message": message, "from": user.get("display_name", "Admin")}
+                    })
+                except Exception:
+                    pass
+        result_data = {"broadcast": message}
+        
+    elif request.command == "/tp":
+        if len(request.args) < 1:
+            return ChatCommandResponse(success=False, message="Usage: /tp [location_id]")
+        target_location = request.args[0]
+        # Update user's character location
+        char = await db.characters.find_one({"user_id": request.user_id})
+        if char:
+            await db.characters.update_one(
+                {"id": char["id"]},
+                {"$set": {"current_location": target_location}}
+            )
+        result_data = {"teleported_to": target_location}
+        
+    elif request.command == "/give":
+        if len(request.args) < 3:
+            return ChatCommandResponse(success=False, message="Usage: /give @username [item] [amount]")
+        target_name = request.args[0].lstrip("@")
+        item = request.args[1]
+        amount = int(request.args[2]) if request.args[2].isdigit() else 1
+        
+        target = await db.user_profiles.find_one({"username": target_name})
+        if target:
+            await db.user_profiles.update_one(
+                {"username": target_name},
+                {"$inc": {f"resources.{item}": amount}}
+            )
+        result_data = {"gave": item, "amount": amount, "to": target_name}
+        
+    elif request.command == "/god":
+        # Toggle god mode for Sirix-1
+        char = await db.characters.find_one({"user_id": request.user_id})
+        if char:
+            current_god = char.get("god_mode", False)
+            await db.characters.update_one(
+                {"id": char["id"]},
+                {"$set": {"god_mode": not current_god, "health": 999999, "max_health": 999999}}
+            )
+        result_data = {"god_mode": "enabled" if not char.get("god_mode") else "disabled"}
+        
+    else:
+        return ChatCommandResponse(success=True, message=f"Command {request.command} acknowledged (implementation pending)")
+    
+    # Log command execution
+    await db.command_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": request.user_id,
+        "command": request.command,
+        "args": request.args,
+        "location_id": request.location_id,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "result": result_data
+    })
+    
+    return ChatCommandResponse(success=True, message=f"Command executed: {request.command}", data=result_data)
+
+# ============ Oracle World Monitor System ============
+# The Oracle (Veythra) can see world state, prophecies, and hidden information
+
+class OracleVisionRequest(BaseModel):
+    viewer_id: str
+    vision_type: str = "world_state"  # world_state, prophecy, player_fate, hidden_truth
+
+@api_router.get("/oracle/status")
+async def get_oracle_status():
+    """Get Oracle Veythra's current status and availability"""
+    oracle = await db.ai_villagers.find_one({"name": "Oracle Veythra"}, {"_id": 0})
+    if not oracle:
+        # Create Oracle if doesn't exist
+        oracle = {
+            "villager_id": "oracle_veythra",
+            "name": "Oracle Veythra",
+            "profession": "oracle",
+            "description": "The all-seeing Oracle who monitors the world's threads of fate",
+            "location_id": "oracle_sanctum",
+            "mood": "mysterious",
+            "abilities": ["world_sight", "prophecy", "fate_reading", "hidden_truth"],
+            "is_world_monitor": True,
+            "vision_cooldown": 0,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.ai_villagers.insert_one(oracle)
+    
+    return {
+        "oracle": oracle,
+        "available": True,
+        "vision_types": ["world_state", "prophecy", "player_fate", "hidden_truth"]
+    }
+
+@api_router.post("/oracle/vision")
+async def request_oracle_vision(request: OracleVisionRequest):
+    """Request a vision from the Oracle - world monitoring system"""
+    viewer = await db.user_profiles.find_one({"id": request.viewer_id})
+    if not viewer:
+        raise HTTPException(status_code=404, detail="Viewer not found")
+    
+    vision_data = {}
+    
+    if request.vision_type == "world_state":
+        # Get comprehensive world state
+        total_players = await db.user_profiles.count_documents({})
+        total_characters = await db.characters.count_documents({})
+        active_demons = await db.active_demons.count_documents({"defeated": {"$ne": True}})
+        total_guilds = await db.guilds.count_documents({})
+        total_buildings = await db.buildings.count_documents({})
+        
+        # Get location populations
+        location_stats = {}
+        async for char in db.characters.find({}, {"current_location": 1}):
+            loc = char.get("current_location", "unknown")
+            location_stats[loc] = location_stats.get(loc, 0) + 1
+        
+        # Get active PvP battles
+        active_pvp = await db.pvp_sessions.count_documents({"status": "active"})
+        
+        # Get economy stats
+        pipeline = [
+            {"$group": {"_id": None, "total_gold": {"$sum": "$resources.gold"}}}
+        ]
+        economy = await db.user_profiles.aggregate(pipeline).to_list(1)
+        total_gold = economy[0]["total_gold"] if economy else 0
+        
+        vision_data = {
+            "world_population": {
+                "total_souls": total_players,
+                "active_heroes": total_characters,
+                "demons_roaming": active_demons
+            },
+            "civilizations": {
+                "guilds_formed": total_guilds,
+                "structures_built": total_buildings
+            },
+            "location_activity": location_stats,
+            "conflicts": {
+                "active_pvp_battles": active_pvp
+            },
+            "economy": {
+                "total_gold_circulation": total_gold if total_gold else "Immeasurable"
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+    elif request.vision_type == "prophecy":
+        # Generate AI prophecy about world events
+        if llm_key:
+            try:
+                chat = LlmChat(llm_key, model="anthropic/claude-sonnet-4-20250514")
+                chat.add_message(UserMessage(content="""You are Oracle Veythra, a mystical seer. 
+                Generate a cryptic prophecy about upcoming events in a fantasy village world.
+                Include hints about: demons, heroes, guilds, trade, or discoveries.
+                Keep it under 100 words, mysterious and poetic."""))
+                prophecy = await asyncio.to_thread(chat.send_message)
+                vision_data = {"prophecy": prophecy, "type": "divine_vision"}
+            except Exception:
+                vision_data = {"prophecy": "The threads of fate are tangled... clarity eludes even my sight.", "type": "obscured"}
+        else:
+            vision_data = {"prophecy": "The mists part to reveal... change approaches from the shadows.", "type": "standard"}
+            
+    elif request.vision_type == "player_fate":
+        # Get stats about the requesting player
+        char = await db.characters.find_one({"user_id": request.viewer_id}, {"_id": 0})
+        if char:
+            vision_data = {
+                "fate_reading": {
+                    "health_aura": "strong" if char.get("health", 100) > 50 else "weakening",
+                    "destiny_points": char.get("xp", 0),
+                    "battles_ahead": await db.active_demons.count_documents({"location_id": char.get("current_location")}),
+                    "guild_bonds": char.get("guild_id") is not None,
+                    "journey_distance": char.get("total_distance_traveled", 0)
+                }
+            }
+        else:
+            vision_data = {"fate_reading": "Your fate is yet unwritten..."}
+            
+    elif request.vision_type == "hidden_truth":
+        # Sirix-1 only - reveal all hidden information
+        if viewer.get("is_transcendent") or viewer.get("permission_level") == "sirix_1":
+            # Get all hidden/secret data
+            hidden_demons = await db.active_demons.find({"hidden": True}, {"_id": 0}).to_list(100)
+            secret_locations = await db.world_secrets.find({}, {"_id": 0}).to_list(100)
+            vision_data = {
+                "hidden_demons": hidden_demons,
+                "secret_locations": secret_locations,
+                "all_seeing": True
+            }
+        else:
+            vision_data = {"message": "This truth is beyond your mortal sight..."}
+    
+    return {
+        "vision_type": request.vision_type,
+        "oracle": "Veythra",
+        "data": vision_data,
+        "granted_at": datetime.now(timezone.utc).isoformat()
+    }
+
+# ============ External AI Integration System ============
+# API connection point for installing external AI apps
+
+class AIAppRegistration(BaseModel):
+    app_name: str
+    app_description: str
+    developer_id: str
+    api_endpoint: str
+    capabilities: List[str] = Field(default_factory=list)  # e.g., ["dialogue", "combat_ai", "world_gen"]
+    required_permissions: List[str] = Field(default_factory=list)
+    webhook_url: Optional[str] = None
+
+class AIAppApproval(BaseModel):
+    app_id: str
+    approver_id: str
+    approved: bool
+    restrictions: List[str] = Field(default_factory=list)
+
+@api_router.get("/integrations/apps")
+async def list_ai_apps(user_id: Optional[str] = None):
+    """List all registered AI apps and their status"""
+    apps = await db.ai_integrations.find({}, {"_id": 0}).to_list(100)
+    
+    # If user provided, show which they have access to
+    if user_id:
+        user = await db.user_profiles.find_one({"id": user_id})
+        user_apps = user.get("installed_ai_apps", []) if user else []
+        for app in apps:
+            app["installed"] = app["app_id"] in user_apps
+    
+    return {
+        "apps": apps,
+        "total": len(apps)
+    }
+
+@api_router.post("/integrations/register")
+async def register_ai_app(registration: AIAppRegistration):
+    """Register a new AI app for integration (requires approval)"""
+    # Check if developer exists
+    developer = await db.user_profiles.find_one({"id": registration.developer_id})
+    if not developer:
+        raise HTTPException(status_code=404, detail="Developer not found")
+    
+    # Check developer permission level
+    perm_level = PERMISSION_LEVELS.get(developer.get("permission_level", "player"), {}).get("level", 1)
+    if perm_level < 2:  # At least mod level to register apps
+        raise HTTPException(status_code=403, detail="Insufficient permissions to register AI apps")
+    
+    app_id = f"ai_app_{str(uuid.uuid4())[:8]}"
+    
+    app_data = {
+        "app_id": app_id,
+        "app_name": registration.app_name,
+        "description": registration.app_description,
+        "developer_id": registration.developer_id,
+        "developer_name": developer.get("display_name", developer.get("username")),
+        "api_endpoint": registration.api_endpoint,
+        "capabilities": registration.capabilities,
+        "required_permissions": registration.required_permissions,
+        "webhook_url": registration.webhook_url,
+        "status": "pending_approval",
+        "approved_by": None,
+        "restrictions": [],
+        "install_count": 0,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.ai_integrations.insert_one(app_data)
+    
+    return {
+        "app_id": app_id,
+        "status": "pending_approval",
+        "message": "AI app registered. Awaiting admin approval."
+    }
+
+@api_router.post("/integrations/approve")
+async def approve_ai_app(approval: AIAppApproval):
+    """Approve or reject an AI app (admin/sirix-1 only)"""
+    approver = await db.user_profiles.find_one({"id": approval.approver_id})
+    if not approver:
+        raise HTTPException(status_code=404, detail="Approver not found")
+    
+    perm_level = PERMISSION_LEVELS.get(approver.get("permission_level", "player"), {}).get("level", 1)
+    if perm_level < 3:  # Admin level required
+        raise HTTPException(status_code=403, detail="Only admins can approve AI apps")
+    
+    app = await db.ai_integrations.find_one({"app_id": approval.app_id})
+    if not app:
+        raise HTTPException(status_code=404, detail="AI app not found")
+    
+    new_status = "approved" if approval.approved else "rejected"
+    
+    await db.ai_integrations.update_one(
+        {"app_id": approval.app_id},
+        {"$set": {
+            "status": new_status,
+            "approved_by": approval.approver_id,
+            "restrictions": approval.restrictions,
+            "approved_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {
+        "app_id": approval.app_id,
+        "status": new_status,
+        "message": f"AI app {new_status}"
+    }
+
+@api_router.post("/integrations/install/{app_id}")
+async def install_ai_app(app_id: str, user_id: str):
+    """Install an approved AI app for a user"""
+    app = await db.ai_integrations.find_one({"app_id": app_id})
+    if not app:
+        raise HTTPException(status_code=404, detail="AI app not found")
+    
+    if app["status"] != "approved":
+        raise HTTPException(status_code=403, detail="AI app not approved for installation")
+    
+    user = await db.user_profiles.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check if user has required permissions
+    for perm in app.get("required_permissions", []):
+        user_perms = PERMISSION_LEVELS.get(user.get("permission_level", "player"), {}).get("abilities", [])
+        if perm not in user_perms and "all" not in user_perms:
+            raise HTTPException(status_code=403, detail=f"Missing required permission: {perm}")
+    
+    # Install app for user
+    installed_apps = user.get("installed_ai_apps", [])
+    if app_id not in installed_apps:
+        installed_apps.append(app_id)
+        await db.user_profiles.update_one(
+            {"id": user_id},
+            {"$set": {"installed_ai_apps": installed_apps}}
+        )
+        await db.ai_integrations.update_one(
+            {"app_id": app_id},
+            {"$inc": {"install_count": 1}}
+        )
+    
+    return {
+        "app_id": app_id,
+        "app_name": app["app_name"],
+        "installed": True,
+        "capabilities": app["capabilities"]
+    }
+
+@api_router.post("/integrations/call/{app_id}")
+async def call_ai_app(app_id: str, user_id: str, action: str, payload: Dict[str, Any] = None):
+    """Call an installed AI app's endpoint"""
+    # Verify user has app installed
+    user = await db.user_profiles.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    if app_id not in user.get("installed_ai_apps", []):
+        raise HTTPException(status_code=403, detail="AI app not installed")
+    
+    app = await db.ai_integrations.find_one({"app_id": app_id})
+    if not app or app["status"] != "approved":
+        raise HTTPException(status_code=404, detail="AI app not available")
+    
+    # Call the external AI endpoint
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                app["api_endpoint"],
+                json={
+                    "action": action,
+                    "user_id": user_id,
+                    "payload": payload or {},
+                    "app_id": app_id,
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+            )
+            response.raise_for_status()
+            return {
+                "app_id": app_id,
+                "action": action,
+                "response": response.json()
+            }
+    except httpx.HTTPError as e:
+        logger.error(f"AI app call failed: {e}")
+        raise HTTPException(status_code=502, detail=f"AI app communication failed: {str(e)}")
+
+@api_router.delete("/integrations/uninstall/{app_id}")
+async def uninstall_ai_app(app_id: str, user_id: str):
+    """Uninstall an AI app from user's account"""
+    user = await db.user_profiles.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    installed_apps = user.get("installed_ai_apps", [])
+    if app_id in installed_apps:
+        installed_apps.remove(app_id)
+        await db.user_profiles.update_one(
+            {"id": user_id},
+            {"$set": {"installed_ai_apps": installed_apps}}
+        )
+        await db.ai_integrations.update_one(
+            {"app_id": app_id},
+            {"$inc": {"install_count": -1}}
+        )
+    
+    return {"app_id": app_id, "uninstalled": True}
+
 # WebSocket for real-time multiplayer
 @app.websocket("/ws/{location_id}/{user_id}")
 async def websocket_endpoint(websocket: WebSocket, location_id: str, user_id: str):
@@ -5804,18 +6353,77 @@ async def websocket_endpoint(websocket: WebSocket, location_id: str, user_id: st
             data = await websocket.receive_json()
             
             if data["type"] == "chat":
-                message = {
-                    "id": str(uuid.uuid4()),
-                    "location_id": location_id,
-                    "sender_id": user_id,
-                    "sender_name": data.get("sender_name", username),
-                    "sender_type": "player",
-                    "content": data["content"],
-                    "message_type": data.get("message_type", "chat"),
-                    "timestamp": datetime.now(timezone.utc).isoformat()
-                }
-                await db.multiplayer_messages.insert_one(message)
-                await broadcast_to_location(location_id, {"type": "chat", "data": message})
+                content = data.get("content", "").strip()
+                
+                # Check for /commands
+                if content.startswith("/"):
+                    parts = content.split()
+                    command = parts[0].lower()
+                    args = parts[1:] if len(parts) > 1 else []
+                    
+                    # Process command
+                    cmd_info = CHAT_COMMANDS.get(command)
+                    if cmd_info:
+                        perm_level = PERMISSION_LEVELS.get(user.get("permission_level", "player"), {}).get("level", 1) if user else 1
+                        rank_data = OFFICIAL_RANKINGS.get(user.get("official_rank", "citizen"), {}) if user else {}
+                        user_rank = rank_data.get("rank", 1)
+                        
+                        min_level = cmd_info.get("min_level", 0)
+                        min_rank = cmd_info.get("min_rank", 0)
+                        
+                        if perm_level >= min_level or user_rank >= min_rank:
+                            # Execute command via API internally
+                            from fastapi.testclient import TestClient
+                            result = await execute_command(ChatCommandRequest(
+                                user_id=user_id,
+                                command=command,
+                                args=args,
+                                location_id=location_id
+                            ))
+                            
+                            # Send result back to user only
+                            await websocket.send_json({
+                                "type": "command_result",
+                                "data": {
+                                    "command": command,
+                                    "success": result.success,
+                                    "message": result.message,
+                                    "result": result.data
+                                }
+                            })
+                        else:
+                            await websocket.send_json({
+                                "type": "command_result",
+                                "data": {
+                                    "command": command,
+                                    "success": False,
+                                    "message": "Insufficient permissions"
+                                }
+                            })
+                    else:
+                        # Unknown command - show help
+                        await websocket.send_json({
+                            "type": "command_result",
+                            "data": {
+                                "command": command,
+                                "success": False,
+                                "message": f"Unknown command: {command}. Type /help for available commands."
+                            }
+                        })
+                else:
+                    # Regular chat message
+                    message = {
+                        "id": str(uuid.uuid4()),
+                        "location_id": location_id,
+                        "sender_id": user_id,
+                        "sender_name": data.get("sender_name", username),
+                        "sender_type": "player",
+                        "content": content,
+                        "message_type": data.get("message_type", "chat"),
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    }
+                    await db.multiplayer_messages.insert_one(message)
+                    await broadcast_to_location(location_id, {"type": "chat", "data": message})
             
             elif data["type"] == "emote":
                 await broadcast_to_location(location_id, {

@@ -234,12 +234,14 @@ const MultiplayerChat = ({ userId, characterId, location, availableChannels = []
           <ChannelIcon className={`w-4 h-4 ${CHANNEL_COLORS[currentChannel]}`} />
         </div>
         <Input
+          data-testid="chat-input"
           value={inputMessage}
           onChange={(e) => setInputMessage(e.target.value)}
-          onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
           placeholder={`Message ${currentChannel}...`}
           className="bg-obsidian border-border/50 rounded-sm text-sm"
           disabled={!isConnected}
+          autoComplete="off"
         />
         <Button
           onClick={sendMessage}

@@ -7,6 +7,7 @@ import CharacterCreation from "@/pages/CharacterCreation";
 import ModeSelection from "@/pages/ModeSelection";
 import VillageExplorer from "@/pages/VillageExplorer";
 import FirstPersonView from "@/pages/FirstPersonView";
+import FirstPersonView3D from "@/pages/FirstPersonView3D";
 import DataspaceView from "@/pages/DataspaceView";
 import QuestBoard from "@/pages/QuestBoard";
 import UserProfilePage from "@/pages/UserProfilePage";
@@ -25,7 +26,8 @@ function App() {
           <Route path="/create-character" element={<CharacterCreation />} />
           <Route path="/select-mode" element={<ModeSelection />} />
           <Route path="/village" element={<VillageExplorer />} />
-          <Route path="/play" element={<FirstPersonView />} />
+          <Route path="/play" element={<FirstPersonView3D />} />
+          <Route path="/play-classic" element={<FirstPersonView />} />
           <Route path="/dataspace" element={<DataspaceView />} />
           <Route path="/quests" element={<QuestBoard />} />
           <Route path="/profile" element={<UserProfilePage />} />
