@@ -15,6 +15,8 @@ import BuildingPage from "@/pages/BuildingPage";
 import TradingPage from "@/pages/TradingPage";
 import GuildPage from "@/pages/GuildPage";
 import InventoryPage from "@/pages/InventoryPage";
+import TermsOfService from "@/pages/TermsOfService";
+import GeographicRestrictions from "@/pages/GeographicRestrictions";
 
 function App() {
   return (
@@ -22,6 +24,8 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<LandingPage />} />
+          <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/geo-restrictions" element={<GeographicRestrictions />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/create-character" element={<CharacterCreation />} />
           <Route path="/select-mode" element={<ModeSelection />} />

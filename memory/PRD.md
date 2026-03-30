@@ -1,15 +1,68 @@
 # AI Village: The Echoes - Production Ready PRD
 
 ## Overview
-A virtual world storytelling experience where AI companions learn and evolve through player interactions. Built for future VR Full-Dive interface integration.
+A virtual world storytelling experience where AI companions learn and evolve through player interactions. Integrated with **ApexForge Collective** real-world earnings platform.
+
+## Business Entity
+**ApexForge Collective**
+- Address: 901 35th Ave, Tuscaloosa, AL 35401
+- Phone: (205) 233-4835
+- Email: legal@apexforge.io
 
 ## Deployment Status: ✅ READY FOR PRODUCTION
 
-### PWA Support Added (March 2026)
-- **Manifest**: `/manifest.json` with app icons and shortcuts
-- **Service Worker**: Offline caching, push notifications
-- **Icons**: SVG + PNG icons (72-512px)
-- **Install Prompt**: Users can "Add to Home Screen" on mobile
+### PWA Support
+- Manifest with app icons and shortcuts
+- Service Worker for offline caching
+- Install prompt for mobile devices
+
+## Real-World Earnings System (NEW)
+
+### Income Streams ($5-15/hr potential)
+| Stream | Hourly Rate | Game Integration |
+|--------|-------------|------------------|
+| Micro Tasks | $6-12/hr | Task Board in Guild Hall |
+| Transcription | $8-15/hr | Oracle's Transcription Quests |
+| Data Labeling | $6-12/hr | Archivist's Cataloging System |
+| Market Research | $5-10/hr | Oracle Consultations |
+| Compute Sharing | $1-5/hr (passive) | Crystal Network Contribution |
+| Affiliate | Variable | Merchant Guild Partnerships |
+| Blockchain | $3-8/hr + crypto | Cryptomancer's Challenges |
+
+### Payment System
+- **Minimum withdrawal**: $1.00 USD
+- **Fixed fee**: $0.25 per withdrawal (supports operations)
+- **Destination options**: 
+  - Connected crypto wallet
+  - Game account balance
+  - Split between both (customizable %)
+- **Processing time**: 1-3 business days
+
+### Geographic Coverage
+- **55 Supported Countries** (US, CA, UK, EU, JP, AU, etc.)
+- **6 Restricted Regions** (sanctioned countries)
+- Auto-detection with eligibility check
+
+## AI NPC Cloud Gaming System (NEW)
+
+### Supported Games
+- **In-game**: Village Chess, Oracle Riddles, Forge Rhythm, Demon Hunter Arena
+- **Browser**: 2048, Tetris, Snake
+- **Emulated**: NES, SNES, GBA, N64, PS1 classics
+
+### Cloud Controller Features
+- Remote controller transfer between games
+- Skill transfer (50-90% based on game similarity)
+- Multiple learning strategies (RL, Imitation, Hybrid, Evolutionary)
+- Performance tracking and improvement
+
+### AI Learning Modes
+| Mode | Best For | Training Time | Accuracy |
+|------|----------|---------------|----------|
+| Reinforcement | Action, Arcade | Medium | 90% |
+| Imitation | Strategy, Puzzle | Fast | 85% |
+| Hybrid | All genres | Long | 95% |
+| Evolutionary | Racing, Fighting | Long | 92% |
 
 ## Special Accounts
 ### Sirix-1 (Supreme Account)

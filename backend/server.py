@@ -6646,6 +6646,22 @@ async def websocket_endpoint(websocket: WebSocket, location_id: str, user_id: st
 # Include router
 app.include_router(api_router)
 
+# Include earnings router
+try:
+    from earnings_router import earnings_router
+    app.include_router(earnings_router, prefix="/api")
+    logging.info("Earnings router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load earnings router: {e}")
+
+# Include NPC gaming router
+try:
+    from npc_gaming_router import npc_gaming_router
+    app.include_router(npc_gaming_router, prefix="/api")
+    logging.info("NPC Gaming router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load NPC gaming router: {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
