@@ -17,6 +17,7 @@ import GuildPage from "@/pages/GuildPage";
 import InventoryPage from "@/pages/InventoryPage";
 import TermsOfService from "@/pages/TermsOfService";
 import GeographicRestrictions from "@/pages/GeographicRestrictions";
+import EarningsHub from "@/pages/EarningsHub";
 
 function App() {
   return (
@@ -39,6 +40,7 @@ function App() {
           <Route path="/trading" element={<TradingPage />} />
           <Route path="/guilds" element={<GuildPage />} />
           <Route path="/inventory" element={<InventoryPage />} />
+          <Route path="/earnings" element={<EarningsHub />} />
         </Routes>
       </BrowserRouter>
       <Toaster 

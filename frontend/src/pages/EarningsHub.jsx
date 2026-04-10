@@ -82,6 +82,15 @@ const EarningsHub = () => {
   const [weeklyEarnings, setWeeklyEarnings] = useState(0);
   const [hourlyRate, setHourlyRate] = useState(0);
   
+  // Ecosystem state
+  const [ecosystemStatus, setEcosystemStatus] = useState(null);
+  const [userContributions, setUserContributions] = useState(null);
+  const [activeTab, setActiveTab] = useState('tasks');
+  
+  // Deposit state
+  const [depositAmount, setDepositAmount] = useState('');
+  const [depositLoading, setDepositLoading] = useState(false);
+  
   // Load account data
   const loadAccount = useCallback(async () => {
     if (!userId) {
@@ -121,9 +130,24 @@ const EarningsHub = () => {
     setLoading(false);
   }, [userId, navigate]);
   
+  // Load ecosystem data
+  const loadEcosystem = useCallback(async () => {
+    try {
+      const [statusRes, userRes] = await Promise.all([
+        axios.get(`${API}/ecosystem/status`),
+        axios.get(`${API}/ecosystem/user/${userId}`).catch(() => ({ data: null }))
+      ]);
+      setEcosystemStatus(statusRes.data);
+      setUserContributions(userRes.data);
+    } catch (error) {
+      console.error('Failed to load ecosystem:', error);
+    }
+  }, [userId]);
+  
   useEffect(() => {
     loadAccount();
-  }, [loadAccount]);
+    loadEcosystem();
+  }, [loadAccount, loadEcosystem]);
   
   // Task timer
   useEffect(() => {
@@ -245,6 +269,91 @@ const EarningsHub = () => {
       loadAccount();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Withdrawal failed');
+    }
+  };
+  
+  // Deposit VE$ via Stripe
+  const initiateDeposit = async () => {
+    const amount = parseFloat(depositAmount);
+    if (isNaN(amount) || amount < 1) {
+      toast.error('Minimum deposit is $1.00');
+      return;
+    }
+    
+    setDepositLoading(true);
+    try {
+      const res = await axios.post(`${API}/payments/deposit/checkout`, {
+        user_id: userId,
+        amount: amount,
+        origin_url: window.location.origin,
+        payment_methods: ['card']
+      });
+      
+      // Redirect to Stripe checkout
+      window.location.href = res.data.checkout_url;
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to initiate deposit');
+      setDepositLoading(false);
+    }
+  };
+  
+  // Check for returning from Stripe
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session_id');
+    const status = urlParams.get('status');
+    
+    if (sessionId && status === 'success') {
+      // Poll for payment status
+      const pollStatus = async (attempts = 0) => {
+        if (attempts >= 5) {
+          toast.info('Payment processing. Balance will update shortly.');
+          return;
+        }
+        
+        try {
+          const res = await axios.get(`${API}/payments/deposit/status/${sessionId}`);
+          if (res.data.payment_status === 'paid') {
+            toast.success('Deposit successful! VE$ credited to your account.');
+            loadAccount();
+            window.history.replaceState({}, '', '/earnings');
+          } else if (res.data.status === 'expired') {
+            toast.error('Payment session expired.');
+            window.history.replaceState({}, '', '/earnings');
+          } else {
+            setTimeout(() => pollStatus(attempts + 1), 2000);
+          }
+        } catch (error) {
+          console.error('Status check error:', error);
+        }
+      };
+      
+      pollStatus();
+    } else if (status === 'cancelled') {
+      toast.info('Payment cancelled');
+      window.history.replaceState({}, '', '/earnings');
+    }
+  }, []);
+  
+  // Support ecosystem
+  const supportEcosystem = async (supportAmount) => {
+    if (supportAmount > (account?.available_balance_usd || 0)) {
+      toast.error('Insufficient VE$ balance');
+      return;
+    }
+    
+    try {
+      const res = await axios.post(`${API}/ecosystem/support`, {
+        user_id: userId,
+        support_type: 'direct',
+        amount_ve: supportAmount
+      });
+      
+      toast.success(res.data.message);
+      loadAccount();
+      loadEcosystem();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Support failed');
     }
   };
   
@@ -457,6 +566,50 @@ const EarningsHub = () => {
           
           {/* Right Panel */}
           <div className="space-y-6">
+            {/* Deposit Card */}
+            <Card className="p-6 bg-gradient-to-br from-green-500/10 to-green-500/5 border-green-500/30">
+              <h3 className="font-cinzel text-lg text-green-400 mb-4 flex items-center gap-2">
+                <ArrowDownLeft className="w-5 h-5" />
+                Buy VE$
+              </h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm text-muted-foreground mb-2 block">Amount (USD)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-green-400 font-bold">$</span>
+                    <Input 
+                      type="number"
+                      value={depositAmount}
+                      onChange={(e) => setDepositAmount(e.target.value)}
+                      placeholder="10.00"
+                      className="pl-8 bg-obsidian border-green-500/30"
+                      min="1"
+                      step="0.01"
+                      data-testid="deposit-amount-input"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    1 USD = 1 VE$ | Instant credit
+                  </p>
+                </div>
+                
+                <Button 
+                  onClick={initiateDeposit}
+                  className="w-full bg-green-600 hover:bg-green-500"
+                  disabled={depositLoading || !depositAmount || parseFloat(depositAmount) < 1}
+                  data-testid="deposit-btn"
+                >
+                  {depositLoading ? (
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <DollarSign className="w-4 h-4 mr-2" />
+                  )}
+                  {depositLoading ? 'Processing...' : 'Buy VE$ with Card'}
+                </Button>
+              </div>
+            </Card>
+            
             {/* Withdrawal Card */}
             <Card className="p-6 bg-surface/50 border-border/30">
               <h3 className="font-cinzel text-lg text-gold mb-4 flex items-center gap-2">
@@ -558,6 +711,97 @@ const EarningsHub = () => {
             </Card>
           </div>
         </div>
+        
+        {/* Ecosystem Support Section */}
+        {ecosystemStatus && (
+          <Card className="p-6 bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-cyan-500/10 border-purple-500/30">
+            <div className="flex items-start justify-between mb-6">
+              <div>
+                <h3 className="font-cinzel text-xl text-purple-400 flex items-center gap-2">
+                  <Cpu className="w-6 h-6" />
+                  Ecosystem Support
+                </h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Help develop the AI and advance technology tiers
+                </p>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-muted-foreground">Current Tier</div>
+                <div className="text-lg font-bold text-purple-400">
+                  {ecosystemStatus.technology_tier?.name || 'Primitive'}
+                </div>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="p-4 bg-black/30 rounded-lg">
+                <div className="text-sm text-muted-foreground">Total Contributions</div>
+                <div className="text-2xl font-bold text-foreground">
+                  {ecosystemStatus.ecosystem?.total_contribution_points?.toLocaleString() || 0}
+                </div>
+              </div>
+              <div className="p-4 bg-black/30 rounded-lg">
+                <div className="text-sm text-muted-foreground">AI Intelligence</div>
+                <div className="text-2xl font-bold text-cyan-400 capitalize">
+                  {ecosystemStatus.ai_intelligence?.name || 'Dormant'}
+                </div>
+              </div>
+              <div className="p-4 bg-black/30 rounded-lg">
+                <div className="text-sm text-muted-foreground">Your Contributions</div>
+                <div className="text-2xl font-bold text-purple-400">
+                  {userContributions?.stats?.total_points?.toLocaleString() || 0}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Rank #{userContributions?.rank || '—'} • {userContributions?.tier || 'Newcomer'}
+                </div>
+              </div>
+            </div>
+            
+            {/* Progress to next tier */}
+            {ecosystemStatus.technology_tier?.next_tier_name && (
+              <div className="mb-6">
+                <div className="flex justify-between text-sm mb-2">
+                  <span className="text-muted-foreground">Progress to {ecosystemStatus.technology_tier.next_tier_name}</span>
+                  <span className="text-purple-400">{ecosystemStatus.technology_tier.progress_to_next}%</span>
+                </div>
+                <Progress value={ecosystemStatus.technology_tier.progress_to_next} className="h-2" />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {ecosystemStatus.technology_tier.points_to_next_tier.toLocaleString()} points needed
+                </p>
+              </div>
+            )}
+            
+            {/* Support buttons */}
+            <div className="flex flex-wrap gap-3">
+              <Button 
+                onClick={() => supportEcosystem(1)}
+                className="bg-purple-600 hover:bg-purple-500"
+                disabled={(account?.available_balance_usd || 0) < 1}
+                data-testid="support-1ve-btn"
+              >
+                Support VE$1 (+10 pts)
+              </Button>
+              <Button 
+                onClick={() => supportEcosystem(5)}
+                className="bg-purple-600 hover:bg-purple-500"
+                disabled={(account?.available_balance_usd || 0) < 5}
+              >
+                Support VE$5 (+50 pts)
+              </Button>
+              <Button 
+                onClick={() => supportEcosystem(10)}
+                className="bg-purple-600 hover:bg-purple-500"
+                disabled={(account?.available_balance_usd || 0) < 10}
+              >
+                Support VE$10 (+100 pts)
+              </Button>
+            </div>
+            
+            <p className="text-xs text-muted-foreground mt-4">
+              Your support helps advance AI intelligence and unlock new game features for everyone.
+            </p>
+          </Card>
+        )}
         
         {/* VE Dollar Info */}
         <Card className="p-4 bg-gold/5 border-gold/20">

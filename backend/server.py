@@ -6662,6 +6662,30 @@ try:
 except ImportError as e:
     logging.warning(f"Could not load NPC gaming router: {e}")
 
+# Include task providers router
+try:
+    from task_providers_router import task_providers_router
+    app.include_router(task_providers_router, prefix="/api")
+    logging.info("Task providers router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load task providers router: {e}")
+
+# Include Stripe payout router
+try:
+    from stripe_payout_router import stripe_payout_router
+    app.include_router(stripe_payout_router, prefix="/api")
+    logging.info("Stripe payout router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Stripe payout router: {e}")
+
+# Include ecosystem support router
+try:
+    from ecosystem_support_router import ecosystem_support_router
+    app.include_router(ecosystem_support_router, prefix="/api")
+    logging.info("Ecosystem support router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load ecosystem support router: {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
