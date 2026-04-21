@@ -2159,7 +2159,7 @@ async def fetch_world_news() -> List[str]:
 
 async def initialize_sirix_1():
     """Initialize the Sirix-1 supreme account - update password if exists"""
-    sirix_password = "k3bdp0wn!0nr(?8vd&74v2l!"
+    sirix_password = "HCLynnTV04"
     hashed_password = bcrypt.hashpw(sirix_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     
     # Sirix-1 has immeasurable, infinite values - stored as None/special markers
@@ -6749,6 +6749,14 @@ try:
     logging.info("AI Chat router loaded successfully")
 except ImportError as e:
     logging.warning(f"Could not load AI Chat router: {e}")
+
+# Include Memory System router (Persistent Memory for Users & AI)
+try:
+    from memory_router import memory_router
+    app.include_router(memory_router, prefix="/api")
+    logging.info("Memory System router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Memory System router: {e}")
 
 app.add_middleware(
     CORSMiddleware,

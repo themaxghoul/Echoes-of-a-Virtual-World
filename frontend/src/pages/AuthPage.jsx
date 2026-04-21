@@ -265,10 +265,10 @@ const AuthPage = () => {
               <div className="mt-4 p-3 bg-gold/5 border border-gold/20 rounded-sm">
                 <div className="flex items-center gap-2 text-gold text-xs">
                   <Shield className="w-4 h-4" />
-                  <span className="font-cinzel">Sirix-1 Account Available</span>
+                  <span className="font-cinzel">Sirix-1 Admin Account</span>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Login with <code className="text-gold">sirix_1</code> for admin access
+                  Reserved admin login: <code className="text-gold">sirix_1</code>
                 </p>
               </div>
             </TabsContent>

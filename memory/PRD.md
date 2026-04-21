@@ -2,135 +2,171 @@
 ## Pre-Release for itch.io
 
 ## Overview
-A virtual world storytelling experience where AI companions learn and evolve through player interactions. Features real-world monetization (ApexForge Collective) and dynamic world events driven by AI.
+A virtual world storytelling experience where AI companions learn and evolve through player interactions. Features real-world monetization (ApexForge Collective), dynamic world events, and a **persistent memory system** that enables AI learning and ecosystem growth.
 
 ## Deployment: READY FOR ITCH.IO PRE-RELEASE
 
-### Core Game Modes
+### Sirix-1 Admin Account
+- Username: `sirix_1`
+- Password: `HCLynnTV04` (SECURED - do not share publicly)
+- Permissions: Transcendent (infinite stats, all access)
 
-#### 1. Story Mode (2D Chat Adventure)
+---
+
+## Persistent Memory System (NEW)
+
+The foundation for AI learning and ecosystem growth.
+
+### Memory Types
+
+#### User Memories
+| Type | Description | Decay Rate |
+|------|-------------|------------|
+| user_interaction | Conversations with NPCs | 0.02 |
+| user_preference | Play style, choices | 0.02 |
+| user_achievement | Milestones | 0.01 (slow) |
+| user_relationship | NPC relationships | 0.01 |
+| user_knowledge | Discovered information | 0.02 |
+| user_emotion | Emotional reactions | 0.05 |
+
+#### AI Memories
+| Type | Description | Decay Rate |
+|------|-------------|------------|
+| ai_learned_behavior | Patterns from interactions | 0.01 |
+| ai_world_knowledge | World state awareness | 0.005 |
+| ai_player_model | Understanding of players | 0.005 (very slow) |
+| ai_conversation | Important conversations | 0.01 |
+| ai_relationship | Relationships with players | 0.005 |
+| ai_prediction | Behavioral predictions | 0.02 |
+
+#### Ecosystem Memories
+| Type | Description |
+|------|-------------|
+| eco_world_event | Major world events |
+| eco_collective | Collective player patterns |
+| eco_evolution | AI evolution milestones |
+| eco_cultural | Emerging cultural patterns |
+
+### Memory Importance Levels
+- **Trivial** (1-2): May be forgotten quickly
+- **Minor** (3-4): Weak retention
+- **Moderate** (5-6): Standard retention
+- **Significant** (7-8): Strong retention
+- **Critical** (9-10): Never forgotten
+
+### Player Models
+AI builds understanding of each player:
+- Play style (aggressive, diplomatic, explorer, builder)
+- Decision patterns
+- Preferred locations
+- Favorite NPCs
+- Trust level (0-1)
+- Emotional tendencies
+- Interaction history
+
+### AI Evolution Tracking
+Each AI tracks its growth:
+- Total memories
+- Unique players met
+- Conversations had
+- Knowledge domains
+- Language sophistication (1-10)
+- Emotional intelligence (1-10)
+- World awareness (1-10)
+- Prediction accuracy (0-1)
+
+### Memory API Endpoints
+```
+POST /api/memory/create              - Create new memory
+POST /api/memory/recall              - Query memories
+POST /api/memory/reinforce/{id}      - Strengthen memory
+POST /api/memory/associate           - Link memories
+GET  /api/memory/entity/{type}/{id}  - Get entity memories
+GET  /api/memory/stats               - System statistics
+POST /api/memory/player-model/update - Update player model
+GET  /api/memory/player-model/{ai}/{player} - Get AI's player model
+GET  /api/memory/ai-evolution/{id}   - Get AI evolution state
+POST /api/memory/maintenance/decay   - Apply memory decay
+POST /api/memory/synthesize-context/{type}/{id} - Generate context
+```
+
+---
+
+## Core Game Modes
+
+### Story Mode (2D Chat Adventure)
 - Text-based adventure with AI narrator
-- **2D World Building** - Players can build structures in their 2D world
-- Chat with NPCs, shape the narrative
-- Location progression with unlockable areas
-- No 3D vessels - pure text/chat experience
+- **2D World Building** 
+- Chat with NPCs
+- Location progression
+- **AI remembers past conversations**
 
-#### 2. First Person 3D Mode
-- Immersive 3D experience with CSS perspective
-- **3D Interactable Models** - Walk through the village
-- D-Pad controls for movement
-- Camera drag for looking around
-- Full 3D vessel for player representation
+### First Person 3D Mode
+- Immersive 3D experience
+- **3D Interactable Models**
+- D-Pad controls
+- Camera drag
+- **AI uses memories for personalized interactions**
 
-### Authentication System
+---
 
-#### Dedicated Login with Stats Tracking
-- Username + Password authentication
-- bcrypt password hashing
-- Login tracking with session stats
-- Sirix-1 admin account with transcendent stats
+## Authentication System
+- Username + Password (bcrypt hashed)
+- Login tracking with stats
+- Sirix-1 secured with dedicated password
+- Stats tracked: logins, quests, NPCs talked
 
-#### User Stats Tracked
-- Total logins
-- Quests completed
-- NPCs talked to
-- Demons defeated
-- Buildings placed
-- Trades completed
-- Gold/VE$ earned
+---
 
-### Navigation System
+## World Engine
 
-#### Back Button Support
-- All screens have back navigation (← arrow)
-- Users can exit screens accidentally clicked
-- Navigation history tracking
-- Fallback paths for all routes
+### World Bosses (5)
+- Malachar the Shadow Lord (5000 HP)
+- Azrael, Prince of Flames (4000 HP)
+- Vyrmathax the Eternal (8000 HP)
+- Netharis the Undying (3500 HP)
+- Goldric the Magnificent (2000 HP)
 
-#### Navigation Paths
-```
-Auth → Mode Selection → Story Mode / 3D Mode → Sub-pages
-         ↓
-    Quick Access: Builder, Trading, Earnings, Quests
-```
+### Diplomatic Factions (5)
+- Village Council
+- Cult of the Void
+- Merchant's Consortium
+- Legions of the Abyss
+- Circle of Echoes
 
-### World Engine (Dynamic Events)
-
-**World Bosses (5 types)**
-| Boss | HP | Diplomatic? | Demands |
-|------|-----|-------------|---------|
-| Malachar the Shadow Lord | 5000 | No | - |
-| Azrael, Prince of Flames | 4000 | Yes | souls, territory, artifacts |
-| Vyrmathax the Eternal | 8000 | Yes | knowledge, respect, treasure |
-| Netharis the Undying | 3500 | Yes | corpses, dark knowledge, souls |
-| Goldric the Magnificent | 2000 | Yes | trade rights, monopoly, tribute |
-
-**Diplomatic Factions (5)**
-- Village Council (lawful_good)
-- Cult of the Void (chaotic_evil)
-- Merchant's Consortium (true_neutral)
-- Legions of the Abyss (chaotic_evil)
-- Circle of Echoes (lawful_neutral)
-
-**Dynamic Events (15 types)**
+### Dynamic Events (15 types)
 Boss Spawn, Invasion, Diplomatic Crisis, Resource Discovery, Plague, Festival, Merchant Caravan, Natural Disaster, Prophecy, Rebellion, Alliance Offer, War Declaration, Mysterious Stranger, Artifact Appearance, Portal Opening
 
-### AI Chat System
+---
 
-NPCs can understand context and trigger world actions:
+## AI Chat System
 
-**AI Action Tags**
+NPCs use persistent memories to:
+- Remember past conversations with players
+- Build trust/distrust based on interactions
+- Personalize responses based on player model
+- Create memories of significant moments
+- Evolve their understanding over time
+
+### AI Action Tags
 - `[MOOD:]` - Change emotional state
-- `[QUEST:]` - Create quests for players
+- `[QUEST:]` - Create quests
 - `[RUMOR:]` - Spread rumors
 - `[PROPHECY:]` - Oracle visions
 - `[RELATION:]` - Modify relationships
 
-### Earnings Hub (VE$ Currency)
+---
+
+## Earnings Hub (VE$ Currency)
 - 7 Task Providers
-- Stripe Deposits (Buy VE$ with card)
+- Stripe Deposits
 - $0.25 Withdrawal Fee
 - MetaMask Web3 Integration
 - 1:1 USD to VE$ ratio
 
-### Key Routes
-| Route | Mode | Description |
-|-------|------|-------------|
-| `/auth` | - | Login/Register with password |
-| `/select-mode` | - | Choose Story/3D mode |
-| `/village` | Story | 2D chat adventure |
-| `/play` | 3D | First person 3D view |
-| `/building` | Story | 2D builder |
-| `/earnings` | - | VE$ monetization |
-| `/quests` | Both | Quest board |
-| `/profile` | Both | User profile |
+---
 
-### API Endpoints (100+ Total)
-
-#### Auth Endpoints
-```
-POST /api/auth/login      - Login with password
-POST /api/auth/register   - Create account
-POST /api/users/track-login - Track login stats
-GET  /api/users/stats/{id}  - Get user stats
-```
-
-#### World Engine
-```
-GET  /api/world-engine/state
-POST /api/world-engine/spawn-boss
-POST /api/world-engine/diplomatic-action
-POST /api/world-engine/create-event
-```
-
-#### AI Chat
-```
-POST /api/ai-chat/chat
-POST /api/ai-chat/narrator
-GET  /api/ai-chat/context/{loc}/{char}
-```
-
-### Tech Stack
+## Tech Stack
 - **Frontend**: React 18, TailwindCSS, Shadcn/UI
 - **Backend**: FastAPI, Python 3.11
 - **Database**: MongoDB (motor async driver)
@@ -140,30 +176,48 @@ GET  /api/ai-chat/context/{loc}/{char}
 - **Web3**: MetaMask wallet integration
 - **PWA**: Service Worker, offline support
 
-### Test Credentials
-- **Sirix-1 Admin**: `sirix_1` / `k3bdp0wn!0nr(?8vd&74v2l!`
+---
 
-### Completed Features
-- [x] Password authentication with stats tracking
+## Backend Routers
+| Router | Description |
+|--------|-------------|
+| server.py | Core routes (6700+ lines) |
+| memory_router.py | **NEW** Persistent memory system |
+| ai_chat_router.py | AI conversations with memory |
+| world_engine_router.py | Dynamic events, bosses |
+| ecosystem_support_router.py | Tech tiers, AI evolution |
+| earnings_router.py | VE$ income |
+| stripe_payout_router.py | Deposits/withdrawals |
+| task_providers_router.py | Micro-tasks |
+| npc_gaming_router.py | NPC game emulation |
+
+---
+
+## Completed Features
+- [x] Sirix-1 password secured (HCLynnTV04)
+- [x] Persistent memory system for users
+- [x] Persistent memory system for AI
+- [x] AI player modeling
+- [x] AI evolution tracking
+- [x] Memory integration in chat
 - [x] Back navigation on all screens
-- [x] Story Mode (2D chat + building)
-- [x] First Person 3D Mode (3D models)
-- [x] Mode selection with clear differentiation
-- [x] World Engine (bosses, events, diplomacy)
-- [x] AI Chat with context integration
+- [x] Story Mode vs First Person 3D
+- [x] World Engine
 - [x] VE$ earnings system
 - [x] PWA deployment ready
 
-### Immediate Priorities
-- [ ] Frontend UI for boss encounters
-- [ ] 2D Building interface for Story Mode
-- [ ] Event notification popups
+---
 
-### Future Roadmap
+## Immediate Priorities
+- [ ] 2D Building interface for Story Mode
+- [ ] Memory visualization UI (show AI memories to players)
+- [ ] Ecosystem dashboard showing collective AI evolution
+
+## Future Roadmap
 - P1: Complete server.py refactoring
 - P1: Real task provider API connections
 - P2: Voice input/output for VR
-- P2: Mount system for travel
+- P2: Cross-game AI memory persistence
 
 ---
 Last Updated: April 21, 2026

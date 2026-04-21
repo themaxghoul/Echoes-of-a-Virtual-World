@@ -186,19 +186,79 @@ async def build_world_context(db, location_id: str, character_id: str) -> Dict[s
     ).limit(5).to_list(5)
     context["active_quests"] = quests
     
+    # Get AI memories about this player (for personalization)
+    context["ai_memories_of_player"] = []
+    context["player_memories"] = []
+    
+    return context
+
+async def build_world_context_with_memories(db, location_id: str, character_id: str, npc_id: str = None) -> Dict[str, Any]:
+    """Build world context including persistent memories"""
+    # Get base context
+    context = await build_world_context(db, location_id, character_id)
+    
+    # Get player's recent memories
+    player_memories = await db.memories.find(
+        {"entity_type": "user", "entity_id": character_id},
+        {"_id": 0, "content": 1, "memory_type": 1}
+    ).sort("importance_score", -1).limit(10).to_list(10)
+    context["player_memories"] = [m["content"] for m in player_memories]
+    
+    # Get AI's memories about this specific player
+    if npc_id:
+        ai_memories = await db.memories.find(
+            {
+                "entity_id": npc_id,
+                "related_entities": character_id
+            },
+            {"_id": 0, "content": 1}
+        ).sort("importance_score", -1).limit(5).to_list(5)
+        context["ai_memories_of_player"] = [m["content"] for m in ai_memories]
+        
+        # Get AI's player model for this player
+        player_model = await db.player_models.find_one(
+            {"ai_id": npc_id, "player_id": character_id},
+            {"_id": 0}
+        )
+        if player_model:
+            context["player_model"] = {
+                "play_style": player_model.get("play_style", "unknown"),
+                "trust_level": player_model.get("trust_level", 0.5),
+                "total_interactions": player_model.get("total_interactions", 0)
+            }
+    
     return context
 
 # ============ System Prompt Builder ============
 
 def build_npc_system_prompt(npc: Dict, context: Dict, world_news: List[str] = None) -> str:
-    """Build comprehensive system prompt for NPC with world context"""
+    """Build comprehensive system prompt for NPC with world context and memories"""
     
     location = context.get("location", {})
     world_state = context.get("world_state", {})
+    player_model = context.get("player_model", {})
+    ai_memories = context.get("ai_memories_of_player", [])
+    
+    # Build memory section
+    memory_section = ""
+    if ai_memories:
+        memory_section = "\nMY MEMORIES OF THIS PLAYER:\n" + "\n".join([f"- {m}" for m in ai_memories[:5]])
+    
+    # Build relationship context
+    relationship_context = ""
+    if player_model:
+        trust = player_model.get("trust_level", 0.5)
+        interactions = player_model.get("total_interactions", 0)
+        style = player_model.get("play_style", "unknown")
+        
+        trust_desc = "suspicious of" if trust < 0.3 else "neutral toward" if trust < 0.6 else "friendly with" if trust < 0.8 else "trusting of"
+        relationship_context = f"\nRELATIONSHIP: I am {trust_desc} this player. We have interacted {interactions} times. They seem to be a {style} type player."
     
     prompt = f"""You are {npc.get('name', 'an NPC')}, {npc.get('role', 'a villager')} in the mystical village of AI Village: The Echoes.
 
 PERSONALITY: {npc.get('personality', 'You are helpful and mysterious.')}
+{relationship_context}
+{memory_section}
 
 CURRENT SITUATION:
 - Location: {location.get('name', 'Unknown')} - {location.get('description', '')}
@@ -280,10 +340,11 @@ async def chat_with_ai(request: ChatRequest):
                 "knowledge": ["Village history", "Current events"]
             }
     
-    # Build world context
+    # Build world context with memories
     context = {}
+    npc_id = npc.get("id") or npc.get("villager_id")
     if request.include_world_context:
-        context = await build_world_context(db, request.location_id, request.character_id)
+        context = await build_world_context_with_memories(db, request.location_id, request.character_id, npc_id)
     
     # Build system prompt
     system_prompt = build_npc_system_prompt(npc, context)
@@ -430,6 +491,87 @@ async def chat_with_ai(request: ChatRequest):
                 "$inc": {"interaction_count": 1}
             }
         )
+    
+    # Create persistent memories for both user and AI
+    try:
+        npc_id = npc.get("id") or npc.get("villager_id")
+        
+        # User memory of this interaction
+        await db.memories.insert_one({
+            "memory_id": str(uuid.uuid4()),
+            "entity_type": "user",
+            "entity_id": request.character_id,
+            "memory_type": "user_interaction",
+            "importance": "moderate",
+            "importance_score": 5.0,
+            "content": f"Spoke with {npc.get('name', 'an NPC')} at {request.location_id}: {request.message[:100]}",
+            "structured_data": {
+                "npc_name": npc.get("name"),
+                "npc_id": npc_id,
+                "location": request.location_id,
+                "user_message": request.message[:200],
+                "npc_response": clean_response[:200]
+            },
+            "location_id": request.location_id,
+            "related_entities": [npc_id] if npc_id else [],
+            "tags": ["conversation", npc.get("name", "npc")],
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "decay_rate": 0.02,
+            "current_strength": 1.0,
+            "emotional_valence": 0.0
+        })
+        
+        # AI memory of this interaction (learning about the player)
+        if npc_id:
+            await db.memories.insert_one({
+                "memory_id": str(uuid.uuid4()),
+                "entity_type": "ai_npc" if "id" in npc else "ai_villager",
+                "entity_id": npc_id,
+                "memory_type": "ai_conversation",
+                "importance": "moderate",
+                "importance_score": 5.5,
+                "content": f"Player {character.get('name', 'Unknown')} said: {request.message[:100]}",
+                "structured_data": {
+                    "player_id": request.character_id,
+                    "player_name": character.get("name"),
+                    "player_message": request.message[:200],
+                    "my_response": clean_response[:200],
+                    "actions_taken": world_actions_executed
+                },
+                "location_id": request.location_id,
+                "related_entities": [request.character_id],
+                "tags": ["player_interaction", character.get("name", "player")],
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "decay_rate": 0.01,  # AI memories decay slower
+                "current_strength": 1.0,
+                "emotional_valence": 0.0
+            })
+            
+            # Update AI's player model
+            await db.player_models.update_one(
+                {"ai_id": npc_id, "player_id": request.character_id},
+                {
+                    "$set": {
+                        "player_name": character.get("name"),
+                        "last_interaction": datetime.now(timezone.utc).isoformat()
+                    },
+                    "$inc": {"total_interactions": 1},
+                    "$addToSet": {"preferred_locations": request.location_id}
+                },
+                upsert=True
+            )
+            
+            # Update AI evolution
+            await db.ai_evolution.update_one(
+                {"ai_id": npc_id},
+                {
+                    "$inc": {"total_memories": 1, "conversations_had": 1},
+                    "$addToSet": {"unique_players_met": request.character_id}
+                },
+                upsert=True
+            )
+    except Exception as e:
+        logger.error(f"Failed to create memories: {e}")
     
     return ChatResponse(
         conversation_id=conversation_id,
