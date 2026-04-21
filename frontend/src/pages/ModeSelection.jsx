@@ -7,7 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import { 
   Gamepad2, MessageSquare, User, Sparkles, Crown,
   ArrowRight, Settings, LogOut, Hammer, ArrowLeftRight,
-  Heart, Zap, Shield, Swords, DollarSign, TrendingUp
+  Heart, Zap, Shield, Swords, DollarSign, TrendingUp, Briefcase
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -313,6 +313,18 @@ const ModeSelection = () => {
 
         {/* Quick Access */}
         <div className="flex flex-wrap gap-3 mt-8 justify-center">
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/jobs');
+              navigate('/jobs');
+            }}
+            className="border-blue-400/30 text-blue-400 hover:bg-blue-400/10 rounded-sm"
+            data-testid="jobs-btn"
+          >
+            <Briefcase className="w-4 h-4 mr-2" />
+            Career Hub
+          </Button>
           <Button
             variant="outline"
             onClick={() => {

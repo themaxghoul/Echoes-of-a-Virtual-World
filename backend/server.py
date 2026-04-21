@@ -6758,6 +6758,14 @@ try:
 except ImportError as e:
     logging.warning(f"Could not load Memory System router: {e}")
 
+# Include Jobs & Career System router
+try:
+    from jobs_router import jobs_router
+    app.include_router(jobs_router, prefix="/api")
+    logging.info("Jobs & Career router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Jobs router: {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
