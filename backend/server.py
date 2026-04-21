@@ -6686,6 +6686,22 @@ try:
 except ImportError as e:
     logging.warning(f"Could not load ecosystem support router: {e}")
 
+# Include World Engine router (Dynamic Events, Bosses, Diplomacy)
+try:
+    from world_engine_router import world_engine_router
+    app.include_router(world_engine_router, prefix="/api")
+    logging.info("World Engine router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load World Engine router: {e}")
+
+# Include AI Chat router (Isolated Chat System)
+try:
+    from ai_chat_router import ai_chat_router
+    app.include_router(ai_chat_router, prefix="/api")
+    logging.info("AI Chat router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load AI Chat router: {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

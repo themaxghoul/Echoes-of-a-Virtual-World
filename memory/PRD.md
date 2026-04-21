@@ -1,204 +1,115 @@
 # AI Village: The Echoes - Production Ready PRD
+## Pre-Release for itch.io
 
 ## Overview
-A virtual world storytelling experience where AI companions learn and evolve through player interactions. Integrated with **ApexForge Collective** real-world earnings platform.
+A virtual world storytelling experience where AI companions learn and evolve through player interactions. Features real-world monetization (ApexForge Collective) and dynamic world events driven by AI.
 
-## Business Entity
-**ApexForge Collective**
-- Address: 901 35th Ave, Tuscaloosa, AL 35401
-- Phone: (205) 233-4835
-- Email: legal@apexforge.io
+## Deployment: READY FOR ITCH.IO PRE-RELEASE
 
-## Deployment Status: READY FOR PRODUCTION
+### Key Systems
 
-### PWA Support
-- Manifest with app icons and shortcuts
-- Service Worker for offline caching
-- Install prompt for mobile devices
+#### 1. AI World Engine (NEW - Dynamic World)
+The World Engine enables NPCs and AI to commit real actions that change the game world:
 
-## Real-World Earnings System (VE$ Currency)
+**World Bosses (5 types)**
+| Boss | HP | Diplomatic? | Demands |
+|------|-----|-------------|---------|
+| Malachar the Shadow Lord | 5000 | No | - |
+| Azrael, Prince of Flames | 4000 | Yes | souls, territory, artifacts |
+| Vyrmathax the Eternal | 8000 | Yes | knowledge, respect, treasure |
+| Netharis the Undying | 3500 | Yes | corpses, dark knowledge, souls |
+| Goldric the Magnificent | 2000 | Yes | trade rights, monopoly, tribute |
 
-### Virtual Echo Dollar (VE$)
-- **Exchange Rate**: 1 VE$ = 1 USD (fixed parity)
-- **Minimum Withdrawal**: $1.00
-- **Withdrawal Fee**: $0.25 (supports game operations)
-- **Payment Methods**: Stripe, Crypto wallet
+**Diplomatic Factions (5)**
+- Village Council (lawful_good) - Elder Morin
+- Cult of the Void (chaotic_evil) - High Priest Vex
+- Merchant's Consortium (true_neutral) - Guildmaster Helena
+- Legions of the Abyss (chaotic_evil) - Archdemon Bael
+- Circle of Echoes (lawful_neutral) - Archmage Seraphina
 
-### Income Streams ($5-15/hr potential)
-| Stream | Hourly Rate | Game Integration |
-|--------|-------------|------------------|
-| Micro Tasks | $6-12/hr | Task Board in Guild Hall |
-| Transcription | $8-15/hr | Oracle's Transcription Quests |
-| Data Labeling | $6-12/hr | Archivist's Cataloging System |
-| Market Research | $5-10/hr | Oracle Consultations |
-| Compute Sharing | $1-5/hr (passive) | Crystal Network Contribution |
-| Affiliate | Variable | Merchant Guild Partnerships |
-| Blockchain | $3-8/hr + crypto | Cryptomancer's Challenges |
+**Dynamic Events (15 types)**
+- Boss Spawn, Invasion, Diplomatic Crisis, Resource Discovery
+- Plague, Festival, Merchant Caravan, Natural Disaster
+- Prophecy, Rebellion, Alliance Offer, War Declaration
+- Mysterious Stranger, Artifact Appearance, Portal Opening
 
-### Task Providers (7 Available)
-1. **Toloka** - Yandex crowdsourcing ($6-10/hr)
-2. **Appen** - AI training data ($8-15/hr)
-3. **Clickworker** - Diverse micro-tasks ($5-12/hr)
-4. **Microworkers** - Quick tasks ($4-8/hr)
-5. **Picoworkers** - Simple tasks ($3-6/hr)
-6. **Spare5** - AI annotation ($6-12/hr)
-7. **ApexForge Internal** - Direct tasks ($5-15/hr)
+**World State Variables**
+- Chaos Level (0-100): Affects spawn rates
+- Prosperity Level (0-100): Affects prices and NPC moods
+- Danger Level (0-100): Affects demon spawns
 
-### Payment System
-- **Stripe Integration**: emergentintegrations library
-- **Deposit**: Buy VE$ with card (instant credit)
-- **Withdrawal**: To crypto wallet or game balance
-- **Processing**: 1-3 business days
+#### 2. AI Chat System (Isolated & Context-Aware)
+NPCs can understand world context and trigger actions:
 
-### Geographic Coverage
-- **55 Supported Countries** (US, CA, UK, EU, JP, AU, etc.)
-- **6 Restricted Regions** (sanctioned countries)
-- Auto-detection with eligibility check
+**AI Action Tags**
+- `[MOOD:happy/angry/fearful]` - Change emotional state
+- `[QUEST:description]` - Create a quest for players
+- `[RUMOR:text]` - Spread rumors through the village
+- `[PROPHECY:text]` - Oracle-only divine visions
+- `[RELATION:+10/-5]` - Modify relationship with player
+- `[TRADE]` - Open trade interface
 
-## Ecosystem Support System (NEW)
+**Context Integration**
+- Location details and atmosphere
+- Nearby NPCs and players
+- Active world events and bosses
+- Recent rumors and prophecies
+- Character state and quests
 
-### Technology Tiers
-| Tier | Name | Points Required | AI Capabilities |
-|------|------|-----------------|-----------------|
-| 0 | Primitive | 0 | Basic responses |
-| 1 | Medieval | 100 | Memory of interactions |
-| 2 | Renaissance | 500 | Learn from conversations |
-| 3 | Industrial | 1,000 | Dynamic behavior |
-| 4 | Digital | 2,500 | Create unique quests |
-| 5 | Quantum | 5,000 | Deep conversations, prophecy |
-| 6 | Transcendent | 10,000 | Emergent society |
+#### 3. Earnings Hub (VE$ Currency)
+Real-world monetization tied 1:1 to USD:
+- 7 Task Providers (Toloka, Appen, etc.)
+- Stripe Deposits (Buy VE$ with card)
+- $0.25 Withdrawal Fee
+- MetaMask Web3 Integration
 
-### AI Intelligence Levels
-- **Dormant**: Scripted responses only
-- **Aware**: Recognizes individual players
-- **Learning**: Adapts to player behavior
-- **Adaptive**: Responds to world changes
-- **Creative**: Generates unique content
-- **Wise**: Deep understanding and insight
-- **Transcendent**: Emergent consciousness
+#### 4. Ecosystem Support System
+Players contribute to AI evolution:
+- 7 Technology Tiers (Primitive → Transcendent)
+- 7 AI Intelligence Levels (Dormant → Transcendent)
+- 11 Contribution Actions
 
-### Contribution Actions (11 types)
-| Action | Points | AI Benefit |
-|--------|--------|------------|
-| Chat with AI | +5 | Language understanding |
-| Trade with villager | +3 | Economic understanding |
-| Complete quest | +10 | Quest design patterns |
-| Defeat demon | +8 | Combat strategy |
-| Build structure | +5 | Architecture understanding |
-| Discover land | +15 | World knowledge |
-| Teach villager | +20 | Direct knowledge transfer |
-| Help villager mood | +7 | Emotional intelligence |
-| Guild activity | +4 | Social dynamics |
-| Earn VE$ | +2 | Real-world task understanding |
-| Direct support | +50 | Major AI advancement |
+## API Endpoints (100+ Total)
 
-### Support Multipliers
-- **Direct VE$ support**: 10 points per VE$
-- **Task completion**: 5 points per VE$
-- **Compute sharing**: 3 points per VE$
+### World Engine Endpoints (NEW)
+```
+GET  /api/world-engine/state           - Current world state
+GET  /api/world-engine/bosses          - Available bosses
+GET  /api/world-engine/factions        - Faction details
+GET  /api/world-engine/events/active   - Active events
+POST /api/world-engine/spawn-boss      - Spawn a boss
+POST /api/world-engine/attack-boss/{id} - Attack boss
+POST /api/world-engine/negotiate-boss/{id} - Negotiate
+POST /api/world-engine/diplomatic-action - Faction diplomacy
+POST /api/world-engine/create-event    - Create event
+POST /api/world-engine/trigger-random-event - Random event
+```
 
-## NPC Cloud Gaming Emulation System
+### AI Chat Endpoints (NEW)
+```
+POST /api/ai-chat/chat                 - Chat with NPC
+POST /api/ai-chat/narrator             - Narrator descriptions
+GET  /api/ai-chat/context/{loc}/{char} - World context
+GET  /api/ai-chat/conversation/{id}    - Conversation history
+POST /api/ai-chat/npc-autonomous-action - NPC autonomous action
+```
 
-### Supported Games
-- **In-game**: Village Chess, Oracle Riddles, Forge Rhythm, Demon Hunter Arena
-- **Browser**: 2048, Tetris, Snake
-- **Emulated**: NES, SNES, GBA, N64, PS1 classics
+### Earnings Endpoints
+```
+GET  /api/payments/packages            - Payout packages
+POST /api/payments/deposit/checkout    - Stripe deposit
+POST /api/payments/withdraw/initiate   - Initiate withdrawal
+GET  /api/payments/balance/{user_id}   - VE$ balance
+```
 
-### AI Learning Modes
-| Mode | Best For | Training Time | Accuracy |
-|------|----------|---------------|----------|
-| Reinforcement | Action, Arcade | Medium | 90% |
-| Imitation | Strategy, Puzzle | Fast | 85% |
-| Hybrid | All genres | Long | 95% |
-| Evolutionary | Racing, Fighting | Long | 92% |
-
-## Special Accounts
-### Sirix-1 (Supreme Account)
-- Username: `@sirix-1` (internal: `sirix_1`)
-- Permission: Transcendent (immutable, infinite resources displayed as infinity)
-- All areas accessible by default
-- AI Helper: Exclusive device integration
-- Commands: 21 exclusive commands including /god, /reset_world, /override, /reveal
-
-## Complete Feature List
-
-### Earnings Hub Features (NEW - April 2026)
-| Feature | Status | Description |
-|---------|--------|-------------|
-| VE$ Balance Display | DONE | Real-time balance with USD equivalent |
-| Buy VE$ (Deposit) | DONE | Stripe checkout integration |
-| Withdraw Funds | DONE | $0.25 fee, wallet or game balance |
-| MetaMask Wallet | DONE | Web3 connectivity for crypto withdrawals |
-| Task Providers | DONE | 7 providers with real micro-tasks |
-| Ecosystem Support | DONE | Contribute VE$ to advance AI |
-| Technology Tiers | DONE | 7 tiers from Primitive to Transcendent |
-| AI Intelligence | DONE | 7 levels from Dormant to Transcendent |
-| Contribution Tracking | DONE | Points, rank, tier for each user |
-| Leaderboard | DONE | Top contributors display |
-
-### UI/UX Enhancements
-| Feature | Status | Description |
-|---------|--------|-------------|
-| Purple Star Stats Panel | DONE | Character stats from top-right icon |
-| Interactive Map | DONE | Visual map with locations, connections |
-| Notification System | DONE | Browser push + in-app notifications |
-| Layout Customization | DONE | Button size, spacing, edge margin |
-| Landscape-Optimized | DONE | Buttons in horizontal row |
-| Camera Controls | DONE | Touch/drag to look around |
-| Virtual-scape Themes | DONE | Matrix theme for mystical areas |
-| First Person Toggle | DONE | Switch between Text and 3D modes |
-
-### Core Systems
-| Feature | Status | Description |
-|---------|--------|-------------|
-| Authentication | DONE | bcrypt password hashing |
-| Character Creation | DONE | Name, background, traits |
-| Village Explorer | DONE | 7 locations, text-based mode |
-| First Person View 3D | DONE | CSS 3D perspective |
-| AI Storyteller | DONE | GPT-5.2 via Emergent Integrations |
-
-### Combat System
-| Feature | Status | Description |
-|---------|--------|-------------|
-| Attack/Heavy Attack | DONE | Stamina-based combat |
-| Block/Dodge | DONE | Defensive actions |
-| Sprint | DONE | Variable stamina drain |
-| PvP Combat | DONE | Challenge and fight players |
-| Equipment | DONE | 7 weapons, 6 armor types |
-| Magic System | DONE | Mana bar, spell casting |
-
-## API Endpoints (80+ Total)
-
-### New Earnings & Ecosystem Endpoints
-- GET `/api/payments/packages` - Payout packages and fees
-- POST `/api/payments/deposit/checkout` - Create Stripe checkout
-- GET `/api/payments/deposit/status/{session_id}` - Check payment status
-- POST `/api/payments/withdraw/initiate` - Initiate withdrawal
-- GET `/api/payments/balance/{user_id}` - Get VE$ balance
-- GET `/api/ecosystem/status` - Ecosystem status and tier
-- POST `/api/ecosystem/contribute` - Submit contribution
-- POST `/api/ecosystem/support` - Direct VE$ support
-- GET `/api/ecosystem/user/{user_id}` - User contributions
-- GET `/api/ecosystem/leaderboard` - Top contributors
-- GET `/api/providers/list` - Task providers
-- GET `/api/providers/tasks/fetch` - Fetch available tasks
-
-## Frontend Routes (15)
-- `/` - Landing
-- `/auth` - Login/Register
-- `/create-character` - Character creation
-- `/select-mode` - Mode selection
-- `/village` - Text explorer
-- `/play` - First person 3D view
-- `/play-classic` - Original first person
-- `/dataspace` - AI memory visualization
-- `/quests` - Quest board
-- `/profile` - User profile
-- `/building` - Building system
-- `/trading` - Trading system
-- `/guilds` - Guild management
-- `/inventory` - Equipment management
-- `/earnings` - **NEW** Earnings Hub
+### Ecosystem Endpoints
+```
+GET  /api/ecosystem/status             - Current tier & AI level
+POST /api/ecosystem/contribute         - Submit contribution
+POST /api/ecosystem/support            - Direct VE$ support
+GET  /api/ecosystem/user/{user_id}     - User contributions
+GET  /api/ecosystem/leaderboard        - Top contributors
+```
 
 ## Tech Stack
 - **Frontend**: React 18, TailwindCSS, Shadcn/UI
@@ -206,22 +117,66 @@ A virtual world storytelling experience where AI companions learn and evolve thr
 - **Database**: MongoDB (motor async driver)
 - **AI**: GPT-5.2 via Emergent Integrations
 - **Payments**: Stripe via emergentintegrations
-- **Auth**: bcrypt password hashing
-- **Realtime**: WebSockets for multiplayer chat
-- **Web3**: MetaMask integration
+- **Web3**: MetaMask wallet integration
+- **PWA**: Service Worker, offline support
 
-## Architecture Notes
-- `server.py` is 6,600+ lines - priority refactoring needed
-- New modular routers: earnings_router, stripe_payout_router, ecosystem_support_router, task_providers_router, npc_gaming_router
+## Backend Architecture (Modularized)
+```
+/app/backend/
+├── server.py                    # Core server (6700 lines - being refactored)
+├── config/
+│   ├── database.py              # DB connection
+│   └── constants.py             # Game constants
+├── world_engine_router.py       # Dynamic events, bosses, diplomacy
+├── ai_chat_router.py            # Isolated AI chat system
+├── earnings_router.py           # VE$ income streams
+├── stripe_payout_router.py      # Deposits & withdrawals
+├── ecosystem_support_router.py  # Tech tiers & AI evolution
+├── task_providers_router.py     # Micro-task providers
+├── npc_gaming_router.py         # NPC game emulation
+```
+
+## Frontend Routes (15)
+- `/` - Landing
+- `/auth` - Login
+- `/create-character` - Character creation
+- `/select-mode` - Mode selection
+- `/village` - Text explorer
+- `/play` - First person 3D view
+- `/dataspace` - AI memory visualization
+- `/quests` - Quest board
+- `/profile` - User profile
+- `/building` - Building system
+- `/trading` - Trading system
+- `/guilds` - Guild management
+- `/inventory` - Equipment
+- `/earnings` - Earnings Hub
+
+## itch.io Pre-Release Checklist
+- [x] AI Chat with world context integration
+- [x] Dynamic boss spawning and combat
+- [x] Diplomatic faction system
+- [x] World events (15 types)
+- [x] VE$ earnings system
+- [x] Stripe payment integration
+- [x] Ecosystem support system
+- [x] PWA deployment ready
+- [x] First Person 3D view
+- [x] Multiplayer chat
+
+## Immediate Priorities
+- [ ] Frontend integration of World Engine UI
+- [ ] Boss encounter UI component
+- [ ] Diplomatic negotiation interface
+- [ ] Event notification system
 
 ## Future Roadmap
-- P0: Backend refactoring (split server.py into /routes, /models, /services)
-- P1: KYC integration for large withdrawals
+- P1: Complete server.py refactoring
 - P1: Real task provider API connections
-- P2: Voice input/output for VR prep
-- P2: Mount system for faster travel
+- P2: Voice input/output for VR
+- P2: Mount system for travel
 - P3: More demon types and boss encounters
 - P3: Cross-server guild wars
 
 ---
-Last Updated: April 2, 2026
+Last Updated: April 21, 2026
