@@ -9,10 +9,11 @@ import { Badge } from '@/components/ui/badge';
 import { 
   MapPin, Send, Menu, X, User, BookOpen, 
   ChevronRight, Loader2, Home, Sparkles, Lock, Unlock,
-  Crown, Shield, Flame, Eye, Moon, Star, Globe
+  Crown, Shield, Flame, Eye, Moon, Star, Globe, ArrowLeft
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
+import { pushNavHistory } from '@/components/GameNavigation';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -72,6 +73,12 @@ const VillageExplorer = () => {
   const [conversationCount, setConversationCount] = useState(0);
   const [visitedLocations, setVisitedLocations] = useState(new Set(['village_square']));
   const [worldNews, setWorldNews] = useState([]);
+
+  // Track navigation
+  useEffect(() => {
+    pushNavHistory('/village');
+    localStorage.setItem('gameMode', 'story');
+  }, []);
 
   // Load progression from localStorage
   useEffect(() => {
@@ -462,14 +469,25 @@ const VillageExplorer = () => {
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Header */}
-        <header className="flex-shrink-0 glass border-b border-border/30 px-6 py-4 flex items-center justify-between">
-          <button
-            data-testid="open-sidebar-btn"
-            onClick={() => setSidebarOpen(true)}
-            className={`text-muted-foreground hover:text-foreground transition-colors ${sidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-          >
-            <Menu className="w-5 h-5" />
-          </button>
+        <header className="flex-shrink-0 glass border-b border-border/30 px-4 sm:px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate('/select-mode')}
+              className="rounded-sm hover:bg-gold/10"
+              data-testid="back-to-mode-select"
+            >
+              <ArrowLeft className="w-5 h-5 text-gold" />
+            </Button>
+            <button
+              data-testid="open-sidebar-btn"
+              onClick={() => setSidebarOpen(true)}
+              className={`text-muted-foreground hover:text-foreground transition-colors ${sidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          </div>
           <div className="text-center">
             <h1 className="font-cinzel text-lg text-gold">{currentLocation.name}</h1>
             <p className="font-mono text-xs text-muted-foreground">

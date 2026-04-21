@@ -10,7 +10,7 @@ import {
   ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
   Pause, Play, Volume2, VolumeX, Eye, Send,
   MapPin, Compass, Crown, Shield, Zap, Package, Swords,
-  Sparkles, Terminal, Star, Map, Bell, Layout
+  Sparkles, Terminal, Star, Map, Bell, Layout, ArrowLeft, Home
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -20,6 +20,7 @@ import CharacterStatsPanel from '@/components/CharacterStatsPanel';
 import InteractiveMap from '@/components/InteractiveMap';
 import LayoutCustomization, { useGameLayout } from '@/components/LayoutCustomization';
 import NotificationCenter, { NotificationBell } from '@/components/NotificationCenter';
+import { pushNavHistory } from '@/components/GameNavigation';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -532,6 +533,12 @@ const FirstPersonView3D = () => {
   const [joystickActive, setJoystickActive] = useState(false);
   const [joystickPosition, setJoystickPosition] = useState({ x: 0, y: 0 });
   
+  // Track navigation for back button
+  useEffect(() => {
+    pushNavHistory('/play');
+    localStorage.setItem('gameMode', 'firstperson');
+  }, []);
+  
   // Load initial data
   useEffect(() => {
     const loadData = async () => {
@@ -957,13 +964,26 @@ const FirstPersonView3D = () => {
       
       {/* HUD - Top */}
       <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-40">
-        <div className="glass rounded-sm px-4 py-2">
-          <div className="flex items-center gap-3">
-            <MapPin className="w-4 h-4 text-gold" />
-            <span className="font-cinzel text-sm text-foreground">{scene.name}</span>
-            {scene.matrixTheme && (
-              <Badge className="bg-green-500/20 text-green-400 text-xs">Matrix</Badge>
-            )}
+        <div className="flex items-center gap-2">
+          {/* Back Button */}
+          <Button
+            data-testid="back-btn"
+            onClick={() => navigate('/select-mode')}
+            variant="ghost"
+            size="icon"
+            className="glass rounded-sm"
+          >
+            <ArrowLeft className="w-5 h-5 text-gold" />
+          </Button>
+          
+          <div className="glass rounded-sm px-4 py-2">
+            <div className="flex items-center gap-3">
+              <MapPin className="w-4 h-4 text-gold" />
+              <span className="font-cinzel text-sm text-foreground">{scene.name}</span>
+              {scene.matrixTheme && (
+                <Badge className="bg-green-500/20 text-green-400 text-xs">Matrix</Badge>
+              )}
+            </div>
           </div>
         </div>
         

@@ -2565,6 +2565,54 @@ async def get_user_by_id(user_id: str):
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
+# User Stats Tracking
+@api_router.post("/users/track-login")
+async def track_login(data: Dict[str, str]):
+    """Track user login for stats"""
+    user_id = data.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id required")
+    
+    await db.user_profiles.update_one(
+        {"id": user_id},
+        {
+            "$inc": {"stats.total_logins": 1},
+            "$set": {"last_login": datetime.now(timezone.utc).isoformat()}
+        }
+    )
+    
+    # Record login event
+    await db.login_events.insert_one({
+        "user_id": user_id,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "event_type": "login"
+    })
+    
+    return {"tracked": True}
+
+@api_router.get("/users/stats/{user_id}")
+async def get_user_stats(user_id: str):
+    """Get user gameplay statistics"""
+    user = await db.user_profiles.find_one({"id": user_id}, {"_id": 0, "stats": 1})
+    
+    # Get additional stats from other collections
+    quests_completed = await db.completed_quests.count_documents({"user_id": user_id})
+    npcs_talked = await db.chat_messages.count_documents({"speaker_id": user_id})
+    total_logins = await db.login_events.count_documents({"user_id": user_id})
+    
+    stats = user.get("stats", {}) if user else {}
+    
+    return {
+        "total_logins": stats.get("total_logins", total_logins),
+        "quests_completed": quests_completed,
+        "npcs_talked": npcs_talked,
+        "demons_defeated": stats.get("demons_defeated", 0),
+        "buildings_placed": stats.get("buildings_placed", 0),
+        "trades_completed": stats.get("trades_completed", 0),
+        "total_gold_earned": stats.get("total_gold_earned", 0),
+        "total_ve_earned": stats.get("total_ve_earned", 0)
+    }
+
 @api_router.put("/users/{user_id}/resources")
 async def update_user_resources(user_id: str, resources: Dict[str, int]):
     user = await db.user_profiles.find_one({"id": user_id})
