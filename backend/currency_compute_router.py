@@ -274,16 +274,19 @@ async def allocate_compute(data: PurchaseComputeRequest):
     tier = COMPUTE_TIERS[data.tier]
     total_cost = tier["hourly_cost_ve"] * data.hours
     
-    # Check balance
-    wallet = await db.entity_wallets.find_one({"entity_id": data.owner_id})
+    # Check balance - look up by entity_id and entity_type
+    wallet = await db.entity_wallets.find_one({
+        "entity_id": data.owner_id,
+        "entity_type": data.owner_type
+    })
     balance = wallet.get("balance_ve", 0) if wallet else 0
     
     if balance < total_cost:
-        raise HTTPException(status_code=400, detail=f"Insufficient funds (need {total_cost} VE$)")
+        raise HTTPException(status_code=400, detail=f"Insufficient funds (need {total_cost} VE$, have {balance} VE$)")
     
     # Deduct cost
     await db.entity_wallets.update_one(
-        {"entity_id": data.owner_id},
+        {"entity_id": data.owner_id, "entity_type": data.owner_type},
         {"$inc": {"balance_ve": -total_cost}}
     )
     
@@ -297,7 +300,8 @@ async def allocate_compute(data: PurchaseComputeRequest):
         purpose=data.purpose
     )
     
-    await db.compute_allocations.insert_one(allocation.dict())
+    alloc_dict = allocation.dict()
+    await db.compute_allocations.insert_one(alloc_dict)
     
     logger.info(f"Compute allocated: {data.tier} for {data.hours}h to {data.owner_type}/{data.owner_id}")
     
@@ -321,16 +325,19 @@ async def purchase_hardware(data: PurchaseHardwareRequest):
     hardware = HARDWARE_PURCHASE[data.hardware_type]
     cost = hardware["one_time_cost_ve"]
     
-    # Check balance
-    wallet = await db.entity_wallets.find_one({"entity_id": data.owner_id})
+    # Check balance - look up by entity_id and entity_type
+    wallet = await db.entity_wallets.find_one({
+        "entity_id": data.owner_id,
+        "entity_type": data.owner_type
+    })
     balance = wallet.get("balance_ve", 0) if wallet else 0
     
     if balance < cost:
-        raise HTTPException(status_code=400, detail=f"Insufficient funds (need {cost} VE$)")
+        raise HTTPException(status_code=400, detail=f"Insufficient funds (need {cost} VE$, have {balance} VE$)")
     
     # Deduct cost
     await db.entity_wallets.update_one(
-        {"entity_id": data.owner_id},
+        {"entity_id": data.owner_id, "entity_type": data.owner_type},
         {"$inc": {"balance_ve": -cost}}
     )
     
@@ -341,7 +348,8 @@ async def purchase_hardware(data: PurchaseHardwareRequest):
         hardware_type=data.hardware_type
     )
     
-    await db.hardware_ownership.insert_one(ownership.dict())
+    ownership_dict = ownership.dict()
+    await db.hardware_ownership.insert_one(ownership_dict)
     
     logger.info(f"Hardware purchased: {data.hardware_type} by {data.owner_type}/{data.owner_id}")
     

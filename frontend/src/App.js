@@ -23,6 +23,8 @@ import UnityOffload from "@/pages/UnityOffload";
 import ChatHistory from "@/pages/ChatHistory";
 import SkillsPage from "@/pages/SkillsPage";
 import CharacterCustomization from "@/pages/CharacterCustomization";
+import TasksDashboard from "@/pages/TasksDashboard";
+import ComputeMarketplace from "@/pages/ComputeMarketplace";
 
 function App() {
   return (
@@ -51,6 +53,8 @@ function App() {
           <Route path="/inventory" element={<InventoryPage />} />
           <Route path="/earnings" element={<EarningsHub />} />
           <Route path="/jobs" element={<JobsHub />} />
+          <Route path="/tasks" element={<TasksDashboard />} />
+          <Route path="/compute" element={<ComputeMarketplace />} />
         </Routes>
       </BrowserRouter>
       <Toaster 

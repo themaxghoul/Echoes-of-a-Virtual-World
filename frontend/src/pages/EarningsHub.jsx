@@ -394,6 +394,28 @@ const EarningsHub = () => {
           
           {/* Wallet Connection */}
           <div className="flex items-center gap-4">
+            {/* Quick Access Buttons */}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => navigate('/tasks')}
+              className="border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10"
+              data-testid="quick-tasks-btn"
+            >
+              <Target className="w-4 h-4 mr-1" />
+              RT Tasks
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => navigate('/compute')}
+              className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10"
+              data-testid="quick-compute-btn"
+            >
+              <Cpu className="w-4 h-4 mr-1" />
+              Compute
+            </Button>
+            
             {walletConnected ? (
               <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 border border-green-500/30 rounded-lg">
                 <Wallet className="w-4 h-4 text-green-500" />

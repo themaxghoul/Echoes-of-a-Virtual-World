@@ -309,7 +309,8 @@ async def start_task_session(data: StartSessionRequest):
         task_type=data.task_type
     )
     
-    await db.rt_sessions.insert_one(session.dict())
+    session_dict = session.dict()
+    await db.rt_sessions.insert_one(session_dict)
     
     # Generate initial batch of tasks
     tasks = []
@@ -325,12 +326,16 @@ async def start_task_session(data: StartSessionRequest):
         )
         tasks.append(task.dict())
     
-    await db.rt_tasks.insert_many(tasks)
+    # Insert tasks (this adds _id to each dict)
+    await db.rt_tasks.insert_many([t.copy() for t in tasks])
+    
+    # Remove _id from response (added by MongoDB)
+    response_tasks = [{k: v for k, v in t.items() if k != '_id'} for t in tasks]
     
     return {
         "session_id": session.session_id,
         "task_type": data.task_type,
-        "tasks": tasks,
+        "tasks": response_tasks,
         "payout_per_task": task_config["payout_per_task"],
         "estimated_hourly": task_config["payout_per_task"] * (3600 / task_config["avg_time_seconds"])
     }
@@ -442,9 +447,13 @@ async def get_next_batch(session_id: str, count: int = 10):
         )
         tasks.append(task.dict())
     
-    await db.rt_tasks.insert_many(tasks)
+    # Insert tasks (copy to avoid _id mutation)
+    await db.rt_tasks.insert_many([t.copy() for t in tasks])
     
-    return {"tasks": tasks, "count": len(tasks)}
+    # Remove _id from response
+    response_tasks = [{k: v for k, v in t.items() if k != '_id'} for t in tasks]
+    
+    return {"tasks": response_tasks, "count": len(response_tasks)}
 
 @rt_tasks_router.post("/session/{session_id}/end")
 async def end_session(session_id: str):

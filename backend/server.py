@@ -6898,6 +6898,22 @@ try:
 except ImportError as e:
     logging.warning(f"Could not load World Map router: {e}")
 
+# Include Real-Time Tasks router (Micro-task system)
+try:
+    from realtime_tasks_router import rt_tasks_router
+    app.include_router(rt_tasks_router, prefix="/api")
+    logging.info("Real-Time Tasks router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Real-Time Tasks router: {e}")
+
+# Include Currency & Compute router (AI Compute Marketplace)
+try:
+    from currency_compute_router import currency_compute_router
+    app.include_router(currency_compute_router, prefix="/api")
+    logging.info("Currency & Compute router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Currency Compute router: {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
