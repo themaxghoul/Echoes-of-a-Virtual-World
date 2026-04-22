@@ -61,11 +61,31 @@ const LandingPage = () => {
         <div className="flex flex-wrap gap-6 mt-6 justify-center">
           <button 
             data-testid="continue-journey-btn"
-            onClick={() => {
+            onClick={async () => {
+              const userId = localStorage.getItem('userId');
               const charId = localStorage.getItem('currentCharacterId');
-              if (charId) {
-                navigate('/select-mode');
-              } else {
+              
+              // Must have both userId and charId
+              if (!userId || !charId) {
+                navigate('/auth');
+                return;
+              }
+              
+              // Verify character belongs to this user
+              try {
+                const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/character/${charId}`);
+                const char = await res.json();
+                
+                if (char && char.user_id === userId) {
+                  navigate('/select-mode');
+                } else {
+                  // Character doesn't belong to this user, clear and redirect
+                  localStorage.removeItem('currentCharacterId');
+                  localStorage.removeItem('characterName');
+                  navigate('/auth');
+                }
+              } catch (error) {
+                // Error fetching, redirect to auth
                 navigate('/auth');
               }
             }}

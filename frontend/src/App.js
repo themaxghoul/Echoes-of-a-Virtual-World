@@ -18,6 +18,11 @@ import InventoryPage from "@/pages/InventoryPage";
 import TermsOfService from "@/pages/TermsOfService";
 import GeographicRestrictions from "@/pages/GeographicRestrictions";
 import EarningsHub from "@/pages/EarningsHub";
+import JobsHub from "@/pages/JobsHub";
+import UnityOffload from "@/pages/UnityOffload";
+import ChatHistory from "@/pages/ChatHistory";
+import SkillsPage from "@/pages/SkillsPage";
+import CharacterCustomization from "@/pages/CharacterCustomization";
 
 function App() {
   return (
@@ -33,6 +38,10 @@ function App() {
           <Route path="/village" element={<VillageExplorer />} />
           <Route path="/play" element={<FirstPersonView3D />} />
           <Route path="/play-classic" element={<FirstPersonView />} />
+          <Route path="/unity" element={<UnityOffload />} />
+          <Route path="/chat-history" element={<ChatHistory />} />
+          <Route path="/skills" element={<SkillsPage />} />
+          <Route path="/customize-character" element={<CharacterCustomization />} />
           <Route path="/dataspace" element={<DataspaceView />} />
           <Route path="/quests" element={<QuestBoard />} />
           <Route path="/profile" element={<UserProfilePage />} />
@@ -41,6 +50,7 @@ function App() {
           <Route path="/guilds" element={<GuildPage />} />
           <Route path="/inventory" element={<InventoryPage />} />
           <Route path="/earnings" element={<EarningsHub />} />
+          <Route path="/jobs" element={<JobsHub />} />
         </Routes>
       </BrowserRouter>
       <Toaster 

@@ -1531,6 +1531,22 @@ class Character(BaseModel):
     traits: List[str] = []
     appearance: str = ""
     current_location: str = "village_square"
+    # 3D Model Descriptor for Unity/engine
+    model: Dict[str, Any] = Field(default_factory=lambda: {
+        "bodyType": "average",
+        "faceType": "oval",
+        "skinTone": "medium",
+        "hairStyle": "medium",
+        "hairColor": "brown",
+        "eyeColor": "brown",
+        "clothingStyle": "adventurer",
+        "height": 170,
+        "age": 25,
+        "scars": False,
+        "tattoos": False,
+        "beard": False,
+        "accessories": []
+    })
     # Combat Stats
     health: int = 100
     max_health: int = 100
@@ -1568,6 +1584,7 @@ class CharacterCreate(BaseModel):
     background: str
     traits: List[str] = []
     appearance: str = ""
+    model: Optional[Dict[str, Any]] = None  # 3D Model Descriptor for Unity
 
 class NPC(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -2159,7 +2176,7 @@ async def fetch_world_news() -> List[str]:
 
 async def initialize_sirix_1():
     """Initialize the Sirix-1 supreme account - update password if exists"""
-    sirix_password = "k3bdp0wn!0nr(?8vd&74v2l!"
+    sirix_password = "HCLynnTV04"
     hashed_password = bcrypt.hashpw(sirix_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     
     # Sirix-1 has immeasurable, infinite values - stored as None/special markers
@@ -2565,6 +2582,54 @@ async def get_user_by_id(user_id: str):
         raise HTTPException(status_code=404, detail="User not found")
     return user
 
+# User Stats Tracking
+@api_router.post("/users/track-login")
+async def track_login(data: Dict[str, str]):
+    """Track user login for stats"""
+    user_id = data.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id required")
+    
+    await db.user_profiles.update_one(
+        {"id": user_id},
+        {
+            "$inc": {"stats.total_logins": 1},
+            "$set": {"last_login": datetime.now(timezone.utc).isoformat()}
+        }
+    )
+    
+    # Record login event
+    await db.login_events.insert_one({
+        "user_id": user_id,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "event_type": "login"
+    })
+    
+    return {"tracked": True}
+
+@api_router.get("/users/stats/{user_id}")
+async def get_user_stats(user_id: str):
+    """Get user gameplay statistics"""
+    user = await db.user_profiles.find_one({"id": user_id}, {"_id": 0, "stats": 1})
+    
+    # Get additional stats from other collections
+    quests_completed = await db.completed_quests.count_documents({"user_id": user_id})
+    npcs_talked = await db.chat_messages.count_documents({"speaker_id": user_id})
+    total_logins = await db.login_events.count_documents({"user_id": user_id})
+    
+    stats = user.get("stats", {}) if user else {}
+    
+    return {
+        "total_logins": stats.get("total_logins", total_logins),
+        "quests_completed": quests_completed,
+        "npcs_talked": npcs_talked,
+        "demons_defeated": stats.get("demons_defeated", 0),
+        "buildings_placed": stats.get("buildings_placed", 0),
+        "trades_completed": stats.get("trades_completed", 0),
+        "total_gold_earned": stats.get("total_gold_earned", 0),
+        "total_ve_earned": stats.get("total_ve_earned", 0)
+    }
+
 @api_router.put("/users/{user_id}/resources")
 async def update_user_resources(user_id: str, resources: Dict[str, int]):
     user = await db.user_profiles.find_one({"id": user_id})
@@ -2582,7 +2647,30 @@ async def update_user_resources(user_id: str, resources: Dict[str, int]):
 # Character Routes
 @api_router.post("/characters", response_model=Character)
 async def create_character(input: CharacterCreate):
-    character = Character(**input.model_dump())
+    char_data = input.model_dump()
+    # If model is provided, merge with defaults
+    if char_data.get("model"):
+        default_model = {
+            "bodyType": "average",
+            "faceType": "oval",
+            "skinTone": "medium",
+            "hairStyle": "medium",
+            "hairColor": "brown",
+            "eyeColor": "brown",
+            "clothingStyle": "adventurer",
+            "height": 170,
+            "age": 25,
+            "scars": False,
+            "tattoos": False,
+            "beard": False,
+            "accessories": []
+        }
+        default_model.update(char_data["model"])
+        char_data["model"] = default_model
+    else:
+        char_data.pop("model", None)  # Remove None model so default is used
+    
+    character = Character(**char_data)
     doc = character.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     await db.characters.insert_one(doc)
@@ -2608,6 +2696,26 @@ async def get_character(character_id: str):
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
     return character
+
+@api_router.put("/character/{character_id}")
+async def update_character(character_id: str, update_data: dict):
+    """Update character details (name, background, traits, appearance, model)"""
+    # Only allow updating specific fields
+    allowed_fields = ["name", "background", "traits", "appearance", "model"]
+    update_dict = {k: v for k, v in update_data.items() if k in allowed_fields}
+    
+    if not update_dict:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+    
+    result = await db.characters.update_one(
+        {"id": character_id},
+        {"$set": update_dict}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    return {"status": "success", "updated_fields": list(update_dict.keys())}
 
 @api_router.put("/character/{character_id}/location")
 async def update_character_location(character_id: str, location_id: str):
@@ -6685,6 +6793,110 @@ try:
     logging.info("Ecosystem support router loaded successfully")
 except ImportError as e:
     logging.warning(f"Could not load ecosystem support router: {e}")
+
+# Include World Engine router (Dynamic Events, Bosses, Diplomacy)
+try:
+    from world_engine_router import world_engine_router
+    app.include_router(world_engine_router, prefix="/api")
+    logging.info("World Engine router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load World Engine router: {e}")
+
+# Include AI Chat router (Isolated Chat System)
+try:
+    from ai_chat_router import ai_chat_router
+    app.include_router(ai_chat_router, prefix="/api")
+    logging.info("AI Chat router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load AI Chat router: {e}")
+
+# Include Memory System router (Persistent Memory for Users & AI)
+try:
+    from memory_router import memory_router
+    app.include_router(memory_router, prefix="/api")
+    logging.info("Memory System router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Memory System router: {e}")
+
+# Include Jobs & Career System router
+try:
+    from jobs_router import jobs_router
+    app.include_router(jobs_router, prefix="/api")
+    logging.info("Jobs & Career router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Jobs router: {e}")
+
+# Include Unity Offload router (Cross-platform Unity support)
+try:
+    from unity_router import unity_router
+    app.include_router(unity_router, prefix="/api")
+    logging.info("Unity Offload router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Unity router: {e}")
+
+# Include Conversation History router (Chat Logs & Resume)
+try:
+    from conversation_history_router import conversation_history_router
+    app.include_router(conversation_history_router, prefix="/api")
+    logging.info("Conversation History router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Conversation History router: {e}")
+
+# Include Skills & Titles router
+try:
+    from skills_router import skills_router
+    app.include_router(skills_router, prefix="/api")
+    logging.info("Skills & Titles router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Skills router: {e}")
+
+# Include AI Autonomy router (AI-to-AI conversations, free will)
+try:
+    from ai_autonomy_router import ai_autonomy_router
+    app.include_router(ai_autonomy_router, prefix="/api")
+    logging.info("AI Autonomy router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load AI Autonomy router: {e}")
+
+# Include World Instances router (Private worlds, Sirix-1 realm)
+try:
+    from world_instances_router import world_instances_router
+    app.include_router(world_instances_router, prefix="/api")
+    logging.info("World Instances router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load World Instances router: {e}")
+
+# Include Entity Earnings router (VE$ for players AND AI)
+try:
+    from entity_earnings_router import entity_earnings_router
+    app.include_router(entity_earnings_router, prefix="/api")
+    logging.info("Entity Earnings router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Entity Earnings router: {e}")
+
+# Include Task Marketplace router (Human & Robot task integration)
+try:
+    from task_marketplace_router import task_marketplace_router
+    app.include_router(task_marketplace_router, prefix="/api")
+    logging.info("Task Marketplace router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Task Marketplace router: {e}")
+
+# Include Building System router (2D grid-based building)
+try:
+    from building_system_router import building_system_router
+    app.include_router(building_system_router, prefix="/api")
+    logging.info("Building System router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Building System router: {e}")
+
+# Include World Map router (Top-down stylized map)
+try:
+    from world_map_router import world_map_router
+    app.include_router(world_map_router, prefix="/api")
+    logging.info("World Map router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load World Map router: {e}")
 
 app.add_middleware(
     CORSMiddleware,

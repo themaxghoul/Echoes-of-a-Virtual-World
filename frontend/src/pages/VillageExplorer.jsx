@@ -9,10 +9,11 @@ import { Badge } from '@/components/ui/badge';
 import { 
   MapPin, Send, Menu, X, User, BookOpen, 
   ChevronRight, Loader2, Home, Sparkles, Lock, Unlock,
-  Crown, Shield, Flame, Eye, Moon, Star, Globe
+  Crown, Shield, Flame, Eye, Moon, Star, Globe, ArrowLeft, History
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
+import { pushNavHistory } from '@/components/GameNavigation';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -40,15 +41,19 @@ const LOCATION_IMAGES = {
   'watchtower': 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&h=400&fit=crop',
 };
 
-// Milestone system for world progression
+// Milestone system for world progression (ALL MAPS NOW OPEN)
+// Note: All locations are now accessible in chat mode. Milestones track progress but don't lock content.
 const MILESTONES = [
-  { id: 1, name: 'First Steps', description: 'Enter The Echoes', xpRequired: 0, unlocks: ['village_square', 'oracle_sanctum'] },
-  { id: 2, name: 'Seeker', description: 'Visit 3 locations', xpRequired: 50, unlocks: ['the_forge', 'ancient_library'] },
-  { id: 3, name: 'Conversationalist', description: 'Have 10 conversations', xpRequired: 150, unlocks: ['wanderers_rest'] },
-  { id: 4, name: 'Explorer', description: 'Discover all initial areas', xpRequired: 300, unlocks: ['shadow_grove'] },
-  { id: 5, name: 'Trusted', description: 'Build relationships', xpRequired: 500, unlocks: ['watchtower'] },
-  { id: 6, name: 'Awakened', description: 'Unlock the outer realms', xpRequired: 1000, unlocks: ['outer_realms'] },
+  { id: 1, name: 'First Steps', description: 'Enter The Echoes', xpRequired: 0, unlocks: ['village_square', 'oracle_sanctum', 'the_forge', 'ancient_library', 'wanderers_rest', 'shadow_grove', 'watchtower', 'outer_realms'] },
+  { id: 2, name: 'Seeker', description: 'Visit 3 locations', xpRequired: 50, unlocks: [] },
+  { id: 3, name: 'Conversationalist', description: 'Have 10 conversations', xpRequired: 150, unlocks: [] },
+  { id: 4, name: 'Explorer', description: 'Discover all initial areas', xpRequired: 300, unlocks: [] },
+  { id: 5, name: 'Trusted', description: 'Build relationships', xpRequired: 500, unlocks: [] },
+  { id: 6, name: 'Awakened', description: 'Unlock the outer realms', xpRequired: 1000, unlocks: [] },
 ];
+
+// All locations are always open in Story/Chat mode
+const ALL_LOCATIONS_OPEN = true;
 
 const VillageExplorer = () => {
   const navigate = useNavigate();
@@ -64,6 +69,7 @@ const VillageExplorer = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState(null);
   const [isThinking, setIsThinking] = useState(false);
+  const [activeConversationId, setActiveConversationId] = useState(null);  // For conversation history
   
   // Milestone & progression state
   const [playerXP, setPlayerXP] = useState(0);
@@ -72,6 +78,32 @@ const VillageExplorer = () => {
   const [conversationCount, setConversationCount] = useState(0);
   const [visitedLocations, setVisitedLocations] = useState(new Set(['village_square']));
   const [worldNews, setWorldNews] = useState([]);
+
+  // Track navigation
+  useEffect(() => {
+    pushNavHistory('/village');
+    localStorage.setItem('gameMode', 'story');
+    
+    // Check for resume conversation
+    const resumeData = localStorage.getItem('resumeConversation');
+    if (resumeData) {
+      try {
+        const data = JSON.parse(resumeData);
+        setActiveConversationId(data.conversation_id);
+        // Pre-populate messages from context
+        if (data.context_messages && data.context_messages.length > 0) {
+          setMessages(data.context_messages.map(m => ({
+            role: m.role,
+            content: m.content
+          })));
+          toast.success(`Resumed conversation with ${data.npc_name || 'NPC'}`);
+        }
+        localStorage.removeItem('resumeConversation');
+      } catch (e) {
+        console.error('Failed to parse resume data:', e);
+      }
+    }
+  }, []);
 
   // Load progression from localStorage
   useEffect(() => {
@@ -83,16 +115,23 @@ const VillageExplorer = () => {
     setConversationCount(savedConvCount);
     setVisitedLocations(new Set(savedVisited));
     
-    // Calculate unlocked locations based on XP
-    const unlocked = ['village_square'];
-    MILESTONES.forEach(m => {
-      if (savedXP >= m.xpRequired) {
-        unlocked.push(...m.unlocks);
-      }
-    });
-    setUnlockedLocations([...new Set(unlocked)]);
+    // ALL LOCATIONS ARE OPEN - Story/Chat mode allows full exploration
+    if (ALL_LOCATIONS_OPEN) {
+      // Unlock all locations immediately
+      const allLocations = ['village_square', 'oracle_sanctum', 'the_forge', 'ancient_library', 'wanderers_rest', 'shadow_grove', 'watchtower', 'outer_realms'];
+      setUnlockedLocations(allLocations);
+    } else {
+      // Legacy: Calculate unlocked locations based on XP
+      const unlocked = ['village_square'];
+      MILESTONES.forEach(m => {
+        if (savedXP >= m.xpRequired) {
+          unlocked.push(...m.unlocks);
+        }
+      });
+      setUnlockedLocations([...new Set(unlocked)]);
+    }
     
-    // Set current milestone
+    // Set current milestone (for tracking, not locking)
     const milestone = [...MILESTONES].reverse().find(m => savedXP >= m.xpRequired) || MILESTONES[0];
     setCurrentMilestone(milestone);
   }, []);
@@ -169,8 +208,10 @@ const VillageExplorer = () => {
   const handleLocationChange = async (location) => {
     if (location.id === currentLocation?.id) return;
     
-    // Check if location is unlocked
-    if (!unlockedLocations.includes(location.id)) {
+    // In Story/Chat mode, all locations are open
+    const isUnlocked = ALL_LOCATIONS_OPEN || unlockedLocations.includes(location.id);
+    
+    if (!isUnlocked) {
       const requiredMilestone = MILESTONES.find(m => m.unlocks.includes(location.id));
       toast.error(`This area requires: ${requiredMilestone?.name || 'Unknown milestone'}`);
       return;
@@ -214,7 +255,28 @@ const VillageExplorer = () => {
     setIsThinking(true);
     setIsLoading(true);
 
+    const userId = localStorage.getItem('userId');
+
     try {
+      // Create conversation history entry if not exists
+      if (!activeConversationId) {
+        try {
+          const convRes = await axios.post(`${API}/conversations/create`, {
+            player_id: userId,
+            character_id: character.id,
+            npc_id: currentLocation.npcs?.[0] || null,
+            npc_name: currentLocation.npcs?.[0] || 'Village',
+            location_id: currentLocation.id,
+            location_name: currentLocation.name
+          });
+          if (convRes.data.conversation_id) {
+            setActiveConversationId(convRes.data.conversation_id);
+          }
+        } catch (convErr) {
+          console.log('Could not create conversation history:', convErr);
+        }
+      }
+
       const response = await axios.post(`${API}/chat`, {
         character_id: character.id,
         location_id: currentLocation.id,
@@ -223,10 +285,23 @@ const VillageExplorer = () => {
       });
 
       setConversationId(response.data.conversation_id);
+      const assistantMsg = response.data.response;
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: response.data.response 
+        content: assistantMsg 
       }]);
+      
+      // Save messages to conversation history
+      if (activeConversationId) {
+        try {
+          await axios.post(`${API}/conversations/${activeConversationId}/messages/bulk`, [
+            { role: 'user', content: userMsg },
+            { role: 'assistant', content: assistantMsg }
+          ]);
+        } catch (historyErr) {
+          console.log('Could not save to history:', historyErr);
+        }
+      }
       
       // Award XP for conversation
       const newConvCount = conversationCount + 1;
@@ -335,7 +410,8 @@ const VillageExplorer = () => {
               </h3>
               <div className="space-y-2">
                 {locations.map((location) => {
-                  const isUnlocked = unlockedLocations.includes(location.id);
+                  // All locations are unlocked in Story/Chat mode
+                  const isUnlocked = ALL_LOCATIONS_OPEN || unlockedLocations.includes(location.id);
                   const isCurrentLocation = currentLocation?.id === location.id;
                   
                   return (
@@ -361,9 +437,9 @@ const VillageExplorer = () => {
                         <div className="flex-1">
                           <div className="font-cinzel text-sm text-foreground flex items-center gap-2">
                             {location.name}
-                            {!isUnlocked && (
-                              <Badge variant="outline" className="text-xs font-mono">
-                                Locked
+                            {ALL_LOCATIONS_OPEN && !visitedLocations.has(location.id) && (
+                              <Badge variant="outline" className="text-xs font-mono text-slate-blue border-slate-blue/30">
+                                New
                               </Badge>
                             )}
                           </div>
@@ -398,8 +474,21 @@ const VillageExplorer = () => {
                 })}
               </div>
               
-              {/* Locked Areas Hint */}
-              {unlockedLocations.length < 6 && (
+              {/* All Areas Open indicator */}
+              {ALL_LOCATIONS_OPEN && (
+                <div className="mt-6 p-4 border border-dashed border-green-500/30 rounded-sm bg-green-500/5">
+                  <div className="flex items-center gap-2 text-green-400 mb-2">
+                    <Unlock className="w-4 h-4" />
+                    <span className="font-cinzel text-sm">All Areas Open</span>
+                  </div>
+                  <p className="font-manrope text-xs text-muted-foreground">
+                    Story Mode grants access to all locations. Explore freely!
+                  </p>
+                </div>
+              )}
+              
+              {/* Legacy locked areas hint (when ALL_LOCATIONS_OPEN is false) */}
+              {!ALL_LOCATIONS_OPEN && unlockedLocations.length < 6 && (
                 <div className="mt-6 p-4 border border-dashed border-border/30 rounded-sm">
                   <div className="flex items-center gap-2 text-muted-foreground mb-2">
                     <Lock className="w-4 h-4" />
@@ -414,6 +503,14 @@ const VillageExplorer = () => {
 
             {/* Bottom Nav */}
             <div className="p-4 border-t border-border/30 space-y-2">
+              <button
+                data-testid="nav-chat-history-btn"
+                onClick={() => navigate('/chat-history')}
+                className="w-full flex items-center gap-2 p-3 bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 rounded-sm transition-colors"
+              >
+                <History className="w-4 h-4" />
+                <span className="font-manrope text-sm">Chat History</span>
+              </button>
               <button
                 data-testid="nav-first-person-btn"
                 onClick={() => navigate('/play')}
@@ -462,14 +559,25 @@ const VillageExplorer = () => {
       {/* Main Content */}
       <main className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Header */}
-        <header className="flex-shrink-0 glass border-b border-border/30 px-6 py-4 flex items-center justify-between">
-          <button
-            data-testid="open-sidebar-btn"
-            onClick={() => setSidebarOpen(true)}
-            className={`text-muted-foreground hover:text-foreground transition-colors ${sidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-          >
-            <Menu className="w-5 h-5" />
-          </button>
+        <header className="flex-shrink-0 glass border-b border-border/30 px-4 sm:px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate('/select-mode')}
+              className="rounded-sm hover:bg-gold/10"
+              data-testid="back-to-mode-select"
+            >
+              <ArrowLeft className="w-5 h-5 text-gold" />
+            </Button>
+            <button
+              data-testid="open-sidebar-btn"
+              onClick={() => setSidebarOpen(true)}
+              className={`text-muted-foreground hover:text-foreground transition-colors ${sidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          </div>
           <div className="text-center">
             <h1 className="font-cinzel text-lg text-gold">{currentLocation.name}</h1>
             <p className="font-mono text-xs text-muted-foreground">
