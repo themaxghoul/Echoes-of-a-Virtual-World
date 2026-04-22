@@ -2543,10 +2543,11 @@ async def register(request: RegisterRequest):
         "is_immutable": False
     }
     
-    await db.user_profiles.insert_one(user_doc)
+    await db.user_profiles.insert_one(user_doc.copy())  # Use copy to avoid _id mutation
     
-    # Return user without password hash
+    # Return user without password hash and _id
     user_doc.pop("hashed_password", None)
+    user_doc.pop("_id", None)
     return {"status": "success", "user": user_doc}
 
 @api_router.post("/users", response_model=UserProfile)
@@ -6913,6 +6914,22 @@ try:
     logging.info("Currency & Compute router loaded successfully")
 except ImportError as e:
     logging.warning(f"Could not load Currency Compute router: {e}")
+
+# Include Multiplayer Chat router (WebSocket chat)
+try:
+    from multiplayer_chat_router import multiplayer_chat_router
+    app.include_router(multiplayer_chat_router, prefix="/api")
+    logging.info("Multiplayer Chat router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Multiplayer Chat router: {e}")
+
+# Include Skill Tree router (Active/Passive skills)
+try:
+    from skill_tree_router import skill_tree_router
+    app.include_router(skill_tree_router, prefix="/api")
+    logging.info("Skill Tree router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Skill Tree router: {e}")
 
 app.add_middleware(
     CORSMiddleware,

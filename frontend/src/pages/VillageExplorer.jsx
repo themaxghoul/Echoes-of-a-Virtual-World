@@ -9,11 +9,13 @@ import { Badge } from '@/components/ui/badge';
 import { 
   MapPin, Send, Menu, X, User, BookOpen, 
   ChevronRight, Loader2, Home, Sparkles, Lock, Unlock,
-  Crown, Shield, Flame, Eye, Moon, Star, Globe, ArrowLeft, History
+  Crown, Shield, Flame, Eye, Moon, Star, Globe, ArrowLeft, History,
+  MessageSquare, Users
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
 import { pushNavHistory } from '@/components/GameNavigation';
+import MultiplayerChat from '@/components/MultiplayerChat';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -78,6 +80,10 @@ const VillageExplorer = () => {
   const [conversationCount, setConversationCount] = useState(0);
   const [visitedLocations, setVisitedLocations] = useState(new Set(['village_square']));
   const [worldNews, setWorldNews] = useState([]);
+  
+  // Multiplayer chat state
+  const [showMultiplayerChat, setShowMultiplayerChat] = useState(false);
+  const [chatPopOut, setChatPopOut] = useState(false);
 
   // Track navigation
   useEffect(() => {
@@ -751,6 +757,40 @@ const VillageExplorer = () => {
           </div>
         </div>
       </main>
+      
+      {/* Multiplayer Chat Toggle Button */}
+      <Button
+        className="fixed bottom-20 right-4 z-40 bg-gold text-black hover:bg-gold-light shadow-lg"
+        onClick={() => setShowMultiplayerChat(true)}
+        data-testid="multiplayer-chat-toggle"
+      >
+        <Users className="w-4 h-4 mr-2" />
+        Players
+      </Button>
+      
+      {/* Multiplayer Chat Panel */}
+      {showMultiplayerChat && !chatPopOut && (
+        <div className="fixed bottom-4 right-4 w-96 h-[500px] z-50">
+          <MultiplayerChat 
+            isOpen={showMultiplayerChat}
+            onClose={() => setShowMultiplayerChat(false)}
+            onPopOut={() => setChatPopOut(true)}
+            currentRegion={currentLocation?.id}
+            userId={localStorage.getItem('userId')}
+          />
+        </div>
+      )}
+      
+      {/* Pop-out Chat */}
+      {chatPopOut && (
+        <MultiplayerChat 
+          isOpen={true}
+          isPopOut={true}
+          onClose={() => { setChatPopOut(false); setShowMultiplayerChat(false); }}
+          currentRegion={currentLocation?.id}
+          userId={localStorage.getItem('userId')}
+        />
+      )}
     </div>
   );
 };
