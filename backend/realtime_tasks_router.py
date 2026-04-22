@@ -1,0 +1,560 @@
+# Real-Time Micro-Task System - Quick Money, Instant Payouts
+# Easy integration with reliable task providers for active earning
+
+from fastapi import APIRouter, HTTPException, BackgroundTasks
+from pydantic import BaseModel, Field
+from typing import Optional, Dict, List, Any
+from datetime import datetime, timezone, timedelta
+import uuid
+import logging
+import random
+import asyncio
+
+rt_tasks_router = APIRouter(prefix="/rt-tasks", tags=["realtime-tasks"])
+
+logger = logging.getLogger(__name__)
+
+# ============ Real-Time Task Types ============
+# These are simple, quick tasks that can be completed in seconds to minutes
+
+RT_TASK_TYPES = {
+    # Image Tasks - Quick visual verification
+    "image_tagging": {
+        "name": "Image Tagging",
+        "description": "Tag objects in images",
+        "avg_time_seconds": 10,
+        "payout_per_task": 0.02,
+        "skill_xp": {"investigation": 1},
+        "batch_size": 10,
+        "auto_approve": True
+    },
+    "image_comparison": {
+        "name": "Image Comparison",
+        "description": "Compare two images for similarity",
+        "avg_time_seconds": 8,
+        "payout_per_task": 0.015,
+        "skill_xp": {"investigation": 1},
+        "batch_size": 15,
+        "auto_approve": True
+    },
+    "content_rating": {
+        "name": "Content Rating",
+        "description": "Rate content appropriateness (SFW/NSFW)",
+        "avg_time_seconds": 5,
+        "payout_per_task": 0.01,
+        "skill_xp": {"diplomacy": 1},
+        "batch_size": 20,
+        "auto_approve": True
+    },
+    
+    # Text Tasks - Quick reading/classification
+    "sentiment_label": {
+        "name": "Sentiment Labeling",
+        "description": "Label text as positive/negative/neutral",
+        "avg_time_seconds": 6,
+        "payout_per_task": 0.01,
+        "skill_xp": {"lore": 1},
+        "batch_size": 20,
+        "auto_approve": True
+    },
+    "text_categorization": {
+        "name": "Text Categorization",
+        "description": "Categorize text into topics",
+        "avg_time_seconds": 12,
+        "payout_per_task": 0.025,
+        "skill_xp": {"lore": 1, "investigation": 1},
+        "batch_size": 10,
+        "auto_approve": True
+    },
+    "spam_detection": {
+        "name": "Spam Detection",
+        "description": "Identify spam messages",
+        "avg_time_seconds": 4,
+        "payout_per_task": 0.008,
+        "skill_xp": {"investigation": 1},
+        "batch_size": 25,
+        "auto_approve": True
+    },
+    
+    # Audio Tasks
+    "audio_transcription_short": {
+        "name": "Short Audio Transcription",
+        "description": "Transcribe 10-30 second audio clips",
+        "avg_time_seconds": 45,
+        "payout_per_task": 0.10,
+        "skill_xp": {"languages": 2, "lore": 1},
+        "batch_size": 5,
+        "auto_approve": False  # Needs quality check
+    },
+    
+    # AI Training Tasks
+    "response_ranking": {
+        "name": "AI Response Ranking",
+        "description": "Rank AI responses by quality",
+        "avg_time_seconds": 20,
+        "payout_per_task": 0.05,
+        "skill_xp": {"arcana": 2},
+        "batch_size": 8,
+        "auto_approve": True
+    },
+    "prompt_writing": {
+        "name": "Prompt Writing",
+        "description": "Write creative prompts for AI",
+        "avg_time_seconds": 30,
+        "payout_per_task": 0.08,
+        "skill_xp": {"lore": 2, "charm": 1},
+        "batch_size": 5,
+        "auto_approve": True
+    },
+    
+    # Verification Tasks
+    "captcha_solving": {
+        "name": "CAPTCHA Solving",
+        "description": "Solve visual CAPTCHAs",
+        "avg_time_seconds": 5,
+        "payout_per_task": 0.005,
+        "skill_xp": {"investigation": 1},
+        "batch_size": 30,
+        "auto_approve": True
+    },
+    "data_entry": {
+        "name": "Data Entry",
+        "description": "Enter data from images/documents",
+        "avg_time_seconds": 25,
+        "payout_per_task": 0.04,
+        "skill_xp": {"lore": 1},
+        "batch_size": 8,
+        "auto_approve": True
+    },
+    
+    # Gaming/Creative Tasks (for The Echoes)
+    "npc_dialogue_rating": {
+        "name": "NPC Dialogue Rating",
+        "description": "Rate NPC conversation quality",
+        "avg_time_seconds": 15,
+        "payout_per_task": 0.03,
+        "skill_xp": {"charm": 1, "diplomacy": 1},
+        "batch_size": 10,
+        "auto_approve": True
+    },
+    "world_description": {
+        "name": "World Description",
+        "description": "Write short location descriptions",
+        "avg_time_seconds": 60,
+        "payout_per_task": 0.15,
+        "skill_xp": {"lore": 3, "languages": 1},
+        "batch_size": 3,
+        "auto_approve": False
+    }
+}
+
+# ============ Task Provider Adapters ============
+# Simple adapters for real task providers
+
+TASK_PROVIDERS = {
+    "internal": {
+        "name": "The Echoes Internal",
+        "description": "Tasks generated by the game ecosystem",
+        "api_required": False,
+        "instant_payout": True,
+        "reliability": 1.0
+    },
+    "clickworker": {
+        "name": "Clickworker",
+        "description": "Global micro-task platform",
+        "api_required": True,
+        "api_url": "https://api.clickworker.com/v2",
+        "instant_payout": False,
+        "payout_delay_hours": 24,
+        "reliability": 0.95
+    },
+    "toloka": {
+        "name": "Toloka",
+        "description": "Yandex data labeling platform",
+        "api_required": True,
+        "api_url": "https://toloka.dev/api/v1",
+        "instant_payout": False,
+        "payout_delay_hours": 48,
+        "reliability": 0.92
+    },
+    "appen": {
+        "name": "Appen",
+        "description": "Enterprise AI training data",
+        "api_required": True,
+        "api_url": "https://api.appen.com/v1",
+        "instant_payout": False,
+        "payout_delay_hours": 72,
+        "reliability": 0.98
+    }
+}
+
+# ============ Models ============
+
+class RTTask(BaseModel):
+    task_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    task_type: str
+    provider: str = "internal"
+    data: Dict[str, Any]  # Task-specific data
+    payout: float
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    expires_at: str
+    status: str = "available"  # available, claimed, completed, expired
+
+class RTTaskSession(BaseModel):
+    session_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    worker_id: str
+    worker_type: str = "player"  # player or npc
+    task_type: str
+    started_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    tasks_completed: int = 0
+    earnings: float = 0.0
+    is_active: bool = True
+
+class TaskCompletion(BaseModel):
+    task_id: str
+    worker_id: str
+    response: Dict[str, Any]
+    time_taken_seconds: float
+
+class StartSessionRequest(BaseModel):
+    worker_id: str
+    worker_type: str = "player"
+    task_type: str
+    batch_size: Optional[int] = None
+
+# ============ Database Helper ============
+
+def get_db():
+    from server import db
+    return db
+
+# ============ Task Generation ============
+
+def generate_internal_task(task_type: str) -> Dict[str, Any]:
+    """Generate an internal task based on type"""
+    task_config = RT_TASK_TYPES.get(task_type, {})
+    
+    if task_type == "image_tagging":
+        return {
+            "image_url": f"https://placeholder.co/400x300?text=Tag+Objects+{random.randint(1000,9999)}",
+            "instructions": "Tag all visible objects in this image",
+            "categories": ["person", "animal", "vehicle", "building", "nature", "object"]
+        }
+    elif task_type == "sentiment_label":
+        samples = [
+            "I absolutely loved the new update!",
+            "This is terrible, I want a refund.",
+            "It's okay, nothing special.",
+            "Best experience ever!",
+            "Could be better, but it works."
+        ]
+        return {
+            "text": random.choice(samples),
+            "options": ["positive", "negative", "neutral"]
+        }
+    elif task_type == "content_rating":
+        return {
+            "content_preview": "Sample content for rating",
+            "options": ["safe", "questionable", "unsafe"]
+        }
+    elif task_type == "response_ranking":
+        return {
+            "prompt": "What is the meaning of life?",
+            "responses": [
+                "42",
+                "To find happiness and purpose",
+                "There is no inherent meaning",
+                "To help others"
+            ],
+            "instructions": "Rank from best to worst"
+        }
+    elif task_type == "npc_dialogue_rating":
+        return {
+            "npc_name": random.choice(["Elder Morvain", "Lyra", "Kael Ironbrand"]),
+            "dialogue": "Greetings, traveler. The echoes whisper of your arrival.",
+            "context": "Player just entered the village square",
+            "criteria": ["naturalness", "relevance", "engagement"]
+        }
+    else:
+        return {
+            "instructions": task_config.get("description", "Complete this task"),
+            "data": {"sample": "data"}
+        }
+
+# ============ Endpoints ============
+
+@rt_tasks_router.get("/types")
+async def get_task_types():
+    """Get all available real-time task types"""
+    return {
+        "task_types": RT_TASK_TYPES,
+        "providers": TASK_PROVIDERS
+    }
+
+@rt_tasks_router.post("/session/start")
+async def start_task_session(data: StartSessionRequest):
+    """Start a real-time task session"""
+    db = get_db()
+    
+    if data.task_type not in RT_TASK_TYPES:
+        raise HTTPException(status_code=400, detail=f"Unknown task type: {data.task_type}")
+    
+    task_config = RT_TASK_TYPES[data.task_type]
+    batch_size = data.batch_size or task_config.get("batch_size", 10)
+    
+    # Create session
+    session = RTTaskSession(
+        worker_id=data.worker_id,
+        worker_type=data.worker_type,
+        task_type=data.task_type
+    )
+    
+    await db.rt_sessions.insert_one(session.dict())
+    
+    # Generate initial batch of tasks
+    tasks = []
+    for _ in range(batch_size):
+        task_data = generate_internal_task(data.task_type)
+        expires = datetime.now(timezone.utc) + timedelta(minutes=5)
+        
+        task = RTTask(
+            task_type=data.task_type,
+            data=task_data,
+            payout=task_config["payout_per_task"],
+            expires_at=expires.isoformat()
+        )
+        tasks.append(task.dict())
+    
+    await db.rt_tasks.insert_many(tasks)
+    
+    return {
+        "session_id": session.session_id,
+        "task_type": data.task_type,
+        "tasks": tasks,
+        "payout_per_task": task_config["payout_per_task"],
+        "estimated_hourly": task_config["payout_per_task"] * (3600 / task_config["avg_time_seconds"])
+    }
+
+@rt_tasks_router.post("/task/complete")
+async def complete_task(completion: TaskCompletion):
+    """Complete a task and receive instant payout"""
+    db = get_db()
+    
+    task = await db.rt_tasks.find_one({"task_id": completion.task_id})
+    
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    if task.get("status") != "available":
+        raise HTTPException(status_code=400, detail="Task already completed or expired")
+    
+    task_config = RT_TASK_TYPES.get(task.get("task_type"), {})
+    payout = task.get("payout", 0)
+    
+    # Mark task complete
+    await db.rt_tasks.update_one(
+        {"task_id": completion.task_id},
+        {
+            "$set": {
+                "status": "completed",
+                "completed_by": completion.worker_id,
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "response": completion.response,
+                "time_taken": completion.time_taken_seconds
+            }
+        }
+    )
+    
+    # Instant payout if auto-approve
+    if task_config.get("auto_approve", True):
+        await db.entity_wallets.update_one(
+            {"entity_id": completion.worker_id},
+            {
+                "$inc": {"balance_ve": payout, "total_earned": payout},
+                "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
+            },
+            upsert=True
+        )
+        
+        # Record transaction
+        await db.rt_transactions.insert_one({
+            "transaction_id": str(uuid.uuid4()),
+            "worker_id": completion.worker_id,
+            "task_id": completion.task_id,
+            "task_type": task.get("task_type"),
+            "amount": payout,
+            "status": "paid",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+        
+        # Award skill XP
+        skill_xp = task_config.get("skill_xp", {})
+        for skill, xp in skill_xp.items():
+            await db.entity_skills.update_one(
+                {"entity_id": completion.worker_id},
+                {"$inc": {f"skills.{skill}.xp": xp, "total_skill_points": xp}},
+                upsert=True
+            )
+    
+    # Update session
+    await db.rt_sessions.update_one(
+        {"worker_id": completion.worker_id, "is_active": True},
+        {
+            "$inc": {"tasks_completed": 1, "earnings": payout}
+        }
+    )
+    
+    return {
+        "completed": True,
+        "task_id": completion.task_id,
+        "payout": payout,
+        "instant_paid": task_config.get("auto_approve", True),
+        "skill_xp": task_config.get("skill_xp", {})
+    }
+
+@rt_tasks_router.get("/session/{session_id}/next-batch")
+async def get_next_batch(session_id: str, count: int = 10):
+    """Get next batch of tasks for a session"""
+    db = get_db()
+    
+    session = await db.rt_sessions.find_one({"session_id": session_id})
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if not session.get("is_active"):
+        raise HTTPException(status_code=400, detail="Session ended")
+    
+    task_type = session.get("task_type")
+    task_config = RT_TASK_TYPES.get(task_type, {})
+    
+    # Generate new batch
+    tasks = []
+    for _ in range(count):
+        task_data = generate_internal_task(task_type)
+        expires = datetime.now(timezone.utc) + timedelta(minutes=5)
+        
+        task = RTTask(
+            task_type=task_type,
+            data=task_data,
+            payout=task_config["payout_per_task"],
+            expires_at=expires.isoformat()
+        )
+        tasks.append(task.dict())
+    
+    await db.rt_tasks.insert_many(tasks)
+    
+    return {"tasks": tasks, "count": len(tasks)}
+
+@rt_tasks_router.post("/session/{session_id}/end")
+async def end_session(session_id: str):
+    """End a task session"""
+    db = get_db()
+    
+    session = await db.rt_sessions.find_one({"session_id": session_id})
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    await db.rt_sessions.update_one(
+        {"session_id": session_id},
+        {
+            "$set": {
+                "is_active": False,
+                "ended_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    return {
+        "ended": True,
+        "session_id": session_id,
+        "tasks_completed": session.get("tasks_completed", 0),
+        "total_earnings": session.get("earnings", 0)
+    }
+
+@rt_tasks_router.get("/worker/{worker_id}/stats")
+async def get_worker_stats(worker_id: str):
+    """Get worker statistics"""
+    db = get_db()
+    
+    # Get all sessions
+    sessions = await db.rt_sessions.find({"worker_id": worker_id}).to_list(100)
+    
+    total_tasks = sum(s.get("tasks_completed", 0) for s in sessions)
+    total_earnings = sum(s.get("earnings", 0) for s in sessions)
+    
+    # By task type
+    pipeline = [
+        {"$match": {"worker_id": worker_id}},
+        {"$group": {"_id": "$task_type", "tasks": {"$sum": "$tasks_completed"}, "earned": {"$sum": "$earnings"}}}
+    ]
+    by_type = await db.rt_sessions.aggregate(pipeline).to_list(20)
+    
+    # Recent transactions
+    recent = await db.rt_transactions.find(
+        {"worker_id": worker_id},
+        {"_id": 0}
+    ).sort("timestamp", -1).limit(20).to_list(20)
+    
+    return {
+        "worker_id": worker_id,
+        "total_tasks": total_tasks,
+        "total_earnings": total_earnings,
+        "by_task_type": {t["_id"]: {"tasks": t["tasks"], "earned": t["earned"]} for t in by_type if t["_id"]},
+        "recent_transactions": recent,
+        "sessions_count": len(sessions)
+    }
+
+@rt_tasks_router.get("/leaderboard/hourly")
+async def get_hourly_leaderboard(limit: int = 20):
+    """Get top earners in the last hour"""
+    db = get_db()
+    
+    one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    
+    pipeline = [
+        {"$match": {"timestamp": {"$gte": one_hour_ago}, "status": "paid"}},
+        {"$group": {"_id": "$worker_id", "earned": {"$sum": "$amount"}, "tasks": {"$sum": 1}}},
+        {"$sort": {"earned": -1}},
+        {"$limit": limit}
+    ]
+    
+    leaders = await db.rt_transactions.aggregate(pipeline).to_list(limit)
+    
+    return {
+        "timeframe": "1_hour",
+        "leaderboard": leaders
+    }
+
+@rt_tasks_router.get("/platform/stats")
+async def get_platform_stats():
+    """Get overall platform statistics"""
+    db = get_db()
+    
+    now = datetime.now(timezone.utc)
+    one_hour_ago = (now - timedelta(hours=1)).isoformat()
+    one_day_ago = (now - timedelta(days=1)).isoformat()
+    
+    # Tasks completed
+    tasks_hour = await db.rt_tasks.count_documents({"status": "completed", "completed_at": {"$gte": one_hour_ago}})
+    tasks_day = await db.rt_tasks.count_documents({"status": "completed", "completed_at": {"$gte": one_day_ago}})
+    
+    # Payouts
+    pipeline = [
+        {"$match": {"timestamp": {"$gte": one_day_ago}, "status": "paid"}},
+        {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
+    ]
+    payouts = await db.rt_transactions.aggregate(pipeline).to_list(1)
+    daily_payout = payouts[0]["total"] if payouts else 0
+    
+    # Active workers
+    active_sessions = await db.rt_sessions.count_documents({"is_active": True})
+    
+    return {
+        "tasks_completed_hour": tasks_hour,
+        "tasks_completed_day": tasks_day,
+        "daily_payout_ve": daily_payout,
+        "active_workers": active_sessions,
+        "task_types_available": len(RT_TASK_TYPES)
+    }
