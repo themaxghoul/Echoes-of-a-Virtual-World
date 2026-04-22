@@ -187,6 +187,10 @@ Players AND AI earn real currency through activities
 - [x] P2: World Map UI (/world-map) - Interactive 8-region map with terrain
 - [x] P2: Unity WebGL Integration (/webgl) - Browser-based Unity loader framework
 - [x] P2: Enhanced Micro-Task Providers - Realistic simulated task data pools
+- [x] P0: Multiplayer Chat System - WebSocket real-time chat with 4 channels
+- [x] P0: Skill Trees - 5 trees, 32 skills, active/passive abilities
+- [x] P0: Title Passives - 10 titles with passive bonuses
+- [x] Bug Fix: Registration with display_name field
 
 ---
 
@@ -266,15 +270,71 @@ Players AND AI earn real currency through activities
 | task_marketplace_router.py | /api/task-marketplace | Human/Robot tasks |
 | building_system_router.py | /api/building | 2D building |
 | world_map_router.py | /api/world-map | Top-down map |
-| realtime_tasks_router.py | /api/rt-tasks | **NEW** Real-time micro-tasks |
-| currency_compute_router.py | /api/economy | **NEW** VE$ & compute marketplace |
-| ...others | | |
+| realtime_tasks_router.py | /api/rt-tasks | Real-time micro-tasks |
+| currency_compute_router.py | /api/economy | VE$ & compute marketplace |
+| multiplayer_chat_router.py | /api/chat | **NEW** WebSocket chat, parties |
+| skill_tree_router.py | /api/skill-trees | **NEW** Skills & title passives |
 
 ---
 
 ## Remaining Tasks
 - [ ] VR voice input/output
 - [ ] Real external micro-task provider connections (currently simulated)
+
+---
+
+## NEW: Multiplayer Chat System (April 22, 2026)
+
+### 4 Chat Channels:
+| Channel | Scope | Features |
+|---------|-------|----------|
+| Global | All players | Broadcasts to everyone online |
+| Region | Same region | Players in same area |
+| Party | Party members | Up to 6 members per party |
+| Whisper | Direct message | 1-on-1 private chat |
+
+### Features:
+- **WebSocket Real-time**: /api/chat/ws/{user_id}
+- **Player Presence**: Online status, current region
+- **Typing Indicators**: Shows who's typing
+- **Party System**: Create, invite, join, leave parties
+- **Block System**: Block/unblock users
+- **Pop-out Windows**: Chat can be detached
+- **Minimizable**: Collapsible chat panel
+
+### API Endpoints:
+- GET /api/chat/online - List online users
+- GET /api/chat/history/{channel} - Chat history
+- POST /api/chat/party/create - Create party
+- POST /api/chat/party/{id}/join - Join party
+- POST /api/chat/block - Block user
+
+---
+
+## NEW: Skill Trees System (April 22, 2026)
+
+### 5 Skill Trees (32 Total Skills):
+| Tree | Skills | Ultimate |
+|------|--------|----------|
+| Combat Mastery | Power Strike, Defensive Stance, Whirlwind, Battle Cry, Executioner, Iron Will | Berserker Rage |
+| Arcane Arts | Arcane Bolt, Mana Shield, Chain Lightning, Teleport, Meteor Strike, Arcane Mastery | Time Stop |
+| Master Craftsman | Basic Smithing, Salvage, Efficient Crafting, Quality Boost | Legendary Enchanter |
+| Silver Tongue | Persuasion, Gather Intel, Haggle, Inspire | Master Diplomat |
+| Wilderness Expert | Foraging, Tracking, Camouflage, Trap Setting | One With Nature |
+
+### 10 Titles with Passive Bonuses:
+| Title | Key Passives |
+|-------|--------------|
+| Newcomer | +10% XP (first 10 levels) |
+| Explorer | +5% movement, +20% exploration XP |
+| Hero | +10% party damage, +15% reputation |
+| Champion | +15% damage, +10% defense, 50% death save |
+| Legend | +20% all stats, party XP bonus |
+| Wealthy | +25% gold, exclusive shop access |
+| Master Crafter | +30% craft speed, 20% material save |
+| Shadow Walker | +30% stealth, silent movement |
+| Dragon Slayer | +50% boss damage, fear immunity |
+| Transcendent | +50% all stats, +100% XP, -90% death penalty |
 
 ---
 
