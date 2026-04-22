@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { 
   MapPin, Send, Menu, X, User, BookOpen, 
   ChevronRight, Loader2, Home, Sparkles, Lock, Unlock,
-  Crown, Shield, Flame, Eye, Moon, Star, Globe, ArrowLeft
+  Crown, Shield, Flame, Eye, Moon, Star, Globe, ArrowLeft, History
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -69,6 +69,7 @@ const VillageExplorer = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState(null);
   const [isThinking, setIsThinking] = useState(false);
+  const [activeConversationId, setActiveConversationId] = useState(null);  // For conversation history
   
   // Milestone & progression state
   const [playerXP, setPlayerXP] = useState(0);
@@ -82,6 +83,26 @@ const VillageExplorer = () => {
   useEffect(() => {
     pushNavHistory('/village');
     localStorage.setItem('gameMode', 'story');
+    
+    // Check for resume conversation
+    const resumeData = localStorage.getItem('resumeConversation');
+    if (resumeData) {
+      try {
+        const data = JSON.parse(resumeData);
+        setActiveConversationId(data.conversation_id);
+        // Pre-populate messages from context
+        if (data.context_messages && data.context_messages.length > 0) {
+          setMessages(data.context_messages.map(m => ({
+            role: m.role,
+            content: m.content
+          })));
+          toast.success(`Resumed conversation with ${data.npc_name || 'NPC'}`);
+        }
+        localStorage.removeItem('resumeConversation');
+      } catch (e) {
+        console.error('Failed to parse resume data:', e);
+      }
+    }
   }, []);
 
   // Load progression from localStorage
@@ -234,7 +255,28 @@ const VillageExplorer = () => {
     setIsThinking(true);
     setIsLoading(true);
 
+    const userId = localStorage.getItem('userId');
+
     try {
+      // Create conversation history entry if not exists
+      if (!activeConversationId) {
+        try {
+          const convRes = await axios.post(`${API}/conversations/create`, {
+            player_id: userId,
+            character_id: character.id,
+            npc_id: currentLocation.npcs?.[0] || null,
+            npc_name: currentLocation.npcs?.[0] || 'Village',
+            location_id: currentLocation.id,
+            location_name: currentLocation.name
+          });
+          if (convRes.data.conversation_id) {
+            setActiveConversationId(convRes.data.conversation_id);
+          }
+        } catch (convErr) {
+          console.log('Could not create conversation history:', convErr);
+        }
+      }
+
       const response = await axios.post(`${API}/chat`, {
         character_id: character.id,
         location_id: currentLocation.id,
@@ -243,10 +285,23 @@ const VillageExplorer = () => {
       });
 
       setConversationId(response.data.conversation_id);
+      const assistantMsg = response.data.response;
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: response.data.response 
+        content: assistantMsg 
       }]);
+      
+      // Save messages to conversation history
+      if (activeConversationId) {
+        try {
+          await axios.post(`${API}/conversations/${activeConversationId}/messages/bulk`, [
+            { role: 'user', content: userMsg },
+            { role: 'assistant', content: assistantMsg }
+          ]);
+        } catch (historyErr) {
+          console.log('Could not save to history:', historyErr);
+        }
+      }
       
       // Award XP for conversation
       const newConvCount = conversationCount + 1;
@@ -448,6 +503,14 @@ const VillageExplorer = () => {
 
             {/* Bottom Nav */}
             <div className="p-4 border-t border-border/30 space-y-2">
+              <button
+                data-testid="nav-chat-history-btn"
+                onClick={() => navigate('/chat-history')}
+                className="w-full flex items-center gap-2 p-3 bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 rounded-sm transition-colors"
+              >
+                <History className="w-4 h-4" />
+                <span className="font-manrope text-sm">Chat History</span>
+              </button>
               <button
                 data-testid="nav-first-person-btn"
                 onClick={() => navigate('/play')}

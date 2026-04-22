@@ -6774,6 +6774,46 @@ try:
 except ImportError as e:
     logging.warning(f"Could not load Unity router: {e}")
 
+# Include Conversation History router (Chat Logs & Resume)
+try:
+    from conversation_history_router import conversation_history_router
+    app.include_router(conversation_history_router, prefix="/api")
+    logging.info("Conversation History router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Conversation History router: {e}")
+
+# Include Skills & Titles router
+try:
+    from skills_router import skills_router
+    app.include_router(skills_router, prefix="/api")
+    logging.info("Skills & Titles router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Skills router: {e}")
+
+# Include AI Autonomy router (AI-to-AI conversations, free will)
+try:
+    from ai_autonomy_router import ai_autonomy_router
+    app.include_router(ai_autonomy_router, prefix="/api")
+    logging.info("AI Autonomy router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load AI Autonomy router: {e}")
+
+# Include World Instances router (Private worlds, Sirix-1 realm)
+try:
+    from world_instances_router import world_instances_router
+    app.include_router(world_instances_router, prefix="/api")
+    logging.info("World Instances router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load World Instances router: {e}")
+
+# Include Entity Earnings router (VE$ for players AND AI)
+try:
+    from entity_earnings_router import entity_earnings_router
+    app.include_router(entity_earnings_router, prefix="/api")
+    logging.info("Entity Earnings router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Entity Earnings router: {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
