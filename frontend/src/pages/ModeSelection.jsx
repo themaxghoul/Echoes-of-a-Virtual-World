@@ -7,7 +7,8 @@ import { Progress } from '@/components/ui/progress';
 import { 
   Gamepad2, MessageSquare, User, Sparkles, Crown,
   ArrowRight, Settings, LogOut, Hammer, ArrowLeftRight,
-  Heart, Zap, Shield, Swords, DollarSign, TrendingUp, Briefcase
+  Heart, Zap, Shield, Swords, DollarSign, TrendingUp, Briefcase,
+  Map, Globe
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -397,6 +398,30 @@ const ModeSelection = () => {
           >
             <Sparkles className="w-4 h-4 mr-2" />
             Quests
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/world-map');
+              navigate('/world-map');
+            }}
+            className="border-cyan-400/30 text-cyan-400 hover:bg-cyan-400/10 rounded-sm"
+            data-testid="world-map-btn"
+          >
+            <Map className="w-4 h-4 mr-2" />
+            World Map
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/webgl');
+              navigate('/webgl');
+            }}
+            className="border-pink-400/30 text-pink-400 hover:bg-pink-400/10 rounded-sm"
+            data-testid="webgl-btn"
+          >
+            <Globe className="w-4 h-4 mr-2" />
+            WebGL
           </Button>
         </div>
 

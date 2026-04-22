@@ -26,6 +26,8 @@ import CharacterCustomization from "@/pages/CharacterCustomization";
 import TasksDashboard from "@/pages/TasksDashboard";
 import ComputeMarketplace from "@/pages/ComputeMarketplace";
 import BuildingGrid from "@/pages/BuildingGrid";
+import WorldMapUI from "@/pages/WorldMapUI";
+import UnityWebGL from "@/pages/UnityWebGL";
 
 function App() {
   return (
@@ -57,6 +59,8 @@ function App() {
           <Route path="/tasks" element={<TasksDashboard />} />
           <Route path="/compute" element={<ComputeMarketplace />} />
           <Route path="/build" element={<BuildingGrid />} />
+          <Route path="/world-map" element={<WorldMapUI />} />
+          <Route path="/webgl" element={<UnityWebGL />} />
         </Routes>
       </BrowserRouter>
       <Toaster 

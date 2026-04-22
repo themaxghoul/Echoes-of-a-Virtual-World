@@ -228,57 +228,349 @@ def get_db():
     from server import db
     return db
 
-# ============ Task Generation ============
+# ============ Task Generation - Simulated Real Providers ============
+
+# Simulated provider task pools (mimics real crowdsourcing platforms)
+SIMULATED_IMAGE_URLS = [
+    "https://picsum.photos/400/300",
+    "https://picsum.photos/seed/{seed}/400/300",
+]
+
+SENTIMENT_SAMPLES = {
+    "positive": [
+        "I absolutely loved the new update! Everything runs so smoothly now.",
+        "Best experience ever! The team really outdid themselves.",
+        "This is exactly what I was looking for. Highly recommend!",
+        "Amazing quality and fast delivery. Will buy again!",
+        "The customer service was exceptional. They went above and beyond.",
+        "I'm so happy with my purchase. It exceeded my expectations!",
+        "Fantastic product! Works perfectly and looks great.",
+        "The new features are incredible. Love using this every day.",
+    ],
+    "negative": [
+        "This is terrible, I want a refund immediately.",
+        "Worst experience of my life. Never using this again.",
+        "Complete waste of money. Doesn't work as advertised.",
+        "Support was unhelpful and rude. Very disappointed.",
+        "Product broke after one day. Poor quality control.",
+        "The update ruined everything. Please revert the changes.",
+        "False advertising! This is nothing like the description.",
+        "Been waiting weeks with no response. Unacceptable service.",
+    ],
+    "neutral": [
+        "It's okay, nothing special really.",
+        "Could be better, but it works for what I need.",
+        "Average product, average price. Gets the job done.",
+        "Neither good nor bad. It's just there.",
+        "It meets basic expectations, nothing more.",
+        "Pretty standard stuff. No complaints, no praise.",
+        "Does what it says. Nothing extraordinary.",
+        "Acceptable quality for the price point.",
+    ]
+}
+
+CONTENT_SAMPLES = {
+    "safe": [
+        "Beautiful sunset photo over the mountains",
+        "Family picnic in the park",
+        "Cute puppy playing with a ball",
+        "Delicious homemade pasta recipe",
+        "Scenic hiking trail in autumn",
+    ],
+    "questionable": [
+        "Political debate commentary",
+        "Medical advice discussion",
+        "Financial investment tips",
+        "Controversial historical topic",
+        "Dietary supplement promotion",
+    ],
+    "unsafe": [
+        "[CONTENT_PREVIEW_REDACTED - Violence]",
+        "[CONTENT_PREVIEW_REDACTED - Adult]",
+        "[CONTENT_PREVIEW_REDACTED - Scam]",
+        "[CONTENT_PREVIEW_REDACTED - Harassment]",
+        "[CONTENT_PREVIEW_REDACTED - Illegal]",
+    ]
+}
+
+NPC_DIALOGUE_SAMPLES = [
+    {"npc": "Elder Morvain", "dialogue": "The echoes whisper of your arrival, young traveler. The village has been waiting.", "context": "First meeting in village square"},
+    {"npc": "Lyra the Herbalist", "dialogue": "These mountain herbs have potent healing properties. Take care when mixing them.", "context": "Player asks about crafting"},
+    {"npc": "Kael Ironbrand", "dialogue": "A fine blade you carry. It's seen battle, I can tell. Care to share your tale?", "context": "Player enters the forge"},
+    {"npc": "Thessa the Oracle", "dialogue": "I see shadows gathering in your future... and light. The choice will be yours.", "context": "Player seeks prophecy"},
+    {"npc": "Finn the Merchant", "dialogue": "Fresh stock from the eastern caravans! Best prices in all the realm!", "context": "Player browses market"},
+    {"npc": "Guardian Vex", "dialogue": "Halt! State your business at the Watchtower. These are dangerous times.", "context": "Player approaches restricted area"},
+    {"npc": "Old Bramble", "dialogue": "*grumbles* Another adventurer trampling my garden. At least wipe your boots!", "context": "Player enters residential area"},
+    {"npc": "Sister Mira", "dialogue": "The temple welcomes all who seek peace. May the ancestors guide your path.", "context": "Player enters temple"},
+]
+
+AI_RESPONSE_SAMPLES = [
+    {
+        "prompt": "What is the meaning of life?",
+        "responses": [
+            "42, according to Douglas Adams' famous novel.",
+            "To find happiness and purpose in helping others.",
+            "There is no inherent meaning; we create our own purpose.",
+            "To experience, learn, and grow as conscious beings."
+        ]
+    },
+    {
+        "prompt": "How do I learn programming?",
+        "responses": [
+            "Start with Python - it's beginner-friendly and versatile.",
+            "Just dive in! Pick a project and learn as you build.",
+            "Take a structured course on platforms like Coursera or freeCodeCamp.",
+            "Read documentation and practice coding challenges daily."
+        ]
+    },
+    {
+        "prompt": "What should I cook for dinner?",
+        "responses": [
+            "Try a simple pasta with garlic, olive oil, and vegetables.",
+            "Stir-fry is quick and you can use whatever you have.",
+            "How about ordering pizza? You deserve a break!",
+            "A hearty soup with bread is perfect for this weather."
+        ]
+    },
+    {
+        "prompt": "How do I deal with stress?",
+        "responses": [
+            "Take deep breaths and practice mindfulness meditation.",
+            "Exercise releases endorphins - try a quick walk outside.",
+            "Talk to a friend or write down your thoughts.",
+            "Break your problems into smaller, manageable tasks."
+        ]
+    },
+]
+
+SPAM_SAMPLES = {
+    "spam": [
+        "CONGRATULATIONS! You've won $1,000,000!!! Click here NOW!!!",
+        "Hot singles in your area want to meet YOU! Click to see photos!",
+        "Make $5000/day working from home! No experience needed!",
+        "LIMITED TIME: 99% OFF luxury watches! Buy now before they're gone!",
+        "Your account will be SUSPENDED! Click here to verify immediately!",
+    ],
+    "not_spam": [
+        "Reminder: Your appointment is scheduled for tomorrow at 3pm.",
+        "Thanks for your order! Your tracking number is ABC123.",
+        "Meeting notes from today's project discussion attached.",
+        "Happy birthday! Hope you have a wonderful day!",
+        "The report you requested is ready for review.",
+    ]
+}
+
+TEXT_CATEGORIES = {
+    "technology": ["New smartphone released", "AI breakthrough announced", "Software update available", "Tech company reports earnings"],
+    "sports": ["Team wins championship", "Player sets new record", "Tournament results", "Coach announces retirement"],
+    "politics": ["New policy announced", "Election results", "Diplomatic meeting scheduled", "Budget proposal released"],
+    "entertainment": ["Movie premiere date set", "Album drops Friday", "Award show nominations", "TV series renewed"],
+    "science": ["Research study published", "Space mission launch", "Climate report findings", "Medical breakthrough"],
+    "business": ["Merger announced", "Stock market update", "Startup funding round", "Industry forecast"],
+}
+
+WORLD_DESCRIPTION_PROMPTS = [
+    {"location": "Ancient Ruins", "style": "mysterious", "elements": ["crumbling pillars", "overgrown vines", "faded inscriptions"]},
+    {"location": "Crystal Cave", "style": "magical", "elements": ["glowing crystals", "underground lake", "echoing chambers"]},
+    {"location": "Merchant District", "style": "bustling", "elements": ["colorful stalls", "shouting vendors", "exotic goods"]},
+    {"location": "Haunted Manor", "style": "eerie", "elements": ["creaking floors", "dusty furniture", "whispered secrets"]},
+    {"location": "Dragon's Peak", "style": "majestic", "elements": ["snow-capped summit", "ancient bones", "scorched earth"]},
+]
+
 
 def generate_internal_task(task_type: str) -> Dict[str, Any]:
-    """Generate an internal task based on type"""
+    """Generate realistic task data mimicking real crowdsourcing platforms"""
     task_config = RT_TASK_TYPES.get(task_type, {})
+    seed = random.randint(1000, 9999)
     
     if task_type == "image_tagging":
+        categories = ["person", "animal", "vehicle", "building", "nature", "food", "furniture", "electronics", "clothing", "text"]
         return {
-            "image_url": f"https://placeholder.co/400x300?text=Tag+Objects+{random.randint(1000,9999)}",
-            "instructions": "Tag all visible objects in this image",
-            "categories": ["person", "animal", "vehicle", "building", "nature", "object"]
+            "image_url": f"https://picsum.photos/seed/{seed}/400/300",
+            "instructions": "Identify and tag ALL visible objects in this image. Select all that apply.",
+            "categories": random.sample(categories, k=random.randint(4, 8)),
+            "min_tags": 2,
+            "max_tags": 10,
+            "provider_hint": "ImageNet Dataset Sample",
+            "difficulty": random.choice(["easy", "medium", "hard"])
         }
+    
+    elif task_type == "image_comparison":
+        return {
+            "image_a_url": f"https://picsum.photos/seed/{seed}/400/300",
+            "image_b_url": f"https://picsum.photos/seed/{seed + 1}/400/300",
+            "instructions": "Compare these two images. Are they showing the same subject?",
+            "options": ["identical", "similar", "different", "unrelated"],
+            "criteria": ["subject", "composition", "style"],
+            "provider_hint": "Duplicate Detection Task"
+        }
+    
     elif task_type == "sentiment_label":
-        samples = [
-            "I absolutely loved the new update!",
-            "This is terrible, I want a refund.",
-            "It's okay, nothing special.",
-            "Best experience ever!",
-            "Could be better, but it works."
+        sentiment = random.choice(["positive", "negative", "neutral"])
+        text = random.choice(SENTIMENT_SAMPLES[sentiment])
+        return {
+            "text": text,
+            "options": ["positive", "negative", "neutral"],
+            "instructions": "Classify the sentiment expressed in this text.",
+            "context": random.choice(["product_review", "social_media", "customer_feedback", "email"]),
+            "provider_hint": "Social Media Analysis",
+            "_ground_truth": sentiment  # For quality tracking (hidden from worker)
+        }
+    
+    elif task_type == "content_rating":
+        safety_level = random.choices(["safe", "questionable", "unsafe"], weights=[0.7, 0.2, 0.1])[0]
+        content = random.choice(CONTENT_SAMPLES[safety_level])
+        return {
+            "content_preview": content,
+            "content_type": random.choice(["text", "image_description", "video_transcript"]),
+            "options": ["safe", "questionable", "unsafe"],
+            "instructions": "Rate the safety/appropriateness of this content.",
+            "guidelines_url": "https://aivillage.io/content-guidelines",
+            "provider_hint": "Trust & Safety",
+            "_ground_truth": safety_level
+        }
+    
+    elif task_type == "response_ranking":
+        sample = random.choice(AI_RESPONSE_SAMPLES)
+        shuffled_responses = sample["responses"].copy()
+        random.shuffle(shuffled_responses)
+        return {
+            "prompt": sample["prompt"],
+            "responses": shuffled_responses,
+            "instructions": "Select the BEST response to this prompt based on helpfulness and accuracy.",
+            "criteria": ["helpfulness", "accuracy", "clarity", "safety"],
+            "provider_hint": "RLHF Training Data"
+        }
+    
+    elif task_type == "npc_dialogue_rating":
+        sample = random.choice(NPC_DIALOGUE_SAMPLES)
+        return {
+            "npc_name": sample["npc"],
+            "dialogue": sample["dialogue"],
+            "context": sample["context"],
+            "instructions": "Rate this NPC dialogue on a scale of 1-5 for each criterion.",
+            "criteria": ["naturalness", "relevance", "engagement", "character_consistency"],
+            "scale": {"min": 1, "max": 5},
+            "provider_hint": "Game Dialogue QA"
+        }
+    
+    elif task_type == "spam_detection":
+        is_spam = random.choice([True, False])
+        text = random.choice(SPAM_SAMPLES["spam"] if is_spam else SPAM_SAMPLES["not_spam"])
+        return {
+            "text": text,
+            "options": ["spam", "not_spam"],
+            "instructions": "Is this message spam or legitimate?",
+            "context": random.choice(["email", "sms", "social_comment", "forum_post"]),
+            "provider_hint": "Spam Filter Training",
+            "_ground_truth": "spam" if is_spam else "not_spam"
+        }
+    
+    elif task_type == "text_categorization":
+        category = random.choice(list(TEXT_CATEGORIES.keys()))
+        headline = random.choice(TEXT_CATEGORIES[category])
+        return {
+            "text": headline,
+            "options": list(TEXT_CATEGORIES.keys()),
+            "instructions": "Categorize this news headline into the most appropriate topic.",
+            "allow_multiple": False,
+            "provider_hint": "News Classification",
+            "_ground_truth": category
+        }
+    
+    elif task_type == "audio_transcription_short":
+        sample_transcripts = [
+            "Hello and welcome to our podcast. Today we're discussing the latest trends in technology.",
+            "Thank you for calling customer support. Your call is important to us.",
+            "In this lecture, we'll explore the fundamental principles of quantum mechanics.",
+            "The weather forecast shows sunny skies with temperatures reaching 75 degrees.",
+            "This meeting is being recorded for quality assurance purposes.",
         ]
         return {
-            "text": random.choice(samples),
-            "options": ["positive", "negative", "neutral"]
+            "audio_url": f"https://audio.aivillage.io/samples/{seed}.mp3",
+            "duration_seconds": random.randint(10, 30),
+            "language": "en-US",
+            "instructions": "Transcribe the spoken words in this audio clip exactly as heard.",
+            "guidelines": ["Include filler words (um, uh)", "Note unclear sections with [inaudible]", "Use punctuation"],
+            "provider_hint": "Speech Recognition Training",
+            "_sample_transcript": random.choice(sample_transcripts)  # For testing
         }
-    elif task_type == "content_rating":
+    
+    elif task_type == "prompt_writing":
+        scenarios = [
+            {"topic": "fantasy adventure", "style": "epic", "length": "short"},
+            {"topic": "sci-fi exploration", "style": "mysterious", "length": "medium"},
+            {"topic": "slice of life", "style": "heartwarming", "length": "short"},
+            {"topic": "horror mystery", "style": "suspenseful", "length": "medium"},
+            {"topic": "historical drama", "style": "formal", "length": "short"},
+        ]
+        scenario = random.choice(scenarios)
         return {
-            "content_preview": "Sample content for rating",
-            "options": ["safe", "questionable", "unsafe"]
+            "scenario": scenario,
+            "instructions": f"Write a creative prompt for a {scenario['style']} {scenario['topic']} story.",
+            "requirements": {
+                "min_words": 20,
+                "max_words": 100,
+                "must_include": ["character", "setting", "conflict"]
+            },
+            "provider_hint": "Creative Writing Dataset"
         }
-    elif task_type == "response_ranking":
+    
+    elif task_type == "captcha_solving":
+        captcha_types = ["text_distorted", "image_select", "math_simple", "pattern_match"]
+        captcha_type = random.choice(captcha_types)
         return {
-            "prompt": "What is the meaning of life?",
-            "responses": [
-                "42",
-                "To find happiness and purpose",
-                "There is no inherent meaning",
-                "To help others"
-            ],
-            "instructions": "Rank from best to worst"
+            "captcha_type": captcha_type,
+            "captcha_image_url": f"https://captcha.aivillage.io/generate/{captcha_type}/{seed}",
+            "instructions": "Solve this CAPTCHA by entering the correct answer.",
+            "hint": {
+                "text_distorted": "Type the characters shown",
+                "image_select": "Select all images containing the specified object",
+                "math_simple": "Solve the math problem",
+                "pattern_match": "Complete the pattern"
+            }[captcha_type],
+            "provider_hint": "CAPTCHA Training"
         }
-    elif task_type == "npc_dialogue_rating":
+    
+    elif task_type == "data_entry":
+        field_types = [
+            {"label": "Company Name", "sample": "Acme Corporation"},
+            {"label": "Phone Number", "sample": "+1 (555) 123-4567"},
+            {"label": "Email Address", "sample": "contact@example.com"},
+            {"label": "Street Address", "sample": "123 Main Street"},
+            {"label": "Date", "sample": "April 22, 2026"},
+            {"label": "Amount", "sample": "$1,234.56"},
+        ]
+        fields = random.sample(field_types, k=random.randint(2, 4))
         return {
-            "npc_name": random.choice(["Elder Morvain", "Lyra", "Kael Ironbrand"]),
-            "dialogue": "Greetings, traveler. The echoes whisper of your arrival.",
-            "context": "Player just entered the village square",
-            "criteria": ["naturalness", "relevance", "engagement"]
+            "document_image_url": f"https://docs.aivillage.io/samples/{seed}.png",
+            "instructions": "Extract the following information from the document image.",
+            "fields_to_extract": [f["label"] for f in fields],
+            "sample_values": {f["label"]: f["sample"] for f in fields},
+            "provider_hint": "Document Processing"
         }
+    
+    elif task_type == "world_description":
+        prompt = random.choice(WORLD_DESCRIPTION_PROMPTS)
+        return {
+            "location_name": prompt["location"],
+            "style": prompt["style"],
+            "required_elements": prompt["elements"],
+            "instructions": f"Write a vivid {prompt['style']} description of {prompt['location']} for a fantasy RPG.",
+            "requirements": {
+                "min_words": 50,
+                "max_words": 150,
+                "must_include_elements": len(prompt["elements"]),
+                "perspective": random.choice(["first_person", "third_person", "omniscient"])
+            },
+            "provider_hint": "Game Content Generation"
+        }
+    
     else:
         return {
             "instructions": task_config.get("description", "Complete this task"),
-            "data": {"sample": "data"}
+            "data": {"sample": "data", "seed": seed},
+            "provider_hint": "Generic Task"
         }
 
 # ============ Endpoints ============

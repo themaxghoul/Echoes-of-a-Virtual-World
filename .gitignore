@@ -108,3 +108,4 @@ credentials.json
 .credentials
 frontend/node_modules/.cache/default-development/10.pack
 frontend/node_modules/.cache/default-development/5.pack
+frontend/node_modules/.cache/default-development/2.pack
