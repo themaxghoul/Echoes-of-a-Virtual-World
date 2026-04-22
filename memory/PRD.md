@@ -2,7 +2,7 @@
 ## Pre-Release for itch.io
 
 ## Overview
-A virtual world storytelling experience where AI companions learn and evolve through player interactions. Features real-world monetization (ApexForge Collective), dynamic world events, and a **persistent memory system** that enables AI learning and ecosystem growth.
+A virtual world storytelling experience where AI companions learn and evolve through player interactions. Features real-world monetization (ApexForge Collective), dynamic world events, a **persistent memory system**, and **full AI autonomy** where NPCs can make decisions, converse with each other, and shape the world.
 
 ## Deployment: READY FOR ITCH.IO PRE-RELEASE
 
@@ -10,6 +10,7 @@ A virtual world storytelling experience where AI companions learn and evolve thr
 - Username: `sirix_1`
 - Password: `HCLynnTV04` (SECURED - do not share publicly)
 - Permissions: Transcendent (infinite stats, all access)
+- **Has exclusive private realm** only accessible by sirix_1
 
 ---
 
@@ -19,7 +20,7 @@ A virtual world storytelling experience where AI companions learn and evolve thr
 - Text-based adventure with AI narrator
 - **ALL MAPS OPEN** - No progression locks for exploration
 - Chat with NPCs, build your 2D world
-- Location progression awards XP but doesn't gate content
+- Skills gain XP through actions
 - AI remembers past conversations
 
 ### 2. First Person 3D (Web)
@@ -27,137 +28,140 @@ A virtual world storytelling experience where AI companions learn and evolve thr
 - D-Pad controls
 - Camera drag navigation
 - 3D interactable models and NPCs
-- AI uses memories for personalized interactions
 
-### 3. Unity 3D (NEW - April 2026)
+### 3. Unity 3D
 - High-fidelity Unity client download
 - Cross-platform sync between web and Unity
-- Full gamepad and keyboard support
-- Real-time combat system with AI enemies
 - Download from itch.io: https://aivillage.itch.io/echoes-unity
-- Supported platforms: Windows, macOS, Linux
 
 ---
 
-## Unity Offload System (NEW)
+## P0 SYSTEMS (NEW - April 2026)
 
-### Features
-- **Cross-Platform Sync**: Progress syncs between web and Unity
-- **Session Tokens**: Secure authentication between platforms
-- **State Management**: Character, inventory, world position sync
-- **Heartbeat System**: Keep-alive for active sessions
+### 1. Skills System (`/api/skill-system/*`)
+**6 Categories, 30 Skills:**
+| Category | Skills | Color |
+|----------|--------|-------|
+| Combat | Swordsmanship, Archery, Defense, Tactics, Berserker | Red |
+| Magic | Elemental, Healing, Enchanting, Divination, Shadow | Purple |
+| Crafting | Blacksmithing, Alchemy, Woodworking, Tailoring, Engineering | Amber |
+| Gathering | Mining, Herbalism, Hunting, Fishing, Foraging | Green |
+| Social | Diplomacy, Trading, Leadership, Intimidation, Charm | Blue |
+| Knowledge | Lore, Languages, Investigation, Arcana, Nature | Indigo |
 
-### API Endpoints
+**Skill XP Gains from Actions:**
+- `attack_melee` → Swordsmanship (1-5 XP)
+- `cast_elemental` → Elemental Magic (2-8 XP)
+- `forge_item` → Blacksmithing (3-10 XP)
+- `conversation` → Charm (1-3 XP)
+- `build_structure` → Engineering (10-30 XP)
+- ...25+ action mappings
+
+### 2. Titles System (31 Titles)
+Titles provide stat boosts when active:
+| Title | Requirement | Boosts |
+|-------|-------------|--------|
+| Sword Saint | Swordsmanship Lv.100 | +10 STR, +5 AGI, +5 END, +3 WIS |
+| Archmage | Elemental Lv.100 | +10 INT, +8 WIS, +50 Mana |
+| Legendary Forger | Blacksmithing Lv.100 | +8 STR, +30% Crafting |
+| The Omniscient | Lore Lv.100 | +15 INT, +15 WIS, +10 PER |
+| World Shaper | 100 World Edits | +3 All Stats, +25% Building |
+| Transcendent | 5 Max Skills | +10 All Stats |
+
+### 3. Entity Earnings (VE$ for Players AND AI)
+**18 Earning Activities:**
+- `quest_completed` - $0.50/quest (max 20/day)
+- `trade_completed` - $0.05/trade (max 100/day)
+- `structure_built` - $1.00/build (max 10/day)
+- `data_labeled` - $0.01/label (max 500/day)
+- `conversation_value` - $0.01/convo (AI only, max 200/day)
+- `world_improvement` - $0.25/improve (AI only, max 20/day)
+
+**Reputation Tiers (Multipliers):**
+- Newcomer: 1.0x
+- Established: 1.1x (earned $10+)
+- Respected: 1.25x (earned $100+)
+- Renowned: 1.5x (earned $1000+)
+- Legendary: 2.0x (earned $10000+)
+
+### 4. AI Autonomy System (`/api/ai-autonomy/*`)
+**Personality Traits:**
+- Cooperative, Aggressive, Curious, Creative
+- Social, Territorial, Mercantile, Spiritual
+
+**Free Will (0-1 scale):**
+- Controls how autonomous NPCs are
+- Higher = more likely to take independent actions
+
+**Autonomous Actions:**
+- `initiate_conversation` - Talk to other NPCs
+- `form_alliance` / `break_alliance`
+- `start_conflict` / `resolve_conflict`
+- `build_structure` / `destroy_structure`
+- `modify_terrain` / `create_landmark`
+- `establish_trade_route`
+- `claim_territory` / `relocate`
+- ...20+ autonomous actions
+
+**AI-to-AI Conversations:**
 ```
-GET  /api/unity/config                    - Server configuration
-GET  /api/unity/downloads                 - Download links
-POST /api/unity/session                   - Create session token
-POST /api/unity/session/{id}/connect      - Mark session connected
-POST /api/unity/session/{id}/disconnect   - Mark session disconnected
-GET  /api/unity/session/{id}/state        - Get current state
-POST /api/unity/sync                      - Sync state from Unity
-POST /api/unity/heartbeat/{id}            - Keep-alive
-GET  /api/unity/stats                     - Platform statistics
+POST /api/ai-autonomy/conversation/start
+POST /api/ai-autonomy/conversation/{id}/continue
 ```
+
+---
+
+## World Instances (`/api/worlds/*`)
+
+### World Types
+| Type | Description | Max NPCs |
+|------|-------------|----------|
+| Private | Personal realm (owner only) | 10 |
+| Shared | Multi-player accessible | 50 |
+| Story | Main story with original characters | 100 |
+| Instance | Temporary event/quest world | 20 |
+
+### Sirix-1 Private Realm
+- **Exclusive access** - Only sirix_1 can enter
+- Fixed seed for consistent world
+- Personal NPCs and structures
+- Endpoint: `GET /api/worlds/sirix-1/realm?user_id=sirix_1`
+
+### Main Story World
+**8 Original Characters:**
+1. Elder Morvain (Village Elder) - Village Square
+2. Lyra the Wanderer (Explorer) - Village Square
+3. Oracle Veythra (Seer) - Oracle Sanctum
+4. Kael Ironbrand (Blacksmith) - The Forge
+5. Archivist Nyx (Lorekeeper) - Ancient Library
+6. Innkeeper Mara (Tavern Owner) - Wanderer's Rest
+7. The Grove Keeper (Forest Guardian) - Shadow Grove
+8. Sentinel Theron (Watchtower Guard) - Watchtower
+
+---
+
+## Chat History & Resume
+- View past dialogues grouped by NPC or Date
+- Search through conversation messages
+- Resume conversations from where you left off
+- Unlimited message storage
+
+---
+
+## Jobs & Career System (21 Jobs)
+- Task Work: Data Labeler, Transcriber, Survey Specialist
+- AI Training: AI Trainer, Feedback Analyst
+- Commerce: Merchant, Resource Broker
+- Construction: Builder, Infrastructure Engineer
+- ...and more categories
 
 ---
 
 ## Persistent Memory System
-
 ### Memory Types
-
-#### User Memories
-| Type | Description | Decay Rate |
-|------|-------------|------------|
-| user_interaction | Conversations with NPCs | 0.02 |
-| user_preference | Play style, choices | 0.02 |
-| user_achievement | Milestones | 0.01 (slow) |
-| user_relationship | NPC relationships | 0.01 |
-| user_knowledge | Discovered information | 0.02 |
-| user_emotion | Emotional reactions | 0.05 |
-
-#### AI Memories
-| Type | Description | Decay Rate |
-|------|-------------|------------|
-| ai_learned_behavior | Patterns from interactions | 0.01 |
-| ai_world_knowledge | World state awareness | 0.005 |
-| ai_player_model | Understanding of players | 0.005 (very slow) |
-| ai_conversation | Important conversations | 0.01 |
-| ai_relationship | Relationships with players | 0.005 |
-| ai_prediction | Behavioral predictions | 0.02 |
-
-### Memory API Endpoints
-```
-POST /api/memory/create              - Create new memory
-POST /api/memory/recall              - Query memories
-POST /api/memory/reinforce/{id}      - Strengthen memory
-POST /api/memory/associate           - Link memories
-GET  /api/memory/entity/{type}/{id}  - Get entity memories
-```
-
----
-
-## Jobs & Career System (NEW)
-
-### Job Categories (21 Jobs Total)
-1. **Task Work**: Data Labeler, Transcriber, Survey Specialist
-2. **AI Training**: AI Trainer, Feedback Analyst
-3. **Commerce**: Merchant, Resource Broker
-4. **Construction**: Builder, Infrastructure Engineer
-5. **Exploration**: Explorer, Resource Gatherer
-6. **Diplomacy**: Diplomat, Faction Liaison
-7. **Scholarship**: Scholar, Lorekeeper
-8. **Combat**: Guardian, Demon Hunter
-9. **Crafting**: Crafter, Enchanter
-10. **Mysticism**: Oracle Apprentice, Ritual Master
-
-### Job Features
-- VE$ hourly earnings
-- Ecosystem points per hour
-- AI benefit descriptions
-- Level progression with titles
-- Work sessions with real-time earnings
-
-### API Endpoints
-```
-GET  /api/jobs/catalog               - All available jobs
-GET  /api/jobs/details/{key}         - Job details
-POST /api/jobs/enroll                - Enroll in job
-GET  /api/jobs/player/{id}           - Player's jobs
-POST /api/jobs/start-work-session    - Start working
-POST /api/jobs/end-work-session/{id} - End session, get earnings
-GET  /api/jobs/economy-stats         - Overall economy stats
-```
-
----
-
-## World Engine
-
-### World Bosses (5)
-- Malachar the Shadow Lord (5000 HP)
-- Azrael, Prince of Flames (4000 HP)
-- Vyrmathax the Eternal (8000 HP)
-- Netharis the Undying (3500 HP)
-- Goldric the Magnificent (2000 HP)
-
-### Diplomatic Factions (5)
-- Village Council
-- Cult of the Void
-- Merchant's Consortium
-- Legions of the Abyss
-- Circle of Echoes
-
-### Dynamic Events (15 types)
-Boss Spawn, Invasion, Diplomatic Crisis, Resource Discovery, Plague, Festival, Merchant Caravan, Natural Disaster, Prophecy, Rebellion, Alliance Offer, War Declaration, Mysterious Stranger, Artifact Appearance, Portal Opening
-
----
-
-## Earnings Hub (VE$ Currency)
-- 7 Task Providers
-- Stripe Deposits
-- $0.25 Withdrawal Fee
-- MetaMask Web3 Integration
-- 1:1 USD to VE$ ratio
+- User memories: interactions, preferences, achievements
+- AI memories: learned behaviors, player models, predictions
+- Memory decay rates control how long memories persist
 
 ---
 
@@ -167,58 +171,53 @@ Boss Spawn, Invasion, Diplomatic Crisis, Resource Discovery, Plague, Festival, M
 - **Database**: MongoDB (motor async driver)
 - **AI**: GPT-5.2 via Emergent Integrations
 - **Payments**: Stripe via emergentintegrations
-- **Auth**: bcrypt password hashing
-- **Web3**: MetaMask wallet integration
-- **PWA**: Service Worker, offline support
 
 ---
 
-## Backend Routers
-| Router | Description |
-|--------|-------------|
-| server.py | Core routes (~6700+ lines) |
-| memory_router.py | Persistent memory system |
-| ai_chat_router.py | AI conversations with memory |
-| world_engine_router.py | Dynamic events, bosses |
-| ecosystem_support_router.py | Tech tiers, AI evolution |
-| earnings_router.py | VE$ income |
-| stripe_payout_router.py | Deposits/withdrawals |
-| task_providers_router.py | Micro-tasks |
-| npc_gaming_router.py | NPC game emulation |
-| jobs_router.py | Career system (NEW) |
-| unity_router.py | Unity offload (NEW) |
+## Backend Routers (15 Total)
+| Router | Prefix | Description |
+|--------|--------|-------------|
+| server.py | /api | Core routes (~6800 lines) |
+| skills_router.py | /api/skill-system | Skills & Titles |
+| ai_autonomy_router.py | /api/ai-autonomy | AI-to-AI, Free Will |
+| world_instances_router.py | /api/worlds | Private/Story worlds |
+| entity_earnings_router.py | /api/entity-earnings | VE$ for all entities |
+| conversation_history_router.py | /api/conversations | Chat logs & resume |
+| jobs_router.py | /api/jobs | Career system |
+| unity_router.py | /api/unity | Unity offload |
+| memory_router.py | /api/memory | Persistent memory |
+| ai_chat_router.py | /api/chat | AI conversations |
+| world_engine_router.py | /api/world-engine | Dynamic events |
+| ...others | | |
 
 ---
 
 ## Completed Features
-- [x] Sirix-1 password secured (HCLynnTV04)
-- [x] Persistent memory system for users
-- [x] Persistent memory system for AI
-- [x] AI player modeling
-- [x] AI evolution tracking
-- [x] Memory integration in chat
-- [x] Back navigation on all screens
-- [x] Story Mode vs First Person 3D vs Unity 3D (3 modes)
-- [x] All maps open in Story/Chat mode (NEW)
-- [x] Unity offload system (NEW)
-- [x] Jobs & Career system (NEW)
-- [x] World Engine
-- [x] VE$ earnings system
-- [x] PWA deployment ready
+- [x] Skills system (6 categories, 30 skills)
+- [x] Titles system (31 titles with stat boosts)
+- [x] Entity earnings (VE$ for players AND AI)
+- [x] AI autonomy (free will, AI-to-AI conversations)
+- [x] World instances (private, shared, story)
+- [x] Sirix-1 exclusive private realm
+- [x] Chat history with resume
+- [x] Jobs & Career system
+- [x] Unity offload support
+- [x] All maps open in Story Mode
+- [x] Persistent memory system
+- [x] World Engine (bosses, factions, events)
 
 ---
 
-## Immediate Priorities
+## Upcoming P1 Features
+- [ ] Top-down stylized world map view
+- [ ] Multiplayer 3D environment with consistent seed
 - [ ] 2D Building interface for Story Mode
-- [ ] Memory visualization UI (show AI memories to players)
-- [ ] Real Unity client WebSocket integration
+- [ ] Real micro-task provider connections
 
-## Future Roadmap
-- P1: Complete server.py refactoring
-- P1: Real task provider API connections
-- P2: Voice input/output for VR
-- P2: Cross-game AI memory persistence
-- P2: WebGL Unity build
+## P2 Backlog
+- [ ] NPC cloud gaming emulation
+- [ ] Voice input/output for VR
+- [ ] WebGL Unity build
 
 ---
 Last Updated: April 22, 2026
