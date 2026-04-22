@@ -180,14 +180,98 @@ Players AND AI earn real currency through activities
 - [x] P1: 2D Building System (5 categories, 100x100 grid)
 - [x] P1: Top-Down World Map (8 regions, 15 terrains)
 - [x] P1: Continue Journey auth fix (session isolation)
+- [x] P0: Real-Time Tasks Dashboard (/tasks) - 13 task types with instant VE$ payouts
+- [x] P0: AI Compute Marketplace (/compute) - Cloud compute & self-computing farms
+
+---
+
+## NEW: Real-Time Tasks System (April 22, 2026)
+
+### 13 Task Types with Instant Payouts:
+| Task Type | Payout/Task | Est. Hourly | Skills |
+|-----------|-------------|-------------|--------|
+| Image Tagging | VE$0.02 | ~VE$7.20 | Investigation |
+| Image Comparison | VE$0.015 | ~VE$6.75 | Investigation |
+| Content Rating | VE$0.01 | ~VE$7.20 | Diplomacy |
+| Sentiment Labeling | VE$0.01 | ~VE$6.00 | Lore |
+| Text Categorization | VE$0.025 | ~VE$7.50 | Lore, Investigation |
+| Spam Detection | VE$0.008 | ~VE$7.20 | Investigation |
+| Audio Transcription | VE$0.10 | ~VE$8.00 | Languages, Lore |
+| Response Ranking | VE$0.05 | ~VE$9.00 | Arcana |
+| Prompt Writing | VE$0.08 | ~VE$9.60 | Lore, Charm |
+| CAPTCHA Solving | VE$0.005 | ~VE$3.60 | Investigation |
+| Data Entry | VE$0.04 | ~VE$5.76 | Lore |
+| NPC Dialogue Rating | VE$0.03 | ~VE$7.20 | Charm, Diplomacy |
+| World Description | VE$0.15 | ~VE$9.00 | Lore, Languages |
+
+**Features:**
+- Start task sessions with batch task loading
+- Complete tasks for instant VE$ payouts + skill XP
+- Session stats tracking (tasks completed, earnings, time)
+- Hourly leaderboard showing top earners
+- Platform stats (active workers, tasks/hour)
+
+---
+
+## NEW: AI Compute Marketplace (April 22, 2026)
+
+### Cloud Compute Tiers:
+| Tier | Specs | Hourly Cost |
+|------|-------|-------------|
+| Basic Cloud | 2 vCPU, 4GB RAM, 50GB | VE$0.05/hr |
+| Standard | 4 vCPU, 16GB RAM, 100GB | VE$0.15/hr |
+| Performance | 8 vCPU, 32GB RAM, 250GB | VE$0.40/hr |
+| Basic GPU | 4 vCPU, 16GB RAM, T4 GPU | VE$0.50/hr |
+| Advanced GPU | 8 vCPU, 64GB RAM, A100 | VE$2.00/hr |
+| GPU Cluster | 32 vCPU, 256GB RAM, 8x A100 | VE$12.00/hr |
+
+### Self-Computing Hardware (Passive Income):
+| Hardware | One-Time Cost | Monthly Yield | ROI |
+|----------|---------------|---------------|-----|
+| Raspberry Pi 5 | VE$100 | VE$5/mo | 300% |
+| Mini PC Node | VE$300 | VE$15/mo | 300% |
+| AI Workstation | VE$3,000 | VE$150/mo | 240% |
+| Server Node | VE$8,000 | VE$400/mo | 300% |
+| Compute Rack | VE$50,000 | VE$3,000/mo | 360% |
+
+**Features:**
+- VE$/USD exchange rate tracking (currently ~$0.991)
+- Cloud compute allocation for AI/player
+- Hardware purchase with passive yield collection
+- Health degradation over lifespan
+- Business Owner System Logs (activity monitoring)
+- AI/Player mode toggle
+- Top AI Investors leaderboard
+- Market stats overview
+
+---
+
+## Backend Routers (21 Total)
+| Router | Prefix | Description |
+|--------|--------|-------------|
+| server.py | /api | Core routes |
+| skills_router.py | /api/skill-system | Skills & Titles |
+| ai_autonomy_router.py | /api/ai-autonomy | AI-to-AI, Free Will |
+| world_instances_router.py | /api/worlds | Private/Story worlds |
+| entity_earnings_router.py | /api/entity-earnings | VE$ earnings |
+| conversation_history_router.py | /api/conversations | Chat logs |
+| jobs_router.py | /api/jobs | Career system |
+| unity_router.py | /api/unity | Unity offload |
+| memory_router.py | /api/memory | Persistent memory |
+| task_marketplace_router.py | /api/task-marketplace | Human/Robot tasks |
+| building_system_router.py | /api/building | 2D building |
+| world_map_router.py | /api/world-map | Top-down map |
+| realtime_tasks_router.py | /api/rt-tasks | **NEW** Real-time micro-tasks |
+| currency_compute_router.py | /api/economy | **NEW** VE$ & compute marketplace |
+| ...others | | |
 
 ---
 
 ## Remaining Tasks
 - [ ] World Map UI (frontend visualization)
 - [ ] Building UI (frontend grid placement)
-- [ ] Task Marketplace UI (frontend task listing)
-- [ ] Real micro-task provider API connections
+- [ ] Real micro-task provider API connections (currently using mock task generation)
+- [ ] Deployment Guide completion
 
 ---
 Last Updated: April 22, 2026
