@@ -5890,6 +5890,99 @@ async def view_profile(user_id: str, viewer_id: Optional[str] = None):
     
     return user
 
+
+# ============ Profile Customization ============
+
+class ProfileCustomization(BaseModel):
+    display_name: Optional[str] = None
+    bio: Optional[str] = None
+    chat_color: Optional[str] = None
+    profile_picture: Optional[str] = None
+    model_preset: Optional[str] = None
+    model_colors: Optional[Dict[str, str]] = None
+    title_display: Optional[str] = None
+    status_message: Optional[str] = None
+    show_online: Optional[bool] = None
+    allow_whispers: Optional[bool] = None
+
+CHAT_COLORS = {
+    "default": "#FFFFFF", "gold": "#FFD700", "crimson": "#DC143C",
+    "emerald": "#50C878", "sapphire": "#0F52BA", "amethyst": "#9966CC",
+    "rose": "#FF007F", "sunset": "#FF4500", "ocean": "#00CED1",
+    "forest": "#228B22", "royal": "#4169E1", "shadow": "#36454F",
+}
+
+MODEL_PRESETS = {
+    "human_male": {"base": "humanoid", "gender": "male", "height": 1.0},
+    "human_female": {"base": "humanoid", "gender": "female", "height": 0.95},
+    "elf_male": {"base": "humanoid", "gender": "male", "height": 1.05, "ears": "pointed"},
+    "elf_female": {"base": "humanoid", "gender": "female", "height": 1.0, "ears": "pointed"},
+    "dwarf_male": {"base": "humanoid", "gender": "male", "height": 0.7, "build": "stocky"},
+    "dwarf_female": {"base": "humanoid", "gender": "female", "height": 0.65, "build": "stocky"},
+    "orc": {"base": "humanoid", "height": 1.2, "skin_tone": "green", "build": "muscular"},
+    "demon": {"base": "humanoid", "height": 1.1, "horns": True, "skin_tone": "red"},
+    "angel": {"base": "humanoid", "height": 1.05, "wings": True, "glow": True},
+    "robot": {"base": "mechanical", "height": 1.0, "material": "metal"},
+    "ghost": {"base": "spectral", "height": 1.0, "opacity": 0.7},
+    "beast": {"base": "animal", "height": 0.8, "fur": True},
+}
+
+@api_router.get("/profile/customization-options")
+async def get_customization_options():
+    """Get available customization options"""
+    return {"chat_colors": CHAT_COLORS, "model_presets": MODEL_PRESETS, "color_fields": ["skin_color", "hair_color", "eye_color", "accent_color"], "max_bio_length": 500, "max_status_length": 100}
+
+@api_router.get("/profile/customization/{user_id}")
+async def get_profile_customization(user_id: str):
+    """Get user's current customization settings"""
+    user = await db.user_profiles.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {
+        "user_id": user_id, "display_name": user.get("display_name", user.get("username")),
+        "bio": user.get("bio", ""), "chat_color": user.get("chat_color", "default"),
+        "profile_picture": user.get("profile_picture"), "model_preset": user.get("model_preset", "human_male"),
+        "model_colors": user.get("model_colors", {"skin_color": "#E8BEAC", "hair_color": "#4A3728", "eye_color": "#634E34", "accent_color": "#FFD700"}),
+        "title_display": user.get("title_display"), "status_message": user.get("status_message", ""),
+        "show_online": user.get("show_online", True), "allow_whispers": user.get("allow_whispers", True)
+    }
+
+@api_router.put("/profile/customization/{user_id}")
+async def update_profile_customization(user_id: str, customization: ProfileCustomization):
+    """Update user's profile customization"""
+    user = await db.user_profiles.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    updates = {}
+    if customization.display_name is not None:
+        if len(customization.display_name) < 2 or len(customization.display_name) > 30:
+            raise HTTPException(status_code=400, detail="Display name must be 2-30 characters")
+        updates["display_name"] = customization.display_name
+    if customization.bio is not None:
+        updates["bio"] = customization.bio[:500]
+    if customization.chat_color is not None:
+        updates["chat_color"] = customization.chat_color
+    if customization.profile_picture is not None:
+        updates["profile_picture"] = customization.profile_picture
+    if customization.model_preset is not None:
+        if customization.model_preset not in MODEL_PRESETS:
+            raise HTTPException(status_code=400, detail="Invalid model preset")
+        updates["model_preset"] = customization.model_preset
+    if customization.model_colors is not None:
+        updates["model_colors"] = customization.model_colors
+    if customization.title_display is not None:
+        updates["title_display"] = customization.title_display
+    if customization.status_message is not None:
+        updates["status_message"] = customization.status_message[:100]
+    if customization.show_online is not None:
+        updates["show_online"] = customization.show_online
+    if customization.allow_whispers is not None:
+        updates["allow_whispers"] = customization.allow_whispers
+    if updates:
+        updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await db.user_profiles.update_one({"id": user_id}, {"$set": updates})
+    return {"updated": True, "fields_updated": list(updates.keys())}
+
 # ============ Chat Commands System ============
 # Commands available to different permission levels
 CHAT_COMMANDS = {
