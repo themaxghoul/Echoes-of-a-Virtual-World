@@ -182,6 +182,8 @@ Players AND AI earn real currency through activities
 - [x] P1: Continue Journey auth fix (session isolation)
 - [x] P0: Real-Time Tasks Dashboard (/tasks) - 13 task types with instant VE$ payouts
 - [x] P0: AI Compute Marketplace (/compute) - Cloud compute & self-computing farms
+- [x] P1: Deployment Guide completed (/app/DEPLOYMENT_GUIDE.md)
+- [x] P2: Building Grid UI (/build) - 100x100 grid-based building placement
 
 ---
 
@@ -268,10 +270,37 @@ Players AND AI earn real currency through activities
 ---
 
 ## Remaining Tasks
-- [ ] World Map UI (frontend visualization)
-- [ ] Building UI (frontend grid placement)
+- [ ] World Map UI (frontend visualization using world_map_router.py)
 - [ ] Real micro-task provider API connections (currently using mock task generation)
-- [ ] Deployment Guide completion
+- [ ] WebGL Unity Build integration
+- [ ] VR voice input/output
+
+---
+
+## NEW: Building Grid UI (April 22, 2026)
+
+### Features:
+- **100x100 Grid Canvas**: Interactive grid with zoom (25%-200%), pan, and grid toggle
+- **5 Building Categories**: Basic Structures, Functional Buildings, Decorative, Paths, Special
+- **Building Placement**: Click-to-place with rotation support, collision detection
+- **Building Management**: Select, move, demolish with 50% refund
+- **Ownership**: Only owners can move/demolish their buildings
+- **Engineering XP**: +10 XP per building placed
+
+### Building Categories:
+| Category | Items | Cost Range |
+|----------|-------|------------|
+| Basic Structures | Wooden/Stone House, Cottage, Tower, Wall, Gate, Bridge | VE$25-300 |
+| Functional Buildings | Forge, Farm, Mine, Temple, Marketplace, Library, Barracks, Tavern, Workshop | VE$150-500 |
+| Decorative | Trees, Flower Bed, Fountain, Statue, Bench, Lamp Post, Well, Signpost | VE$5-150 |
+| Paths | Dirt Path, Stone Path, Cobblestone Road, Wooden Boardwalk | VE$2-8 |
+| Special | Portal, Obelisk, Altar, Waypoint, Monument | VE$200-1000 |
+
+### UI Components:
+- Left sidebar: Building catalog with category tabs
+- Center: 100x100 grid canvas
+- Right sidebar: Selected building info panel
+- Toolbar: Zoom, grid toggle, rotation, coordinates display
 
 ---
 Last Updated: April 22, 2026
