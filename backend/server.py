@@ -1531,6 +1531,22 @@ class Character(BaseModel):
     traits: List[str] = []
     appearance: str = ""
     current_location: str = "village_square"
+    # 3D Model Descriptor for Unity/engine
+    model: Dict[str, Any] = Field(default_factory=lambda: {
+        "bodyType": "average",
+        "faceType": "oval",
+        "skinTone": "medium",
+        "hairStyle": "medium",
+        "hairColor": "brown",
+        "eyeColor": "brown",
+        "clothingStyle": "adventurer",
+        "height": 170,
+        "age": 25,
+        "scars": False,
+        "tattoos": False,
+        "beard": False,
+        "accessories": []
+    })
     # Combat Stats
     health: int = 100
     max_health: int = 100
@@ -1568,6 +1584,7 @@ class CharacterCreate(BaseModel):
     background: str
     traits: List[str] = []
     appearance: str = ""
+    model: Optional[Dict[str, Any]] = None  # 3D Model Descriptor for Unity
 
 class NPC(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -2630,7 +2647,30 @@ async def update_user_resources(user_id: str, resources: Dict[str, int]):
 # Character Routes
 @api_router.post("/characters", response_model=Character)
 async def create_character(input: CharacterCreate):
-    character = Character(**input.model_dump())
+    char_data = input.model_dump()
+    # If model is provided, merge with defaults
+    if char_data.get("model"):
+        default_model = {
+            "bodyType": "average",
+            "faceType": "oval",
+            "skinTone": "medium",
+            "hairStyle": "medium",
+            "hairColor": "brown",
+            "eyeColor": "brown",
+            "clothingStyle": "adventurer",
+            "height": 170,
+            "age": 25,
+            "scars": False,
+            "tattoos": False,
+            "beard": False,
+            "accessories": []
+        }
+        default_model.update(char_data["model"])
+        char_data["model"] = default_model
+    else:
+        char_data.pop("model", None)  # Remove None model so default is used
+    
+    character = Character(**char_data)
     doc = character.model_dump()
     doc['created_at'] = doc['created_at'].isoformat()
     await db.characters.insert_one(doc)
@@ -2656,6 +2696,26 @@ async def get_character(character_id: str):
     if not character:
         raise HTTPException(status_code=404, detail="Character not found")
     return character
+
+@api_router.put("/character/{character_id}")
+async def update_character(character_id: str, update_data: dict):
+    """Update character details (name, background, traits, appearance, model)"""
+    # Only allow updating specific fields
+    allowed_fields = ["name", "background", "traits", "appearance", "model"]
+    update_dict = {k: v for k, v in update_data.items() if k in allowed_fields}
+    
+    if not update_dict:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+    
+    result = await db.characters.update_one(
+        {"id": character_id},
+        {"$set": update_dict}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    return {"status": "success", "updated_fields": list(update_dict.keys())}
 
 @api_router.put("/character/{character_id}/location")
 async def update_character_location(character_id: str, location_id: str):
@@ -6813,6 +6873,30 @@ try:
     logging.info("Entity Earnings router loaded successfully")
 except ImportError as e:
     logging.warning(f"Could not load Entity Earnings router: {e}")
+
+# Include Task Marketplace router (Human & Robot task integration)
+try:
+    from task_marketplace_router import task_marketplace_router
+    app.include_router(task_marketplace_router, prefix="/api")
+    logging.info("Task Marketplace router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Task Marketplace router: {e}")
+
+# Include Building System router (2D grid-based building)
+try:
+    from building_system_router import building_system_router
+    app.include_router(building_system_router, prefix="/api")
+    logging.info("Building System router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Building System router: {e}")
+
+# Include World Map router (Top-down stylized map)
+try:
+    from world_map_router import world_map_router
+    app.include_router(world_map_router, prefix="/api")
+    logging.info("World Map router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load World Map router: {e}")
 
 app.add_middleware(
     CORSMiddleware,
