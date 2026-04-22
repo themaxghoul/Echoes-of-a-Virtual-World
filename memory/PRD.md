@@ -184,6 +184,9 @@ Players AND AI earn real currency through activities
 - [x] P0: AI Compute Marketplace (/compute) - Cloud compute & self-computing farms
 - [x] P1: Deployment Guide completed (/app/DEPLOYMENT_GUIDE.md)
 - [x] P2: Building Grid UI (/build) - 100x100 grid-based building placement
+- [x] P2: World Map UI (/world-map) - Interactive 8-region map with terrain
+- [x] P2: Unity WebGL Integration (/webgl) - Browser-based Unity loader framework
+- [x] P2: Enhanced Micro-Task Providers - Realistic simulated task data pools
 
 ---
 
@@ -270,10 +273,8 @@ Players AND AI earn real currency through activities
 ---
 
 ## Remaining Tasks
-- [ ] World Map UI (frontend visualization using world_map_router.py)
-- [ ] Real micro-task provider API connections (currently using mock task generation)
-- [ ] WebGL Unity Build integration
 - [ ] VR voice input/output
+- [ ] Real external micro-task provider connections (currently simulated)
 
 ---
 
@@ -301,6 +302,67 @@ Players AND AI earn real currency through activities
 - Center: 100x100 grid canvas
 - Right sidebar: Selected building info panel
 - Toolbar: Zoom, grid toggle, rotation, coordinates display
+
+---
+
+## NEW: World Map UI (April 22, 2026)
+
+### Features:
+- **8 Regions**: Village Square, Oracle Sanctum, The Forge, Ancient Library, Wanderer's Rest, Shadow Grove, Watchtower, Outer Realms
+- **Procedural Terrain**: 15 terrain types (grass, forest, dark_forest, water, mountain, volcanic, mystical_stone, ethereal, etc.)
+- **Road Network**: 10 roads connecting regions
+- **Entity Tracking**: Real-time player/NPC/creature positions
+- **Region Selection**: Click regions to view details (connected regions, NPCs, buildings)
+- **Travel System**: Navigate to selected regions
+
+### Region Details:
+| Region | Terrain | Color | Description |
+|--------|---------|-------|-------------|
+| The Hollow Square | Cobblestone | #8B7355 | Central meeting place |
+| Oracle's Sanctum | Mystical Stone | #9333EA | Ancient prophecies |
+| The Ember Forge | Volcanic | #DC2626 | Master craftsmen |
+| Ancient Library | Marble | #3B82F6 | Knowledge repository |
+| Wanderer's Rest | Forest Clearing | #22C55E | Traveler haven |
+| Shadow Grove | Dark Forest | #1E3A2F | Mysterious forest |
+| The Watchtower | Highland | #71717A | Defense outpost |
+| Outer Realms | Ethereal | #EC4899 | Beyond the veil |
+
+---
+
+## NEW: Unity WebGL Integration (April 22, 2026)
+
+### Features:
+- **Custom Build Loading**: Input URL to Unity WebGL build folder
+- **Session Management**: Creates backend session with token sync
+- **State Sync**: Character ID and session token sent to Unity
+- **Performance Monitoring**: FPS, memory, ping tracking
+- **Controls**: Pause/resume, mute, fullscreen toggles
+- **Platform Support**: Desktop, Tablet, Mobile (limited)
+
+### Integration Points:
+- `POST /api/unity/session`: Create game session
+- `POST /api/unity/session/{id}/connect`: Connect client
+- `SendMessage('GameManager', 'SetSessionToken', token)`
+- `SendMessage('GameManager', 'SetCharacterId', characterId)`
+
+---
+
+## NEW: Enhanced Micro-Task Providers (April 22, 2026)
+
+### Simulated Data Pools (Mimics Toloka/MTurk):
+- **Sentiment Samples**: 24 texts (positive, negative, neutral) with ground truth
+- **Content Samples**: 15 samples (safe, questionable, unsafe) for moderation training
+- **NPC Dialogue Samples**: 8 game-specific dialogue snippets with context
+- **AI Response Samples**: 4 prompt/response sets for RLHF training
+- **Spam Samples**: 10 spam vs legitimate messages
+- **Text Categories**: 6 news categories (technology, sports, politics, entertainment, science, business)
+- **World Description Prompts**: 5 creative writing scenarios for game content
+
+### Task Data Includes:
+- `provider_hint`: Source/purpose identifier
+- `_ground_truth`: Hidden correct answer for quality tracking
+- `criteria`: Rating dimensions
+- `context`: Situational information
 
 ---
 Last Updated: April 22, 2026
