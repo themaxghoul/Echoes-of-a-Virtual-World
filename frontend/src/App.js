@@ -25,6 +25,7 @@ import SkillsPage from "@/pages/SkillsPage";
 import CharacterCustomization from "@/pages/CharacterCustomization";
 import TasksDashboard from "@/pages/TasksDashboard";
 import ComputeMarketplace from "@/pages/ComputeMarketplace";
+import BuildingGrid from "@/pages/BuildingGrid";
 
 function App() {
   return (
@@ -55,6 +56,7 @@ function App() {
           <Route path="/jobs" element={<JobsHub />} />
           <Route path="/tasks" element={<TasksDashboard />} />
           <Route path="/compute" element={<ComputeMarketplace />} />
+          <Route path="/build" element={<BuildingGrid />} />
         </Routes>
       </BrowserRouter>
       <Toaster 

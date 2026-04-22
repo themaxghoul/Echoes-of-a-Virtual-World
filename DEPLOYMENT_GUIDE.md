@@ -610,3 +610,251 @@ yarn test:e2e
 ### Support
 - Emergent Platform: [emergent.sh](https://emergent.sh)
 - GitHub Issues: Create issue in your repo
+
+---
+
+## 5. Production Deployment
+
+### Option A: Deploy via Emergent
+1. Your app is already running in preview mode on Emergent
+2. Use the "Deploy" button in the Emergent dashboard for production deployment
+3. Configure custom domain if needed
+
+### Option B: Self-Hosted Deployment
+
+**Docker Compose Setup:**
+
+Create `docker-compose.yml`:
+```yaml
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:6
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - MONGO_URL=mongodb://mongodb:27017
+      - DB_NAME=ai_village_echoes
+      - LLM_API_KEY=${LLM_API_KEY}
+    depends_on:
+      - mongodb
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_BACKEND_URL=http://localhost:8001
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:
+```
+
+**Backend Dockerfile** (`backend/Dockerfile`):
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8001"]
+```
+
+**Frontend Dockerfile** (`frontend/Dockerfile`):
+```dockerfile
+FROM node:18-alpine
+
+WORKDIR /app
+
+COPY package.json yarn.lock ./
+RUN yarn install --frozen-lockfile
+
+COPY . .
+RUN yarn build
+
+RUN npm install -g serve
+CMD ["serve", "-s", "build", "-l", "3000"]
+```
+
+**Deploy:**
+```bash
+# Start services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
+```
+
+### Option C: Cloud Providers
+
+**Vercel (Frontend) + Railway/Render (Backend):**
+
+1. **Frontend on Vercel:**
+   ```bash
+   cd frontend
+   vercel
+   ```
+   - Set `REACT_APP_BACKEND_URL` to your backend URL
+
+2. **Backend on Railway:**
+   - Connect GitHub repo
+   - Set environment variables in Railway dashboard
+   - Configure MongoDB add-on or use MongoDB Atlas
+
+---
+
+## 6. Troubleshooting
+
+### Common Issues
+
+**MongoDB Connection Failed:**
+```bash
+# Check if MongoDB is running
+docker ps | grep mongo
+
+# Start MongoDB
+docker run -d -p 27017:27017 --name mongodb mongo:6
+```
+
+**Backend Won't Start:**
+```bash
+# Check logs
+tail -100 /var/log/supervisor/backend.err.log
+
+# Common fixes:
+pip install -r requirements.txt
+python -c "import server"  # Check for import errors
+```
+
+**Frontend Build Errors:**
+```bash
+# Clear cache and reinstall
+rm -rf node_modules yarn.lock
+yarn install
+yarn build
+```
+
+**CORS Issues:**
+- Ensure backend CORS is configured for your frontend URL
+- Check `server.py` CORSMiddleware settings
+
+**API 500 Errors:**
+- Check backend logs for stack trace
+- Common cause: ObjectId serialization - ensure `_id` is excluded from MongoDB responses
+
+---
+
+## 7. API Endpoints Reference
+
+### Authentication
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/login` | Login with username/password |
+| POST | `/api/auth/register` | Register new user |
+
+### Characters
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/characters` | List user's characters |
+| POST | `/api/characters` | Create character |
+| PUT | `/api/character/{id}` | Update character |
+
+### Real-Time Tasks
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/rt-tasks/types` | Get available task types |
+| POST | `/api/rt-tasks/session/start` | Start task session |
+| POST | `/api/rt-tasks/task/complete` | Complete a task |
+| GET | `/api/rt-tasks/worker/{id}/stats` | Get worker stats |
+
+### Economy & Compute
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/economy/compute/tiers` | Get compute tiers |
+| POST | `/api/economy/compute/allocate` | Allocate compute |
+| POST | `/api/economy/hardware/purchase` | Purchase hardware |
+| GET | `/api/economy/ve/rate` | Get VE$/USD rate |
+
+### Building System
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/building/catalog` | Get building catalog |
+| GET | `/api/building/grid/{world}/{region}` | Get region grid |
+| POST | `/api/building/place` | Place building |
+| POST | `/api/building/move` | Move building |
+| DELETE | `/api/building/{id}` | Demolish building |
+
+### World Map
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/world-map/{world_id}` | Get world map data |
+| GET | `/api/world-map/regions` | List all regions |
+
+---
+
+## 8. Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        FRONTEND                             │
+│  React 18 + Vite + TailwindCSS + Shadcn/UI                 │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐      │
+│  │ Landing  │ │   Auth   │ │  Game    │ │ Earnings │      │
+│  │  Page    │ │  Pages   │ │  Pages   │ │   Hub    │      │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────┘      │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                        BACKEND                              │
+│  FastAPI + Motor (async MongoDB) + Pydantic                │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │                  21 API Routers                      │  │
+│  │  • auth • characters • skills • ai-autonomy          │  │
+│  │  • entity-earnings • rt-tasks • economy              │  │
+│  │  • building • world-map • jobs • unity               │  │
+│  │  • conversations • memory • world-instances          │  │
+│  └──────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                        DATABASE                             │
+│  MongoDB 6+ with Motor async driver                         │
+│  Collections: users, characters, ai_villagers,              │
+│  entity_wallets, placed_buildings, rt_tasks, etc.          │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    EXTERNAL SERVICES                        │
+│  • LLM API (GPT-5.2 via Emergent Universal Key)            │
+│  • Stripe (optional, for withdrawals)                       │
+│  • Unity WebGL (for 3D offload)                            │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+Last Updated: April 22, 2026
