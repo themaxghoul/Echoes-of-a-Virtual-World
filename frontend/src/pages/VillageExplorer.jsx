@@ -41,15 +41,19 @@ const LOCATION_IMAGES = {
   'watchtower': 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&h=400&fit=crop',
 };
 
-// Milestone system for world progression
+// Milestone system for world progression (ALL MAPS NOW OPEN)
+// Note: All locations are now accessible in chat mode. Milestones track progress but don't lock content.
 const MILESTONES = [
-  { id: 1, name: 'First Steps', description: 'Enter The Echoes', xpRequired: 0, unlocks: ['village_square', 'oracle_sanctum'] },
-  { id: 2, name: 'Seeker', description: 'Visit 3 locations', xpRequired: 50, unlocks: ['the_forge', 'ancient_library'] },
-  { id: 3, name: 'Conversationalist', description: 'Have 10 conversations', xpRequired: 150, unlocks: ['wanderers_rest'] },
-  { id: 4, name: 'Explorer', description: 'Discover all initial areas', xpRequired: 300, unlocks: ['shadow_grove'] },
-  { id: 5, name: 'Trusted', description: 'Build relationships', xpRequired: 500, unlocks: ['watchtower'] },
-  { id: 6, name: 'Awakened', description: 'Unlock the outer realms', xpRequired: 1000, unlocks: ['outer_realms'] },
+  { id: 1, name: 'First Steps', description: 'Enter The Echoes', xpRequired: 0, unlocks: ['village_square', 'oracle_sanctum', 'the_forge', 'ancient_library', 'wanderers_rest', 'shadow_grove', 'watchtower', 'outer_realms'] },
+  { id: 2, name: 'Seeker', description: 'Visit 3 locations', xpRequired: 50, unlocks: [] },
+  { id: 3, name: 'Conversationalist', description: 'Have 10 conversations', xpRequired: 150, unlocks: [] },
+  { id: 4, name: 'Explorer', description: 'Discover all initial areas', xpRequired: 300, unlocks: [] },
+  { id: 5, name: 'Trusted', description: 'Build relationships', xpRequired: 500, unlocks: [] },
+  { id: 6, name: 'Awakened', description: 'Unlock the outer realms', xpRequired: 1000, unlocks: [] },
 ];
+
+// All locations are always open in Story/Chat mode
+const ALL_LOCATIONS_OPEN = true;
 
 const VillageExplorer = () => {
   const navigate = useNavigate();
@@ -90,16 +94,23 @@ const VillageExplorer = () => {
     setConversationCount(savedConvCount);
     setVisitedLocations(new Set(savedVisited));
     
-    // Calculate unlocked locations based on XP
-    const unlocked = ['village_square'];
-    MILESTONES.forEach(m => {
-      if (savedXP >= m.xpRequired) {
-        unlocked.push(...m.unlocks);
-      }
-    });
-    setUnlockedLocations([...new Set(unlocked)]);
+    // ALL LOCATIONS ARE OPEN - Story/Chat mode allows full exploration
+    if (ALL_LOCATIONS_OPEN) {
+      // Unlock all locations immediately
+      const allLocations = ['village_square', 'oracle_sanctum', 'the_forge', 'ancient_library', 'wanderers_rest', 'shadow_grove', 'watchtower', 'outer_realms'];
+      setUnlockedLocations(allLocations);
+    } else {
+      // Legacy: Calculate unlocked locations based on XP
+      const unlocked = ['village_square'];
+      MILESTONES.forEach(m => {
+        if (savedXP >= m.xpRequired) {
+          unlocked.push(...m.unlocks);
+        }
+      });
+      setUnlockedLocations([...new Set(unlocked)]);
+    }
     
-    // Set current milestone
+    // Set current milestone (for tracking, not locking)
     const milestone = [...MILESTONES].reverse().find(m => savedXP >= m.xpRequired) || MILESTONES[0];
     setCurrentMilestone(milestone);
   }, []);
@@ -176,8 +187,10 @@ const VillageExplorer = () => {
   const handleLocationChange = async (location) => {
     if (location.id === currentLocation?.id) return;
     
-    // Check if location is unlocked
-    if (!unlockedLocations.includes(location.id)) {
+    // In Story/Chat mode, all locations are open
+    const isUnlocked = ALL_LOCATIONS_OPEN || unlockedLocations.includes(location.id);
+    
+    if (!isUnlocked) {
       const requiredMilestone = MILESTONES.find(m => m.unlocks.includes(location.id));
       toast.error(`This area requires: ${requiredMilestone?.name || 'Unknown milestone'}`);
       return;
@@ -342,7 +355,8 @@ const VillageExplorer = () => {
               </h3>
               <div className="space-y-2">
                 {locations.map((location) => {
-                  const isUnlocked = unlockedLocations.includes(location.id);
+                  // All locations are unlocked in Story/Chat mode
+                  const isUnlocked = ALL_LOCATIONS_OPEN || unlockedLocations.includes(location.id);
                   const isCurrentLocation = currentLocation?.id === location.id;
                   
                   return (
@@ -368,9 +382,9 @@ const VillageExplorer = () => {
                         <div className="flex-1">
                           <div className="font-cinzel text-sm text-foreground flex items-center gap-2">
                             {location.name}
-                            {!isUnlocked && (
-                              <Badge variant="outline" className="text-xs font-mono">
-                                Locked
+                            {ALL_LOCATIONS_OPEN && !visitedLocations.has(location.id) && (
+                              <Badge variant="outline" className="text-xs font-mono text-slate-blue border-slate-blue/30">
+                                New
                               </Badge>
                             )}
                           </div>
@@ -405,8 +419,21 @@ const VillageExplorer = () => {
                 })}
               </div>
               
-              {/* Locked Areas Hint */}
-              {unlockedLocations.length < 6 && (
+              {/* All Areas Open indicator */}
+              {ALL_LOCATIONS_OPEN && (
+                <div className="mt-6 p-4 border border-dashed border-green-500/30 rounded-sm bg-green-500/5">
+                  <div className="flex items-center gap-2 text-green-400 mb-2">
+                    <Unlock className="w-4 h-4" />
+                    <span className="font-cinzel text-sm">All Areas Open</span>
+                  </div>
+                  <p className="font-manrope text-xs text-muted-foreground">
+                    Story Mode grants access to all locations. Explore freely!
+                  </p>
+                </div>
+              )}
+              
+              {/* Legacy locked areas hint (when ALL_LOCATIONS_OPEN is false) */}
+              {!ALL_LOCATIONS_OPEN && unlockedLocations.length < 6 && (
                 <div className="mt-6 p-4 border border-dashed border-border/30 rounded-sm">
                   <div className="flex items-center gap-2 text-muted-foreground mb-2">
                     <Lock className="w-4 h-4" />

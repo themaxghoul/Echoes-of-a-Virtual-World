@@ -249,25 +249,24 @@ const ModeSelection = () => {
         )}
 
         {/* Mode Selection */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 max-w-3xl w-full">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 max-w-5xl w-full">
           {/* 2D Story Mode - Text Adventure with Building */}
           <Card 
             className="bg-surface/80 border-border/50 rounded-sm hover:border-gold/50 transition-all duration-300 cursor-pointer group"
             onClick={() => selectMode('story', '/village')}
             data-testid="story-mode-card"
           >
-            <CardContent className="p-6 sm:p-8 text-center">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 sm:mb-6 rounded-full bg-gold/20 border border-gold/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <MessageSquare className="w-8 h-8 sm:w-10 sm:h-10 text-gold" />
+            <CardContent className="p-6 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gold/20 border border-gold/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <MessageSquare className="w-8 h-8 text-gold" />
               </div>
-              <h3 className="font-cinzel text-lg sm:text-xl text-foreground mb-2">Story Mode</h3>
-              <p className="font-manrope text-sm text-muted-foreground mb-4 sm:mb-6">
-                Text adventure with AI storytelling. Build your 2D world, chat with NPCs, shape the narrative.
+              <h3 className="font-cinzel text-lg text-foreground mb-2">Story Mode</h3>
+              <p className="font-manrope text-sm text-muted-foreground mb-4">
+                Text adventure with AI storytelling. Build your 2D world, chat with NPCs.
               </p>
-              <div className="flex flex-wrap gap-2 justify-center mb-4 sm:mb-6">
+              <div className="flex flex-wrap gap-2 justify-center mb-4">
                 <Badge className="bg-gold/10 text-gold text-xs rounded-sm">AI Narrator</Badge>
-                <Badge className="bg-gold/10 text-gold text-xs rounded-sm">2D Building</Badge>
-                <Badge className="bg-gold/10 text-gold text-xs rounded-sm">Chat Mode</Badge>
+                <Badge className="bg-gold/10 text-gold text-xs rounded-sm">All Maps Open</Badge>
               </div>
               <Button 
                 data-testid="select-storymode-btn"
@@ -280,31 +279,59 @@ const ModeSelection = () => {
             </CardContent>
           </Card>
 
-          {/* 3D First Person Mode */}
+          {/* 3D First Person Mode (Web) */}
           <Card 
             className="bg-surface/80 border-border/50 rounded-sm hover:border-slate-blue/50 transition-all duration-300 cursor-pointer group"
             onClick={() => selectMode('firstperson', '/play')}
             data-testid="firstperson-mode-card"
           >
-            <CardContent className="p-6 sm:p-8 text-center">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-4 sm:mb-6 rounded-full bg-slate-blue/20 border border-slate-blue/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Gamepad2 className="w-8 h-8 sm:w-10 sm:h-10 text-slate-blue" />
+            <CardContent className="p-6 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-blue/20 border border-slate-blue/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Gamepad2 className="w-8 h-8 text-slate-blue" />
               </div>
-              <h3 className="font-cinzel text-lg sm:text-xl text-foreground mb-2">First Person 3D</h3>
-              <p className="font-manrope text-sm text-muted-foreground mb-4 sm:mb-6">
-                Immersive 3D experience. Walk through the village, interact with 3D models and NPCs.
+              <h3 className="font-cinzel text-lg text-foreground mb-2">First Person 3D</h3>
+              <p className="font-manrope text-sm text-muted-foreground mb-4">
+                Immersive 3D in browser. Walk through the village, interact with NPCs.
               </p>
-              <div className="flex flex-wrap gap-2 justify-center mb-4 sm:mb-6">
-                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">3D World</Badge>
-                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">D-Pad Controls</Badge>
-                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">3D Models</Badge>
+              <div className="flex flex-wrap gap-2 justify-center mb-4">
+                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">Web 3D</Badge>
+                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">D-Pad</Badge>
               </div>
               <Button 
                 data-testid="select-firstperson-btn"
                 className="w-full bg-slate-blue text-white hover:bg-slate-blue-light font-cinzel rounded-sm"
               >
                 <Gamepad2 className="w-5 h-5 mr-2" />
-                Enter 3D World
+                Enter 3D Web
+                <ArrowRight className="w-5 h-5 ml-2" />
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Unity First Person Mode */}
+          <Card 
+            className="bg-surface/80 border-border/50 rounded-sm hover:border-purple-500/50 transition-all duration-300 cursor-pointer group"
+            onClick={() => selectMode('unity', '/unity')}
+            data-testid="unity-mode-card"
+          >
+            <CardContent className="p-6 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Gamepad2 className="w-8 h-8 text-purple-400" />
+              </div>
+              <h3 className="font-cinzel text-lg text-foreground mb-2">Unity 3D</h3>
+              <p className="font-manrope text-sm text-muted-foreground mb-4">
+                High-fidelity Unity client. Download and play with full graphics.
+              </p>
+              <div className="flex flex-wrap gap-2 justify-center mb-4">
+                <Badge className="bg-purple-500/10 text-purple-400 text-xs rounded-sm">Hi-Fi 3D</Badge>
+                <Badge className="bg-purple-500/10 text-purple-400 text-xs rounded-sm">Sync</Badge>
+              </div>
+              <Button 
+                data-testid="select-unity-btn"
+                className="w-full bg-purple-600 text-white hover:bg-purple-500 font-cinzel rounded-sm"
+              >
+                <Gamepad2 className="w-5 h-5 mr-2" />
+                Unity Offload
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
             </CardContent>

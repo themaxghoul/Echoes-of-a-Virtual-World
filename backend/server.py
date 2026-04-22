@@ -6766,6 +6766,14 @@ try:
 except ImportError as e:
     logging.warning(f"Could not load Jobs router: {e}")
 
+# Include Unity Offload router (Cross-platform Unity support)
+try:
+    from unity_router import unity_router
+    app.include_router(unity_router, prefix="/api")
+    logging.info("Unity Offload router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Unity router: {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
