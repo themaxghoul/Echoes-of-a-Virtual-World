@@ -1,5 +1,5 @@
 # Real-Time Micro-Task System - Quick Money, Instant Payouts
-# Easy integration with reliable task providers for active earning
+# Multi-provider integration with Toloka, MTurk, Scale AI, Hive, and Appen
 
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
@@ -9,10 +9,26 @@ import uuid
 import logging
 import random
 import asyncio
+import os
 
 rt_tasks_router = APIRouter(prefix="/rt-tasks", tags=["realtime-tasks"])
 
 logger = logging.getLogger(__name__)
+
+# Import task provider manager
+try:
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from task_providers import (
+        TaskProviderManager, get_provider_manager,
+        ProviderTask, TaskSubmission as ProviderTaskSubmission
+    )
+    PROVIDERS_AVAILABLE = True
+    logger.info("Task providers module loaded successfully")
+except ImportError as e:
+    PROVIDERS_AVAILABLE = False
+    logger.warning(f"Task providers module not available: {e}")
 
 # ============ Real-Time Task Types ============
 # These are simple, quick tasks that can be completed in seconds to minutes
@@ -891,4 +907,258 @@ async def get_platform_stats():
         "daily_payout_ve": daily_payout,
         "active_workers": active_sessions,
         "task_types_available": len(RT_TASK_TYPES)
+    }
+
+
+# ============ REAL PROVIDER INTEGRATION ENDPOINTS ============
+
+@rt_tasks_router.get("/providers/status")
+async def get_providers_status():
+    """Get status of all task providers"""
+    if not PROVIDERS_AVAILABLE:
+        return {
+            "providers_available": False,
+            "message": "Task providers module not loaded",
+            "configured_providers": [],
+            "required_env_vars": [
+                "TOLOKA_API_KEY",
+                "MTURK_API_KEY (format: ACCESS_KEY:SECRET_KEY)",
+                "SCALE_AI_API_KEY",
+                "HIVE_API_KEY",
+                "APPEN_API_KEY"
+            ]
+        }
+    
+    manager = get_provider_manager()
+    
+    # Check which providers have API keys configured
+    configured = []
+    missing = []
+    
+    provider_env_map = {
+        "toloka": "TOLOKA_API_KEY",
+        "mturk": "MTURK_API_KEY",
+        "scale_ai": "SCALE_AI_API_KEY",
+        "hive": "HIVE_API_KEY",
+        "appen": "APPEN_API_KEY"
+    }
+    
+    for name, env_var in provider_env_map.items():
+        if os.environ.get(env_var):
+            configured.append({"name": name, "env_var": env_var, "status": "configured"})
+        else:
+            missing.append({"name": name, "env_var": env_var, "status": "missing"})
+    
+    return {
+        "providers_available": PROVIDERS_AVAILABLE,
+        "configured_providers": configured,
+        "missing_providers": missing,
+        "active_providers": manager.get_active_providers(),
+        "provider_stats": manager.get_provider_stats()
+    }
+
+@rt_tasks_router.post("/providers/initialize")
+async def initialize_providers(provider_names: Optional[List[str]] = None):
+    """Initialize task providers"""
+    if not PROVIDERS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Task providers module not available")
+    
+    manager = get_provider_manager()
+    results = await manager.initialize_providers(provider_names)
+    
+    successful = [k for k, v in results.items() if v]
+    failed = [k for k, v in results.items() if not v]
+    
+    return {
+        "initialized": successful,
+        "failed": failed,
+        "active_providers": manager.get_active_providers()
+    }
+
+@rt_tasks_router.post("/providers/add")
+async def add_provider(provider_name: str, api_key: str, environment: str = "sandbox"):
+    """Add a single provider with API key"""
+    if not PROVIDERS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Task providers module not available")
+    
+    valid_providers = ["toloka", "mturk", "scale_ai", "hive", "appen"]
+    if provider_name not in valid_providers:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid provider. Must be one of: {valid_providers}"
+        )
+    
+    manager = get_provider_manager()
+    success = await manager.add_provider(provider_name, api_key, environment)
+    
+    if success:
+        return {
+            "success": True,
+            "provider": provider_name,
+            "environment": environment,
+            "active_providers": manager.get_active_providers()
+        }
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to initialize {provider_name}. Check API key."
+        )
+
+@rt_tasks_router.get("/providers/health")
+async def health_check_providers():
+    """Run health checks on all providers"""
+    if not PROVIDERS_AVAILABLE:
+        return {"providers_available": False}
+    
+    manager = get_provider_manager()
+    health = await manager.health_check_all()
+    
+    return {
+        "health_status": health,
+        "healthy_count": sum(1 for v in health.values() if v.get("status") == "healthy"),
+        "total_configured": len(manager.providers)
+    }
+
+@rt_tasks_router.get("/providers/balances")
+async def get_provider_balances():
+    """Get account balances from all providers"""
+    if not PROVIDERS_AVAILABLE:
+        return {"providers_available": False}
+    
+    manager = get_provider_manager()
+    balances = await manager.get_balances()
+    
+    return {
+        "balances": balances,
+        "providers_count": len(balances)
+    }
+
+@rt_tasks_router.get("/providers/task-types")
+async def get_all_provider_task_types():
+    """Get supported task types from all providers"""
+    if not PROVIDERS_AVAILABLE:
+        # Return simulated types
+        return {
+            "providers_available": False,
+            "simulated_types": list(RT_TASK_TYPES.keys())
+        }
+    
+    manager = get_provider_manager()
+    task_types = await manager.get_all_task_types()
+    
+    # Add simulated types as fallback
+    task_types["simulated"] = [
+        {"id": k, "name": v["name"], "description": v["description"]}
+        for k, v in RT_TASK_TYPES.items()
+    ]
+    
+    return {
+        "task_types_by_provider": task_types,
+        "total_types": sum(len(v) for v in task_types.values())
+    }
+
+@rt_tasks_router.get("/providers/tasks")
+async def fetch_real_provider_tasks(
+    task_type: Optional[str] = None,
+    provider: Optional[str] = None,
+    limit: int = 20
+):
+    """Fetch tasks from real providers"""
+    if not PROVIDERS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Task providers not available")
+    
+    manager = get_provider_manager()
+    
+    if not manager.get_active_providers():
+        return {
+            "tasks": [],
+            "message": "No providers configured. Add API keys or use /providers/add",
+            "active_providers": []
+        }
+    
+    if provider:
+        tasks = await manager.fetch_tasks_by_provider(provider, task_type, limit)
+    else:
+        tasks = await manager.fetch_all_tasks(task_type, limit // len(manager.providers) + 1)
+    
+    # Convert to dict format
+    task_list = [
+        {
+            "task_id": t.task_id,
+            "provider": t.provider,
+            "task_type": t.task_type,
+            "title": t.title,
+            "description": t.description,
+            "instructions": t.instructions,
+            "payout": t.payout,
+            "estimated_time_seconds": t.estimated_time_seconds,
+            "difficulty": t.difficulty,
+            "data": t.data
+        }
+        for t in tasks[:limit]
+    ]
+    
+    return {
+        "tasks": task_list,
+        "count": len(task_list),
+        "providers_queried": manager.get_active_providers()
+    }
+
+@rt_tasks_router.post("/providers/submit")
+async def submit_to_provider(
+    task_id: str,
+    worker_id: str,
+    response: Dict[str, Any],
+    time_taken_seconds: float
+):
+    """Submit a task response to the appropriate provider"""
+    if not PROVIDERS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Task providers not available")
+    
+    manager = get_provider_manager()
+    
+    submission = ProviderTaskSubmission(
+        task_id=task_id,
+        worker_id=worker_id,
+        response=response,
+        time_taken_seconds=time_taken_seconds
+    )
+    
+    result = await manager.submit_task(submission)
+    
+    # Record in local database
+    db = get_db()
+    await db.provider_submissions.insert_one({
+        "task_id": task_id,
+        "worker_id": worker_id,
+        "provider": task_id.split("_")[0],
+        "submission_id": result.submission_id,
+        "status": result.status,
+        "payout": result.payout,
+        "feedback": result.feedback,
+        "submitted_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {
+        "task_id": result.task_id,
+        "submission_id": result.submission_id,
+        "status": result.status,
+        "payout": result.payout,
+        "feedback": result.feedback
+    }
+
+@rt_tasks_router.get("/providers/submissions/{worker_id}")
+async def get_provider_submissions(worker_id: str, limit: int = 50):
+    """Get provider task submissions for a worker"""
+    db = get_db()
+    
+    submissions = await db.provider_submissions.find(
+        {"worker_id": worker_id},
+        {"_id": 0}
+    ).sort("submitted_at", -1).to_list(limit)
+    
+    return {
+        "worker_id": worker_id,
+        "submissions": submissions,
+        "count": len(submissions)
     }

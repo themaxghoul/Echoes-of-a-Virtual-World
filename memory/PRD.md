@@ -506,4 +506,45 @@ Players AND AI earn real currency through activities
 - `POST /api/skill-trees/award-points`: Award skill points
 
 ---
+
+## NEW: Real Task Provider Integration (April 23, 2026)
+
+### Supported Providers (5 Total):
+1. **Toloka (Yandex)** - Image classification, content moderation, text classification
+2. **Amazon MTurk** - HITs, surveys, transcription, data labeling
+3. **Scale AI** - Image/text annotation, comparison, transcription
+4. **Hive AI** - Text/visual moderation, AI detection, spam/PII detection
+5. **Appen** - Image/text/audio/video annotation, data collection
+
+### Architecture:
+- `task_providers/` package with provider-specific implementations
+- `TaskProviderManager` orchestrates all providers
+- Unified `ProviderTask` and `TaskSubmission` models
+- Async HTTP clients with retry logic and rate limiting
+
+### Required Environment Variables:
+```
+TOLOKA_API_KEY=your_toloka_oauth_token
+MTURK_API_KEY=access_key:secret_key
+SCALE_AI_API_KEY=your_scale_api_key
+HIVE_API_KEY=your_hive_api_key
+APPEN_API_KEY=your_appen_api_key
+```
+
+### API Endpoints:
+- `GET /api/rt-tasks/providers/status`: Provider configuration status
+- `POST /api/rt-tasks/providers/initialize`: Initialize configured providers
+- `POST /api/rt-tasks/providers/add`: Add provider with API key
+- `GET /api/rt-tasks/providers/health`: Health check all providers
+- `GET /api/rt-tasks/providers/balances`: Get account balances
+- `GET /api/rt-tasks/providers/task-types`: Get all task types
+- `GET /api/rt-tasks/providers/tasks`: Fetch real tasks from providers
+- `POST /api/rt-tasks/providers/submit`: Submit task to provider
+
+### Notes:
+- System falls back to simulated tasks when no providers configured
+- Each provider uses sandbox/production environments
+- Task IDs prefixed with provider name (e.g., `toloka_xxx`, `mturk_xxx`)
+
+---
 Last Updated: April 23, 2026
