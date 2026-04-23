@@ -133,11 +133,11 @@ const ModeSelection = () => {
             variant="ghost"
             size="icon"
             onClick={() => {
-              pushNavHistory('/profile');
-              navigate('/profile');
+              pushNavHistory('/settings');
+              navigate('/settings');
             }}
             className="rounded-sm"
-            data-testid="profile-btn"
+            data-testid="settings-btn"
           >
             <Settings className="w-5 h-5 text-muted-foreground" />
           </Button>

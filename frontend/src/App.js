@@ -28,6 +28,7 @@ import ComputeMarketplace from "@/pages/ComputeMarketplace";
 import BuildingGrid from "@/pages/BuildingGrid";
 import WorldMapUI from "@/pages/WorldMapUI";
 import UnityWebGL from "@/pages/UnityWebGL";
+import ProfileSettings from "@/pages/ProfileSettings";
 
 function App() {
   return (
@@ -61,6 +62,7 @@ function App() {
           <Route path="/build" element={<BuildingGrid />} />
           <Route path="/world-map" element={<WorldMapUI />} />
           <Route path="/webgl" element={<UnityWebGL />} />
+          <Route path="/settings" element={<ProfileSettings />} />
         </Routes>
       </BrowserRouter>
       <Toaster 
