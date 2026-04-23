@@ -425,4 +425,40 @@ Players AND AI earn real currency through activities
 - `context`: Situational information
 
 ---
+
+## NEW: Profile Customization System (April 22, 2026)
+
+### Features:
+- **Display Name**: 2-30 character custom name
+- **Status Message**: Up to 100 characters
+- **Bio**: Up to 500 characters personal description
+- **Profile Picture**: URL-based profile image
+
+### Character Model Presets (12 options):
+- Human Male/Female, Elf Male/Female, Dwarf Male/Female
+- Orc, Demon, Angel, Robot, Ghost, Beast
+
+### Model Colors (4 customizable):
+- Skin Color, Hair Color, Eye Color, Accent Color
+
+### Chat Colors (12 options):
+- Default, Gold, Crimson, Emerald, Sapphire, Amethyst
+- Rose, Sunset, Ocean, Forest, Royal, Shadow
+
+### Privacy Settings:
+- Show Online Status toggle
+- Allow Whispers toggle
+
+### UI Tabs:
+1. **Profile**: Basic info (name, status, bio, picture)
+2. **Appearance**: Model preset & color customization
+3. **Chat**: Chat color selection with live preview
+4. **Privacy**: Online status & whisper settings
+
+### API Endpoints:
+- `GET /api/profile/customization-options`: Available options
+- `GET /api/profile/customization/{user_id}`: Current settings
+- `PUT /api/profile/customization/{user_id}`: Update settings
+
+---
 Last Updated: April 22, 2026
