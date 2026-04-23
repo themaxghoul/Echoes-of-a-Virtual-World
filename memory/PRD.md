@@ -461,4 +461,49 @@ Players AND AI earn real currency through activities
 - `PUT /api/profile/customization/{user_id}`: Update settings
 
 ---
-Last Updated: April 22, 2026
+
+## NEW: Real Earnings Tracking & Withdrawal Preferences (April 23, 2026)
+
+### Real Earnings History API:
+- `GET /api/earnings/history/{user_id}`: Returns actual today_earned, week_earned from transactions
+- Daily breakdown with per-day earnings and task counts
+- Tracks RT task session earnings separately
+- No more simulated/placeholder stats
+
+### Withdrawal Preferences:
+- `GET /api/earnings/preferences/{user_id}`: Get saved preferences
+- `PUT /api/earnings/preferences/{user_id}`: Save preferences permanently
+- Supports: `default_method` (crypto/game_balance), `default_wallet`, `wallet_percentage`, `auto_withdraw_threshold`
+- Modal shows "Set as Default" buttons for permanent preference saving
+
+### Session Earnings Sync:
+- `POST /api/rt-tasks/session/{session_id}/end` now auto-syncs earnings to main account
+- Creates transaction record in earnings_transactions
+
+---
+
+## NEW: Skill Trees System (April 23, 2026)
+
+### 5 Skill Trees:
+1. **Combat Mastery**: Power Strike, Defensive Stance, Whirlwind, Battle Cry, Executioner, Iron Will, Berserker Rage
+2. **Arcane Arts**: Mana Bolt, Shield, Teleport, Arcane Blast, Mind Control, Soul Drain, Reality Warp
+3. **Master Craftsman**: Basic Tools, Repair, Forge Mastery, Enchanting, Alchemy, Masterwork, Legendary Craft
+4. **Silver Tongue**: Bargain, Persuade, Intimidate, Inspire, Deception, Leadership, Orator
+5. **Wilderness Expert**: Forage, Track, Tame Beast, Camouflage, Survival, Beast Master, One with Nature
+
+### Features:
+- 4 tiers per tree with requirements (must unlock prereqs first)
+- Active skills (cooldown, cost) and Passive skills (permanent bonuses)
+- Skill Points awarded for achievements/levels
+- Title Passives: Earn titles to unlock additional bonuses
+- UI shows progress (0/7 unlocked), locked/unlocked states, detailed skill modals
+
+### API Endpoints:
+- `GET /api/skill-trees/trees`: All skill trees with tiers
+- `GET /api/skill-trees/player/{player_id}`: Player skills and points
+- `POST /api/skill-trees/unlock`: Unlock a skill
+- `GET /api/skill-trees/active-effects`: Combined passive bonuses
+- `POST /api/skill-trees/award-points`: Award skill points
+
+---
+Last Updated: April 23, 2026
