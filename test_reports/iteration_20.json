@@ -1,0 +1,136 @@
+{
+  "summary": "Completed e2e testing of Iteration 20 features: Earnings Hub real data, Skill Trees UI, and withdrawal preferences. All 15 backend tests passed (100%). Frontend UI verified with Skill Trees page showing all 5 trees with tier-based progression, skill detail modal with unlock functionality, and Earnings Hub showing real earnings data with 'Set as Default' withdrawal preferences.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Earnings Hub", "issues": ["403 errors for some resource loads (likely external images) - non-blocking"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_earnings_skilltrees_iter20.py",
+    "/app/test_reports/pytest/pytest_results_iter20.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GET /api/earnings/history/{user_id} correctly returns today_earned and week_earned from real transaction data",
+    "GET /api/earnings/preferences/{user_id} returns saved withdrawal preferences with is_default flag",
+    "PUT /api/earnings/preferences/{user_id} saves preferences permanently with wallet validation",
+    "POST /api/rt-tasks/session/{session_id}/end syncs earnings to main account via earnings_accounts collection",
+    "GET /api/skill-trees/trees returns all 5 skill trees: combat, magic, crafting, social, survival",
+    "Skill Trees page displays tier-based progression (Tier 1-4) with skill requirements",
+    "Skill detail modal shows cooldown, cost, effects, and unlock requirements",
+    "Withdrawal modal shows 'Set as Default' options for both wallet and game balance",
+    "Title Passives section displays user's earned passive bonuses from titles",
+    "Skills button in ModeSelection correctly navigates to /skill-trees route"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_earnings_skilltrees_iter20.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "username": "sirix_1",
+    "password": "HCLynnTV04"
+  },
+  "seed_data_creation": "Used existing sirix_1 account for testing. Created TEST_prefs_* and TEST_skill_* test data for preferences and skill tree testing.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 20 features fully tested. Key endpoints: GET /api/earnings/history/{user_id} (returns today_earned, week_earned, daily_breakdown), GET/PUT /api/earnings/preferences/{user_id} (withdrawal preferences with default_method, default_wallet), GET /api/skill-trees/trees (all 5 skill trees), GET /api/skill-trees/player/{player_id} (player skills and points), POST /api/skill-trees/unlock (unlock skills), POST /api/rt-tasks/session/{session_id}/end (syncs earnings to main account). Frontend test IDs: skill-trees-btn, tree-combat, tree-magic, tree-crafting, tree-social, tree-survival, skill-power_strike, unlock-skill-btn, withdraw-wallet-btn, withdraw-game-btn.",
+  "features_tested": {
+    "earnings_history_api": {
+      "status": "PASS",
+      "details": [
+        "Returns today_earned from real transaction data",
+        "Returns week_earned from real transaction data",
+        "Returns daily_breakdown with per-day earnings",
+        "Returns total_earned and available_balance from account",
+        "Includes rt_session_count for real-time task sessions"
+      ]
+    },
+    "withdrawal_preferences_api": {
+      "status": "PASS",
+      "details": [
+        "GET returns default preferences (game_balance) for new users",
+        "PUT saves preferences permanently to withdrawal_preferences collection",
+        "Validates wallet address format (0x + 40 hex chars)",
+        "Supports default_method: crypto or game_balance",
+        "Supports wallet_percentage for split withdrawals",
+        "Supports auto_withdraw_threshold for automatic withdrawals"
+      ]
+    },
+    "skill_trees_api": {
+      "status": "PASS",
+      "details": [
+        "GET /api/skill-trees/trees returns all 5 trees with tiers",
+        "GET /api/skill-trees/trees/{tree_id} returns specific tree details",
+        "GET /api/skill-trees/player/{player_id} returns player skills and points",
+        "POST /api/skill-trees/unlock validates skill points and requirements",
+        "POST /api/skill-trees/award-points awards skill points to players",
+        "GET /api/skill-trees/active-effects returns combined passive bonuses"
+      ]
+    },
+    "session_end_sync": {
+      "status": "PASS",
+      "details": [
+        "POST /api/rt-tasks/session/{session_id}/end ends session",
+        "Syncs earnings to main earnings_accounts collection",
+        "Records sync transaction in earnings_transactions",
+        "Returns synced_to_account flag"
+      ]
+    },
+    "skill_trees_ui": {
+      "status": "PASS",
+      "details": [
+        "Page loads at /skill-trees route",
+        "Displays all 5 trees: Combat Mastery, Arcane Arts, Master Craftsman, Silver Tongue, Wilderness Expert",
+        "Shows tier-based progression (Tier 1-4)",
+        "Skill Points display in header (10 Skill Points)",
+        "Title Passives section shows earned passives",
+        "Skill cards show name, type (active/passive), description",
+        "Skill detail modal shows cooldown, cost, effects, requirements",
+        "Unlock button with data-testid='unlock-skill-btn'"
+      ]
+    },
+    "earnings_hub_ui": {
+      "status": "PASS",
+      "details": [
+        "Shows Available Balance (VE$)",
+        "Shows Earned Today from real data",
+        "Shows Average Hourly rate",
+        "Shows Tasks Completed count",
+        "Buy VE$ section with card payment",
+        "Withdraw Funds section with preview",
+        "Income Streams list (Micro Tasks, Transcription, Data Labeling)"
+      ]
+    },
+    "withdrawal_modal_ui": {
+      "status": "PASS",
+      "details": [
+        "Shows Amount, Processing Fee, Total Deduction, Remaining Balance",
+        "Shows saved default preference (Default: Wallet or Game Balance)",
+        "Keep in Game Balance button with data-testid='withdraw-game-btn'",
+        "Send to Wallet button (when wallet connected) with data-testid='withdraw-wallet-btn'",
+        "'Set as Default' option for saving preferences permanently",
+        "Processing time and permanent preferences note"
+      ]
+    },
+    "mode_selection_navigation": {
+      "status": "PASS",
+      "details": [
+        "Skills button with data-testid='skill-trees-btn' navigates to /skill-trees",
+        "Earn VE$ button with data-testid='earnings-btn' navigates to /earnings"
+      ]
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

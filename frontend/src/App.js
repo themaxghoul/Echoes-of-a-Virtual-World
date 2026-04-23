@@ -29,6 +29,7 @@ import BuildingGrid from "@/pages/BuildingGrid";
 import WorldMapUI from "@/pages/WorldMapUI";
 import UnityWebGL from "@/pages/UnityWebGL";
 import ProfileSettings from "@/pages/ProfileSettings";
+import SkillTrees from "@/pages/SkillTrees";
 
 function App() {
   return (
@@ -63,6 +64,7 @@ function App() {
           <Route path="/world-map" element={<WorldMapUI />} />
           <Route path="/webgl" element={<UnityWebGL />} />
           <Route path="/settings" element={<ProfileSettings />} />
+          <Route path="/skill-trees" element={<SkillTrees />} />
         </Routes>
       </BrowserRouter>
       <Toaster 

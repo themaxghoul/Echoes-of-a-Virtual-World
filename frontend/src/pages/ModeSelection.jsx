@@ -8,7 +8,7 @@ import {
   Gamepad2, MessageSquare, User, Sparkles, Crown,
   ArrowRight, Settings, LogOut, Hammer, ArrowLeftRight,
   Heart, Zap, Shield, Swords, DollarSign, TrendingUp, Briefcase,
-  Map, Globe
+  Map, Globe, Award
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -422,6 +422,18 @@ const ModeSelection = () => {
           >
             <Globe className="w-4 h-4 mr-2" />
             WebGL
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/skill-trees');
+              navigate('/skill-trees');
+            }}
+            className="border-yellow-400/30 text-yellow-400 hover:bg-yellow-400/10 rounded-sm"
+            data-testid="skill-trees-btn"
+          >
+            <Award className="w-4 h-4 mr-2" />
+            Skills
           </Button>
         </div>
 

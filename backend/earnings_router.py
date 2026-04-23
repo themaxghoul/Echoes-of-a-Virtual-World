@@ -817,3 +817,251 @@ async def connect_wallet(user_id: str, wallet_address: str, network: str = "poly
         "address": wallet_address,
         "network": network
     }
+
+
+
+# ============ REAL EARNINGS TRACKING ============
+
+class WithdrawalPreferences(BaseModel):
+    user_id: str
+    default_method: str = "game_balance"  # crypto, game_balance
+    default_wallet: Optional[str] = None
+    wallet_percentage: int = 100  # percentage to send to wallet
+    auto_withdraw_threshold: Optional[float] = None  # auto-withdraw when balance reaches this
+    
+@earnings_router.get("/history/{user_id}")
+async def get_earnings_history(user_id: str, days: int = 30, limit: int = 100):
+    """Get detailed earnings history with daily/weekly breakdowns"""
+    db = get_db()
+    
+    from datetime import timedelta
+    now = datetime.now(timezone.utc)
+    start_date = now - timedelta(days=days)
+    
+    # Get all transactions in date range
+    transactions = await db.earnings_transactions.find({
+        "user_id": user_id,
+        "timestamp": {"$gte": start_date.isoformat()}
+    }).sort("timestamp", -1).to_list(limit)
+    
+    # Also get RT task session earnings
+    rt_sessions = await db.rt_task_sessions.find({
+        "worker_id": user_id,
+        "started_at": {"$gte": start_date.isoformat()}
+    }).to_list(500)
+    
+    # Calculate daily earnings
+    daily_earnings = {}
+    today = now.date()
+    week_start = today - timedelta(days=today.weekday())
+    
+    today_total = 0.0
+    week_total = 0.0
+    
+    for tx in transactions:
+        tx_date = datetime.fromisoformat(tx["timestamp"].replace("Z", "+00:00")).date()
+        date_key = tx_date.isoformat()
+        
+        amount = tx.get("amount_usd", 0)
+        if date_key not in daily_earnings:
+            daily_earnings[date_key] = {"total": 0, "tasks": 0, "sources": {}}
+        
+        daily_earnings[date_key]["total"] += amount
+        daily_earnings[date_key]["tasks"] += 1
+        
+        source = tx.get("type", "unknown")
+        daily_earnings[date_key]["sources"][source] = daily_earnings[date_key]["sources"].get(source, 0) + amount
+        
+        if tx_date == today:
+            today_total += amount
+        if tx_date >= week_start:
+            week_total += amount
+    
+    # Add RT session earnings
+    for session in rt_sessions:
+        session_date = datetime.fromisoformat(session["started_at"].replace("Z", "+00:00")).date()
+        date_key = session_date.isoformat()
+        
+        amount = session.get("earnings", 0)
+        tasks_done = session.get("tasks_completed", 0)
+        
+        if date_key not in daily_earnings:
+            daily_earnings[date_key] = {"total": 0, "tasks": 0, "sources": {}}
+        
+        daily_earnings[date_key]["total"] += amount
+        daily_earnings[date_key]["tasks"] += tasks_done
+        daily_earnings[date_key]["sources"]["rt_tasks"] = daily_earnings[date_key]["sources"].get("rt_tasks", 0) + amount
+        
+        if session_date == today:
+            today_total += amount
+        if session_date >= week_start:
+            week_total += amount
+    
+    # Get account for totals
+    account = await db.earnings_accounts.find_one({"user_id": user_id}, {"_id": 0})
+    
+    return {
+        "user_id": user_id,
+        "today_earned": round(today_total, 2),
+        "week_earned": round(week_total, 2),
+        "daily_breakdown": daily_earnings,
+        "total_earned": account.get("total_earned_usd", 0) if account else 0,
+        "available_balance": account.get("available_balance_usd", 0) if account else 0,
+        "tasks_completed": account.get("tasks_completed", 0) if account else 0,
+        "transaction_count": len(transactions),
+        "rt_session_count": len(rt_sessions)
+    }
+
+@earnings_router.get("/preferences/{user_id}")
+async def get_withdrawal_preferences(user_id: str):
+    """Get user's withdrawal preferences"""
+    db = get_db()
+    
+    prefs = await db.withdrawal_preferences.find_one({"user_id": user_id}, {"_id": 0})
+    
+    if not prefs:
+        # Return defaults
+        return {
+            "user_id": user_id,
+            "default_method": "game_balance",
+            "default_wallet": None,
+            "wallet_percentage": 100,
+            "auto_withdraw_threshold": None,
+            "is_default": True
+        }
+    
+    return {**prefs, "is_default": False}
+
+@earnings_router.put("/preferences/{user_id}")
+async def update_withdrawal_preferences(user_id: str, prefs: WithdrawalPreferences):
+    """Update user's withdrawal preferences for permanent credit transfer settings"""
+    db = get_db()
+    
+    # Verify user exists
+    account = await db.earnings_accounts.find_one({"user_id": user_id})
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+    
+    # Validate wallet if provided
+    if prefs.default_wallet and prefs.default_method == "crypto":
+        if not prefs.default_wallet.startswith("0x") or len(prefs.default_wallet) != 42:
+            raise HTTPException(status_code=400, detail="Invalid wallet address format")
+    
+    # Update or insert preferences
+    pref_data = {
+        "user_id": user_id,
+        "default_method": prefs.default_method,
+        "default_wallet": prefs.default_wallet,
+        "wallet_percentage": min(100, max(0, prefs.wallet_percentage)),
+        "auto_withdraw_threshold": prefs.auto_withdraw_threshold,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.withdrawal_preferences.update_one(
+        {"user_id": user_id},
+        {"$set": pref_data},
+        upsert=True
+    )
+    
+    return {"updated": True, "preferences": pref_data}
+
+@earnings_router.post("/sync-rt-earnings")
+async def sync_realtime_task_earnings(user_id: str, session_id: str, amount: float, tasks_count: int):
+    """Sync earnings from real-time task sessions to main earnings account"""
+    db = get_db()
+    
+    if amount <= 0:
+        return {"synced": False, "reason": "No earnings to sync"}
+    
+    # Update earnings account
+    await db.earnings_accounts.update_one(
+        {"user_id": user_id},
+        {
+            "$inc": {
+                "total_earned_usd": amount,
+                "available_balance_usd": amount,
+                "tasks_completed": tasks_count
+            },
+            "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
+        },
+        upsert=True
+    )
+    
+    # Record transaction
+    await db.earnings_transactions.insert_one({
+        "transaction_id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "type": "rt_task_sync",
+        "session_id": session_id,
+        "amount_usd": amount,
+        "tasks_count": tasks_count,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    })
+    
+    # Check auto-withdraw threshold
+    prefs = await db.withdrawal_preferences.find_one({"user_id": user_id})
+    if prefs and prefs.get("auto_withdraw_threshold"):
+        account = await db.earnings_accounts.find_one({"user_id": user_id})
+        if account and account.get("available_balance_usd", 0) >= prefs["auto_withdraw_threshold"]:
+            # Return flag to trigger auto-withdrawal
+            return {
+                "synced": True,
+                "amount": amount,
+                "tasks": tasks_count,
+                "auto_withdraw_triggered": True,
+                "threshold": prefs["auto_withdraw_threshold"]
+            }
+    
+    return {"synced": True, "amount": amount, "tasks": tasks_count, "auto_withdraw_triggered": False}
+
+@earnings_router.get("/task-history/{user_id}")
+async def get_task_history(user_id: str, limit: int = 50):
+    """Get recent completed task history"""
+    db = get_db()
+    
+    # Get from earnings transactions
+    transactions = await db.earnings_transactions.find({
+        "user_id": user_id,
+        "type": {"$in": ["task_completion", "rt_task_sync", "rt_task_completion"]}
+    }).sort("timestamp", -1).to_list(limit)
+    
+    # Get from RT task completions
+    rt_completions = await db.rt_task_completions.find({
+        "worker_id": user_id
+    }).sort("completed_at", -1).to_list(limit)
+    
+    # Merge and format
+    history = []
+    
+    for tx in transactions:
+        tx.pop("_id", None)
+        history.append({
+            "id": tx.get("transaction_id"),
+            "type": tx.get("type"),
+            "amount": tx.get("amount_usd", 0),
+            "timestamp": tx.get("timestamp"),
+            "task_id": tx.get("task_id"),
+            "session_id": tx.get("session_id"),
+            "source": "earnings"
+        })
+    
+    for rt in rt_completions:
+        rt.pop("_id", None)
+        history.append({
+            "id": rt.get("completion_id", str(uuid.uuid4())),
+            "type": "rt_task",
+            "amount": rt.get("payout", 0),
+            "timestamp": rt.get("completed_at"),
+            "task_id": rt.get("task_id"),
+            "task_type": rt.get("task_type"),
+            "source": "rt_tasks"
+        })
+    
+    # Sort by timestamp
+    history.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+    
+    return {
+        "user_id": user_id,
+        "history": history[:limit],
+        "total_count": len(history)
+    }

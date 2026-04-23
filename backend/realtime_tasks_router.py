@@ -749,7 +749,7 @@ async def get_next_batch(session_id: str, count: int = 10):
 
 @rt_tasks_router.post("/session/{session_id}/end")
 async def end_session(session_id: str):
-    """End a task session"""
+    """End a task session and sync earnings to main account"""
     db = get_db()
     
     session = await db.rt_sessions.find_one({"session_id": session_id})
@@ -767,11 +767,44 @@ async def end_session(session_id: str):
         }
     )
     
+    # Sync earnings to main earnings account
+    worker_id = session.get("worker_id")
+    earnings = session.get("earnings", 0)
+    tasks_completed = session.get("tasks_completed", 0)
+    
+    if worker_id and earnings > 0:
+        # Update main earnings account
+        await db.earnings_accounts.update_one(
+            {"user_id": worker_id},
+            {
+                "$inc": {
+                    "total_earned_usd": earnings,
+                    "available_balance_usd": earnings,
+                    "tasks_completed": tasks_completed
+                },
+                "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
+            },
+            upsert=True
+        )
+        
+        # Record sync transaction
+        await db.earnings_transactions.insert_one({
+            "transaction_id": str(uuid.uuid4()),
+            "user_id": worker_id,
+            "type": "rt_task_sync",
+            "session_id": session_id,
+            "amount_usd": earnings,
+            "tasks_count": tasks_completed,
+            "task_type": session.get("task_type"),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+    
     return {
         "ended": True,
         "session_id": session_id,
-        "tasks_completed": session.get("tasks_completed", 0),
-        "total_earnings": session.get("earnings", 0)
+        "tasks_completed": tasks_completed,
+        "total_earnings": earnings,
+        "synced_to_account": earnings > 0
     }
 
 @rt_tasks_router.get("/worker/{worker_id}/stats")
