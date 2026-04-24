@@ -8,7 +8,7 @@ import {
   Gamepad2, MessageSquare, User, Sparkles, Crown,
   ArrowRight, Settings, LogOut, Hammer, ArrowLeftRight,
   Heart, Zap, Shield, Swords, DollarSign, TrendingUp, Briefcase,
-  Map, Globe, Award, Lock, Clock
+  Map, Globe, Award, Lock, Clock, Cpu, Scroll, ShoppingBag, Trophy
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -401,8 +401,8 @@ const ModeSelection = () => {
           <Button
             variant="outline"
             onClick={() => {
-              pushNavHistory('/quests');
-              navigate('/quests');
+              pushNavHistory('/quest-log');
+              navigate('/quest-log');
             }}
             className="border-purple-400/30 text-purple-400 hover:bg-purple-400/10 rounded-sm"
           >
@@ -444,6 +444,54 @@ const ModeSelection = () => {
           >
             <Award className="w-4 h-4 mr-2" />
             Skills
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/marketplace');
+              navigate('/marketplace');
+            }}
+            className="border-emerald-400/30 text-emerald-400 hover:bg-emerald-400/10 rounded-sm"
+            data-testid="marketplace-btn"
+          >
+            <ShoppingBag className="w-4 h-4 mr-2" />
+            Marketplace
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/ai-partners');
+              navigate('/ai-partners');
+            }}
+            className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-400/10 rounded-sm"
+            data-testid="ai-partners-btn"
+          >
+            <Cpu className="w-4 h-4 mr-2" />
+            AI Partners
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/quest-log');
+              navigate('/quest-log');
+            }}
+            className="border-amber-500/30 text-amber-500 hover:bg-amber-500/10 rounded-sm"
+            data-testid="quest-log-btn"
+          >
+            <Scroll className="w-4 h-4 mr-2" />
+            Quest Log
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/leaderboard');
+              navigate('/leaderboard');
+            }}
+            className="border-rose-400/30 text-rose-400 hover:bg-rose-400/10 rounded-sm"
+            data-testid="leaderboard-btn"
+          >
+            <Trophy className="w-4 h-4 mr-2" />
+            Leaderboard
           </Button>
         </div>
 

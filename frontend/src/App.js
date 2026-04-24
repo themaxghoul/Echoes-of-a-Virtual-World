@@ -31,6 +31,11 @@ import UnityWebGL from "@/pages/UnityWebGL";
 import ProfileSettings from "@/pages/ProfileSettings";
 import SkillTrees from "@/pages/SkillTrees";
 import IsometricBuilder from "@/pages/IsometricBuilder";
+import TaskMarketplace from "@/pages/TaskMarketplace";
+import AIPartners from "@/pages/AIPartners";
+import QuestLog from "@/pages/QuestLog";
+import Onboarding from "@/pages/Onboarding";
+import Leaderboard from "@/pages/Leaderboard";
 
 function App() {
   return (
@@ -67,6 +72,11 @@ function App() {
           <Route path="/settings" element={<ProfileSettings />} />
           <Route path="/skill-trees" element={<SkillTrees />} />
           <Route path="/isometric-builder" element={<IsometricBuilder />} />
+          <Route path="/marketplace" element={<TaskMarketplace />} />
+          <Route path="/ai-partners" element={<AIPartners />} />
+          <Route path="/quest-log" element={<QuestLog />} />
+          <Route path="/onboarding" element={<Onboarding />} />
+          <Route path="/leaderboard" element={<Leaderboard />} />
         </Routes>
       </BrowserRouter>
       <Toaster 
