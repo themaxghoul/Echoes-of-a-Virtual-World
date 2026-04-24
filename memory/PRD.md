@@ -723,3 +723,133 @@ At 4x Earth scale (10M compute), computational power converts to real-world ener
 
 ---
 Last Updated: April 24, 2026
+
+## P0-P2 FEATURES COMPLETE (April 24, 2026 - Session 2)
+
+### P0: Hybrid Task Marketplace with Stripe Connect
+**Payment Types:**
+- VE$ Only: Pay tasks with in-game currency
+- Stripe (Real Money): Pay with credit card via Stripe Connect
+- Hybrid: Both VE$ AND Stripe payments combined
+
+**Features:**
+- Create tasks with category, difficulty, and instructions
+- 10% platform fee (deducted from worker payout)
+- VE$ escrow system for task creators
+- Workers can browse, accept, submit, and get paid
+- Task approval/rejection by creators
+- Skills XP awarded on completion
+
+**Endpoints:**
+- `POST /api/task-marketplace/hybrid/create` - Create hybrid task
+- `GET /api/task-marketplace/hybrid/tasks` - List open tasks
+- `POST /api/task-marketplace/hybrid/fund-stripe` - Stripe checkout session
+- `POST /api/task-marketplace/hybrid/accept` - Accept task
+- `POST /api/task-marketplace/hybrid/submit` - Submit work
+- `POST /api/task-marketplace/hybrid/review` - Approve/reject submission
+
+### P1: AI Partners UI
+**10 AI Programs for Passive Income:**
+| Program | Compute | Gold/hr | VE$/hr | Risk |
+|---------|---------|---------|--------|------|
+| Market Analyst | 50 | 10 | 0.02 | Medium |
+| Resource Harvester | 30 | 15 | 0.01 | Low |
+| Craft Optimizer | 40 | 12 | 0.015 | Low |
+| Quest Runner | 60 | 20 | 0.025 | Medium |
+| NPC Merchant | 35 | 8 | 0.018 | Very Low |
+| Farm Manager | 25 | 6 | 0.008 | None |
+| Dungeon Explorer | 80 | 30 | 0.05 | High |
+| Alchemist AI | 55 | 18 | 0.022 | Medium |
+| Defense Coordinator | 45 | 0 | 0 | Low |
+| Energy Harvester | 100 | 25 | 0.03 | Low |
+
+**Trust Levels:**
+- Stranger (0-19%): 0.6x earnings
+- Acquaintance (20-39%): 0.8x earnings
+- Associate (40-59%): 1.0x earnings
+- Partner (60-74%): 1.2x earnings
+- Trusted Ally (75-89%): 1.35x earnings
+- Soulbound (90-100%): 1.5x earnings
+
+### P1: Quest Log UI
+**7 Quest Categories:**
+- Story, Faction, Daily, Exploration, Combat, Crafting, Social
+
+**6 Factions:**
+- Merchants Guild, Adventurers League, Arcane Council, Artisans Union, Nature Wardens, Shadow Network
+
+**Features:**
+- Accept quests for Gold + XP rewards
+- Track quest objectives and completion
+- Earn faction reputation
+- Quest templates with varying difficulty
+
+### P1: Onboarding/Introduction Flow
+**8 Player Paths:**
+| Path | Starting Gold | Key Bonuses |
+|------|--------------|-------------|
+| Merchant Prince | 500 | Market access |
+| Warrior Champion | 200 | Combat gear |
+| Arcane Scholar | 150 | 200 Compute |
+| Master Artisan | 300 | Crafting bonuses |
+| Nature Guardian | 200 | Exploration bonuses |
+| Shadow Operative | 400 | Stealth bonuses |
+| Tech Pioneer | 100 | 300 Compute |
+| Free Spirit | 250 | Balanced bonuses |
+
+**7-Step Introduction:**
+1. Welcome to Virtual Verse
+2. Choose Your Path (with bonuses)
+3. AI Partnership explanation
+4. Economy (Gold + VE$) overview
+5. Building System introduction
+6. World Scale & Purpose
+7. Begin the Journey
+
+### P2: Leaderboard UI
+**3 Leaderboard Categories:**
+1. Adventurer Rank - XP and rank progression
+2. Top Earners - VE$ earnings hourly
+3. Compute Power - Hardware + allocations
+
+**Features:**
+- Top 3 podium display
+- User rank highlighting
+- Real-time refresh
+
+### P2: Mode Selection Updates
+**New Quick Access Buttons:**
+- Marketplace (`/marketplace`)
+- AI Partners (`/ai-partners`)
+- Quest Log (`/quest-log`)
+- Leaderboard (`/leaderboard`)
+
+---
+
+## FRONTEND ROUTES
+```
+/auth - Authentication
+/create-character - Character creation
+/select-mode - Mode selection hub
+/village - Story Mode (2D chat adventure)
+/isometric-builder - 2D Building System
+/marketplace - Hybrid Task Marketplace
+/ai-partners - AI Partners (passive income)
+/quest-log - Quest Log
+/onboarding - New player introduction
+/leaderboard - Rankings
+/profile-settings - Profile customization
+/skill-trees - Skill management
+/earnings - Earnings hub
+/trading - Trading interface
+/jobs - Career hub
+```
+
+---
+
+## TESTED & VERIFIED (April 24, 2026)
+- All 25 backend API tests passed (100%)
+- All 5 new frontend pages loading correctly
+- Navigation buttons working on ModeSelection
+- Test credentials: sirix_1 / HCLynnTV04
+

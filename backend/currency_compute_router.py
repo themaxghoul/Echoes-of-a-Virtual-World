@@ -553,3 +553,76 @@ async def get_economy_overview():
         },
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
+
+
+@currency_compute_router.get("/leaderboard/compute")
+async def get_compute_leaderboard(limit: int = 50):
+    """Get leaderboard of top compute power users"""
+    db = get_db()
+    
+    # Aggregate compute from allocations and hardware
+    pipeline = [
+        {"$match": {"status": "active"}},
+        {"$group": {
+            "_id": "$user_id",
+            "allocated_compute": {"$sum": "$compute_units"},
+            "total_spend": {"$sum": "$total_cost"}
+        }},
+        {"$sort": {"allocated_compute": -1}},
+        {"$limit": limit}
+    ]
+    
+    allocations = await db.compute_allocations.aggregate(pipeline).to_list(limit)
+    
+    # Get hardware ownership
+    hw_pipeline = [
+        {"$match": {"status": {"$ne": "retired"}}},
+        {"$group": {
+            "_id": "$user_id",
+            "owned_hardware": {"$sum": "$compute_capacity"},
+            "total_yield": {"$sum": "$total_yield"}
+        }}
+    ]
+    hardware = await db.hardware_ownership.aggregate(hw_pipeline).to_list(100)
+    hw_by_user = {h["_id"]: h for h in hardware}
+    
+    # Merge and create leaderboard
+    leaderboard = []
+    seen_users = set()
+    
+    for alloc in allocations:
+        user_id = alloc["_id"]
+        if user_id and user_id not in seen_users:
+            hw = hw_by_user.get(user_id, {})
+            total_compute = (alloc.get("allocated_compute", 0) or 0) + (hw.get("owned_hardware", 0) or 0)
+            
+            leaderboard.append({
+                "user_id": user_id,
+                "total_compute": total_compute,
+                "allocated_compute": alloc.get("allocated_compute", 0),
+                "owned_hardware": hw.get("owned_hardware", 0),
+                "total_spend": alloc.get("total_spend", 0),
+                "hardware_yield": hw.get("total_yield", 0)
+            })
+            seen_users.add(user_id)
+    
+    # Add users who only have hardware
+    for user_id, hw in hw_by_user.items():
+        if user_id and user_id not in seen_users:
+            leaderboard.append({
+                "user_id": user_id,
+                "total_compute": hw.get("owned_hardware", 0),
+                "allocated_compute": 0,
+                "owned_hardware": hw.get("owned_hardware", 0),
+                "total_spend": 0,
+                "hardware_yield": hw.get("total_yield", 0)
+            })
+    
+    # Sort by total compute
+    leaderboard.sort(key=lambda x: x["total_compute"], reverse=True)
+    leaderboard = leaderboard[:limit]
+    
+    return {
+        "top_investors": leaderboard,
+        "total_entries": len(leaderboard)
+    }
