@@ -547,4 +547,87 @@ APPEN_API_KEY=your_appen_api_key
 - Task IDs prefixed with provider name (e.g., `toloka_xxx`, `mturk_xxx`)
 
 ---
-Last Updated: April 23, 2026
+
+## UPDATE: Coming Soon Modes & Version Fix (April 24, 2026)
+
+- **First Person 3D** and **Unity 3D** modes now show "Coming Soon" overlay
+- Version number standardized to **v0.1.0** across all UI elements
+- Story Mode remains active and accessible
+
+---
+
+## NEW: 2D Isometric Building System (April 24, 2026)
+
+### Plot Size Tiers:
+| Size | Dimensions | Cost | Max Buildings |
+|------|------------|------|---------------|
+| Small | 4x4 tiles | VE$500 | 1 |
+| Medium | 6x6 tiles | VE$1,500 | 3 |
+| Large | 8x8 tiles | VE$4,000 | 6 |
+
+### Building Categories (30 prefabs total, 4-6 per category):
+
+**Residential** (6 prefabs):
+- Cottage, Townhouse, Manor, Apartment Complex, Villa, Palace
+
+**Commercial** (6 prefabs):
+- Market Stall, General Store, Tavern, Bank, Grand Bazaar, Auction House
+
+**Industrial** (6 prefabs):
+- Smithy, Carpentry, Alchemy Lab, Foundry, Enchanting Tower, Manufacturing Plant
+
+**Agricultural** (6 prefabs):
+- Vegetable Garden, Orchard, Grain Farm, Livestock Pen, Vineyard, Mega Farm
+
+**Civic** (6 prefabs):
+- Well, Shrine, Guard Post, Town Hall, Temple, Colosseum
+
+### Features:
+- Isometric 2.5D view with pan/zoom controls
+- Prefab sprite variants (4-6 per building)
+- Plot upgrades (small → medium → large)
+- Daily income from buildings
+- Building removal with 50% refund
+
+### API Endpoints:
+- `GET /api/isometric-building/prefabs`: All building prefabs
+- `GET /api/isometric-building/plot-sizes`: Plot tier info
+- `POST /api/isometric-building/plot/purchase`: Buy a plot
+- `POST /api/isometric-building/building/place`: Place building
+- `DELETE /api/isometric-building/building/{plot}/{building}`: Remove building
+- `POST /api/isometric-building/plot/upgrade`: Upgrade plot size
+
+---
+
+## NEW: Adventurer Rank & AI Title System (April 24, 2026)
+
+### Rank Progression:
+F → E → D → C → B → A → S → SS → SSS → ★1 → ★2 → ★∞
+
+### Rebirth System:
+- Rebirth through **achievement**, not death
+- First rebirth requires SSS rank (1,000,000 exp)
+- Subsequent rebirths require accumulated achievements
+- Star ranks (★) can go infinitely: ★1, ★2, ★3, ...
+
+### Title System:
+- **AI-driven**: Titles earned based on actions, not named by players
+- **6 Categories**: Combat, Exploration, Wealth, Social, Crafting, Special
+- **Rarities**: Common → Rare → Epic → Legendary → Mythic → Transcendent → Unique
+- **Max buff**: 1000% (10x multiplier) per stat
+
+### Example Titles:
+- Monster Slayer: +10% Attack, +5% Crit (Common)
+- Dragon Hunter: +25% Attack, +20% Fire Resist (Rare)
+- Godslayer: +100% All Stats (Legendary)
+- War God: +500% Attack, +300% Crit Damage (Transcendent)
+- Extinction Class: +1000% All Stats (Unique - MAX)
+
+### API Endpoints:
+- `GET /api/ranks/player/{user_id}`: Player rank, titles, buffs
+- `POST /api/ranks/rebirth`: Perform achievement-based rebirth
+- `POST /api/ranks/title/claim`: Claim earned title
+- `GET /api/ranks/leaderboard`: Top ranked players
+
+---
+Last Updated: April 24, 2026

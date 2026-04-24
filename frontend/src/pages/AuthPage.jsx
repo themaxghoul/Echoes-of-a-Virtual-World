@@ -361,7 +361,7 @@ const AuthPage = () => {
 
         {/* Footer */}
         <p className="text-center mt-6 font-mono text-xs text-muted-foreground/50">
-          v0.3.0 // Pre-Release for itch.io
+          v0.1.0 // Early Access
         </p>
       </div>
     </div>

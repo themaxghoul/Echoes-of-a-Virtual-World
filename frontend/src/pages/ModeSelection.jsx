@@ -8,7 +8,7 @@ import {
   Gamepad2, MessageSquare, User, Sparkles, Crown,
   ArrowRight, Settings, LogOut, Hammer, ArrowLeftRight,
   Heart, Zap, Shield, Swords, DollarSign, TrendingUp, Briefcase,
-  Map, Globe, Award
+  Map, Globe, Award, Lock, Clock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -280,14 +280,19 @@ const ModeSelection = () => {
             </CardContent>
           </Card>
 
-          {/* 3D First Person Mode (Web) */}
+          {/* 3D First Person Mode (Web) - COMING SOON */}
           <Card 
-            className="bg-surface/80 border-border/50 rounded-sm hover:border-slate-blue/50 transition-all duration-300 cursor-pointer group"
-            onClick={() => selectMode('firstperson', '/play')}
+            className="bg-surface/80 border-border/50 rounded-sm transition-all duration-300 group relative opacity-70"
             data-testid="firstperson-mode-card"
           >
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-sm">
+              <div className="text-center">
+                <Clock className="w-10 h-10 text-slate-blue mx-auto mb-2" />
+                <Badge className="bg-slate-blue/20 text-slate-blue text-sm px-4 py-1">Coming Soon</Badge>
+              </div>
+            </div>
             <CardContent className="p-6 text-center">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-blue/20 border border-slate-blue/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-blue/20 border border-slate-blue/30 flex items-center justify-center">
                 <Gamepad2 className="w-8 h-8 text-slate-blue" />
               </div>
               <h3 className="font-cinzel text-lg text-foreground mb-2">First Person 3D</h3>
@@ -299,24 +304,29 @@ const ModeSelection = () => {
                 <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">D-Pad</Badge>
               </div>
               <Button 
+                disabled
                 data-testid="select-firstperson-btn"
-                className="w-full bg-slate-blue text-white hover:bg-slate-blue-light font-cinzel rounded-sm"
+                className="w-full bg-slate-blue/50 text-white font-cinzel rounded-sm cursor-not-allowed"
               >
-                <Gamepad2 className="w-5 h-5 mr-2" />
-                Enter 3D Web
-                <ArrowRight className="w-5 h-5 ml-2" />
+                <Lock className="w-5 h-5 mr-2" />
+                Coming Soon
               </Button>
             </CardContent>
           </Card>
 
-          {/* Unity First Person Mode */}
+          {/* Unity First Person Mode - COMING SOON */}
           <Card 
-            className="bg-surface/80 border-border/50 rounded-sm hover:border-purple-500/50 transition-all duration-300 cursor-pointer group"
-            onClick={() => selectMode('unity', '/unity')}
+            className="bg-surface/80 border-border/50 rounded-sm transition-all duration-300 group relative opacity-70"
             data-testid="unity-mode-card"
           >
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-sm">
+              <div className="text-center">
+                <Clock className="w-10 h-10 text-purple-400 mx-auto mb-2" />
+                <Badge className="bg-purple-500/20 text-purple-400 text-sm px-4 py-1">Coming Soon</Badge>
+              </div>
+            </div>
             <CardContent className="p-6 text-center">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center">
                 <Gamepad2 className="w-8 h-8 text-purple-400" />
               </div>
               <h3 className="font-cinzel text-lg text-foreground mb-2">Unity 3D</h3>
@@ -328,12 +338,12 @@ const ModeSelection = () => {
                 <Badge className="bg-purple-500/10 text-purple-400 text-xs rounded-sm">Sync</Badge>
               </div>
               <Button 
+                disabled
                 data-testid="select-unity-btn"
-                className="w-full bg-purple-600 text-white hover:bg-purple-500 font-cinzel rounded-sm"
+                className="w-full bg-purple-600/50 text-white font-cinzel rounded-sm cursor-not-allowed"
               >
-                <Gamepad2 className="w-5 h-5 mr-2" />
-                Unity Offload
-                <ArrowRight className="w-5 h-5 ml-2" />
+                <Lock className="w-5 h-5 mr-2" />
+                Coming Soon
               </Button>
             </CardContent>
           </Card>
@@ -356,8 +366,8 @@ const ModeSelection = () => {
           <Button
             variant="outline"
             onClick={() => {
-              pushNavHistory('/building');
-              navigate('/building');
+              pushNavHistory('/isometric-builder');
+              navigate('/isometric-builder');
             }}
             className="border-gold/30 text-gold hover:bg-gold/10 rounded-sm"
             data-testid="building-btn"
@@ -469,7 +479,7 @@ const ModeSelection = () => {
       {/* Footer */}
       <footer className="relative z-10 p-4 text-center border-t border-border/30">
         <p className="font-mono text-xs text-muted-foreground/50">
-          Story Mode = 2D Chat + Building | First Person = 3D Models
+          AI Village: The Echoes | v0.1.0
         </p>
       </footer>
     </div>

@@ -30,6 +30,7 @@ import WorldMapUI from "@/pages/WorldMapUI";
 import UnityWebGL from "@/pages/UnityWebGL";
 import ProfileSettings from "@/pages/ProfileSettings";
 import SkillTrees from "@/pages/SkillTrees";
+import IsometricBuilder from "@/pages/IsometricBuilder";
 
 function App() {
   return (
@@ -65,6 +66,7 @@ function App() {
           <Route path="/webgl" element={<UnityWebGL />} />
           <Route path="/settings" element={<ProfileSettings />} />
           <Route path="/skill-trees" element={<SkillTrees />} />
+          <Route path="/isometric-builder" element={<IsometricBuilder />} />
         </Routes>
       </BrowserRouter>
       <Toaster 

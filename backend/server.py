@@ -7024,6 +7024,20 @@ try:
 except ImportError as e:
     logging.warning(f"Could not load Skill Tree router: {e}")
 
+try:
+    from isometric_building_router import isometric_building_router
+    app.include_router(isometric_building_router, prefix="/api")
+    logging.info("Isometric Building router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Isometric Building router: {e}")
+
+try:
+    from rank_title_router import rank_title_router
+    app.include_router(rank_title_router, prefix="/api")
+    logging.info("Rank & Title router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Rank & Title router: {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
