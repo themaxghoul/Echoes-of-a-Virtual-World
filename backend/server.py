@@ -7038,6 +7038,27 @@ try:
 except ImportError as e:
     logging.warning(f"Could not load Rank & Title router: {e}")
 
+try:
+    from ai_partner_router import ai_partner_router
+    app.include_router(ai_partner_router, prefix="/api")
+    logging.info("AI Partner router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load AI Partner router: {e}")
+
+try:
+    from quest_router import quest_router
+    app.include_router(quest_router, prefix="/api")
+    logging.info("Quest router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Quest router: {e}")
+
+try:
+    from player_direction_router import player_direction_router
+    app.include_router(player_direction_router, prefix="/api")
+    logging.info("Player Direction router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Player Direction router: {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

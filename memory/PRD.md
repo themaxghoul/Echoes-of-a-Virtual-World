@@ -630,4 +630,96 @@ F → E → D → C → B → A → S → SS → SSS → ★1 → ★2 → ★�
 - `GET /api/ranks/leaderboard`: Top ranked players
 
 ---
+
+## NEW: AI Partner & Automated Income System (April 24, 2026)
+
+### Philosophy
+AI as partners that offload tasks and generate passive income. Players maintain relationships with AI companions who work for them while away.
+
+### AI Programs (10 Types):
+| Program | Compute | Base Gold/hr | Base VE$/hr | Max Multiplier |
+|---------|---------|--------------|-------------|----------------|
+| Market Analyst | 50 | 10 | 0.02 | 5x |
+| Resource Harvester | 30 | 15 | 0.01 | 4x |
+| Craft Optimizer | 40 | 12 | 0.015 | 4.5x |
+| Quest Runner | 60 | 20 | 0.025 | 6x |
+| NPC Merchant | 35 | 18 | 0.02 | 5x |
+| Farm Manager | 25 | 8 | 0.01 | 3.5x |
+| Dungeon Crawler | 80 | 35 | 0.04 | 8x |
+| Research Assistant | 70 | 5 | 0.03 | 5x |
+| Security Monitor | 45 | 0 | 0.005 | 4x |
+| Energy Converter | 200 | 0 | 0.10 | 10x |
+
+### Trust System:
+- **Stranger** (0-20): 0.6x earnings
+- **Acquaintance** (20-40): 0.8x earnings
+- **Associate** (40-60): 1.0x earnings
+- **Partner** (60-75): 1.2x earnings
+- **Trusted Ally** (75-90): 1.35x earnings
+- **Soulbound** (90-100): 1.5x earnings
+
+### Currencies:
+- **Gold**: In-game currency for purchases, quests, NPC trading
+- **VE$**: Real value currency, withdrawable
+
+---
+
+## NEW: Quest System (April 24, 2026)
+
+### Quest Categories:
+- Story, Faction, Daily, Exploration, Combat, Crafting, Social
+
+### Factions (6):
+- Merchants Guild, Adventurers League, Mages Circle
+- Craftsmen Union, Nature Wardens, Shadow Network
+
+### Reputation Tiers:
+Hostile → Unfriendly → Neutral → Friendly → Honored → Revered → Exalted
+
+### Sample Quests:
+- Daily Gathering: 50 Gold, 25 XP
+- Monster Hunt: 75 Gold, 40 XP, +15 Adventurers League rep
+- Bounty Hunt: 300 Gold, 100 XP, +75 rep
+
+---
+
+## NEW: Player Directions & Introduction (April 24, 2026)
+
+### 8 Player Paths:
+1. **Merchant Prince** - Trade and economics
+2. **Warrior Champion** - Combat and glory
+3. **Arcane Scholar** - Magic and research
+4. **Master Artisan** - Crafting and building
+5. **Nature Guardian** - Farming and wildlife
+6. **Shadow Operative** - Stealth and secrets
+7. **Tech Pioneer** - AI and automation
+8. **Free Spirit** - Complete freedom
+
+### Introduction System:
+- 7-step introduction explaining the Virtual Verse
+- Skippable after path selection
+- Covers: Welcome, Path Selection, AI Partner, Economy, Building, Purpose, Begin
+
+---
+
+## The Virtual Verse - Single Seed World (April 24, 2026)
+
+### Concept:
+A unified, persistent world shared by all players. Every action shapes reality.
+
+### Scale Progression:
+| Scale | Size | Compute Required |
+|-------|------|------------------|
+| Genesis | 0.1x | 0 |
+| Expansion | 0.5x | 10,000 |
+| Continents | 1x | 100,000 |
+| Megaverse | 2x | 1,000,000 |
+| Infinite Realm | 4x | 10,000,000 |
+
+### Energy Conversion (End-game):
+At 4x Earth scale (10M compute), computational power converts to real-world energy efficiency:
+- 1M compute = sustainable energy for 1000 households
+- Goal: Transform computational power into real-world positive impact
+
+---
 Last Updated: April 24, 2026
