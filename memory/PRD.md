@@ -911,6 +911,27 @@ These tasks require genuine player engagement and cannot be completed by AI part
 | Artifact Recovery | Retrieve rare items from dungeons | High |
 | Monster Bounties | Hunt specific creatures terrorizing regions | Variable |
 | Trade Route Establishment | Personally negotiate new commerce paths | Medium |
+| First Discovery Experiments | Test untested elements/materials/spells | Very High |
+
+**First Discovery System:**
+New spells, materials, or elemental combinations cannot be "slot-machined" into existence. Rules:
+- Any **untested** experiment requires an **animate entity present**
+- Valid participants: Experiment Manager, Assistant, or Machine Operator
+- Once discovered/tested once, the process MAY be automated for reproduction
+- First discoverer gets permanent credit + bonus VE$ + potential royalties
+
+**Participant Roles:**
+| Role | Responsibility | Automation After Discovery |
+|------|----------------|---------------------------|
+| Experiment Manager | Oversees the entire process, makes decisions | Cannot be automated |
+| Assistant | Supports manager, handles materials | Can be AI after first success |
+| Machine Operator | Controls equipment during experiment | Can be AI after first success |
+
+**Why This Matters:**
+- Prevents "AFK farming" of new discoveries
+- Rewards genuine exploration and risk-taking
+- Creates economic value for pioneers
+- Balances automation with meaningful gameplay
 
 **Purpose:**
 - Incentivize dedicated player engagement for VE$ earnings
