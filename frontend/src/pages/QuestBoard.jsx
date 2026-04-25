@@ -177,7 +177,7 @@ const BountyPaper = ({ bounty, onClick, rotation }) => {
               <h3 className="text-lg font-bold leading-tight mt-1" style={{ fontFamily: 'serif' }}>{bounty.title}</h3>
             </div>
             <p className="text-sm text-amber-900/80 mb-4 line-clamp-2" style={{ fontFamily: 'serif' }}>{bounty.description}</p>
-            <div className="space-y-1 text-xs text-amber-800"><div className="flex items-center gap-2"><MapPin className="w-3 h-3" />{bounty.location}</div><div className="flex items-center gap-2"><Clock className="w-3 h-3" />{bounty.time_limit_hours}h</div></div>
+            <div className="space-y-1 text-xs text-amber-800"><div className="flex items-center gap-2"><MapPin className="w-3 h-3" />{bounty.location}</div><div className="flex items-center gap-2"><Clock className="w-3 h-3" />Max {bounty.time_limit_hours}h to complete</div></div>
             <div className="mt-4 pt-3 border-t-2 border-amber-800/30 flex items-center justify-between">
               <div className="flex items-center gap-3"><span className="flex items-center gap-1 text-amber-700 font-bold"><Coins className="w-4 h-4" />{bounty.gold_reward}</span>{bounty.ve_reward > 0 && <span className="text-emerald-700 font-bold">+{bounty.ve_reward} VE$</span>}</div>
               <span className="text-xs font-bold uppercase px-2 py-1 rounded" style={{ backgroundColor: `${df.color}20`, color: df.color }}>{df.label}</span>
@@ -208,6 +208,7 @@ const QuestPaper = ({ quest, onClick, rotation, isActive }) => {
             </div>
             <p className="text-sm text-amber-900/80 mb-4 line-clamp-2" style={{ fontFamily: 'serif' }}>{quest.description}</p>
             {isActive && quest.objectives && <div className="space-y-1 mb-3">{quest.objectives.slice(0, 2).map((o, i) => <div key={i} className="flex items-center gap-2 text-xs"><div className={`w-3 h-3 rounded border ${o.completed ? 'bg-green-500 border-green-500' : 'border-amber-700'}`} /><span className={o.completed ? 'line-through text-amber-600' : ''}>{o.type}: {o.current || 0}/{o.count}</span></div>)}</div>}
+            {quest.time_limit_hours && <div className="flex items-center gap-1 text-xs text-amber-700 mb-2"><Clock className="w-3 h-3" />Max {quest.time_limit_hours}h</div>}
             <div className="mt-4 pt-3 border-t-2 border-amber-800/30 flex items-center gap-3 text-xs">
               {quest.rewards?.gold > 0 && <span className="flex items-center gap-1 text-amber-700 font-bold"><Coins className="w-3 h-3" />{quest.rewards.gold}</span>}
               {quest.rewards?.exp > 0 && <span className="flex items-center gap-1 text-blue-700 font-bold"><Star className="w-3 h-3" />{quest.rewards.exp} XP</span>}
@@ -241,7 +242,7 @@ const BountyModal = ({ bounty, onClose, onAccept }) => {
             <div className="mb-6"><h3 className="text-sm font-bold uppercase tracking-wider text-amber-800 mb-2">Mission Brief</h3><p className="text-lg leading-relaxed" style={{ fontFamily: 'serif' }}>{bounty.description}</p></div>
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="bg-amber-900/10 rounded-lg p-4"><div className="flex items-center gap-2 text-amber-700 mb-1"><MapPin className="w-4 h-4" /><span className="text-xs uppercase tracking-wider font-bold">Location</span></div><p className="font-semibold">{bounty.location}</p></div>
-              <div className="bg-amber-900/10 rounded-lg p-4"><div className="flex items-center gap-2 text-amber-700 mb-1"><Clock className="w-4 h-4" /><span className="text-xs uppercase tracking-wider font-bold">Time</span></div><p className="font-semibold">{bounty.time_limit_hours}h</p></div>
+              <div className="bg-amber-900/10 rounded-lg p-4"><div className="flex items-center gap-2 text-amber-700 mb-1"><Clock className="w-4 h-4" /><span className="text-xs uppercase tracking-wider font-bold">Time Limit</span></div><p className="font-semibold">Maximum {bounty.time_limit_hours} hours</p></div>
               <div className="bg-amber-900/10 rounded-lg p-4"><div className="flex items-center gap-2 text-amber-700 mb-1"><Skull className="w-4 h-4" /><span className="text-xs uppercase tracking-wider font-bold">Difficulty</span></div><p className="font-semibold" style={{ color: df.color }}>{df.label}</p></div>
               <div className="bg-amber-900/10 rounded-lg p-4"><div className="flex items-center gap-2 text-amber-700 mb-1"><Target className="w-4 h-4" /><span className="text-xs uppercase tracking-wider font-bold">Type</span></div><p className="font-semibold">{bt.description}</p></div>
             </div>

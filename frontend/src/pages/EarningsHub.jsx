@@ -161,11 +161,51 @@ const EarningsHub = () => {
       console.error('Failed to load ecosystem:', error);
     }
   }, [userId]);
+
+  // Load marketplace & AI partner data for sync
+  const loadExternalSources = useCallback(async () => {
+    try {
+      const [marketplaceRes, aiPartnersRes, bountyRes] = await Promise.all([
+        axios.get(`${API}/task-marketplace/hybrid/my-tasks/${userId}`).catch(() => ({ data: { completed: [] } })),
+        axios.get(`${API}/ai-partner/user/${userId}/status`).catch(() => ({ data: { pending_earnings: { gold: 0, ve: 0 } } })),
+        axios.get(`${API}/bounty-board/my-bounties/${userId}`).catch(() => ({ data: { stats: { total_ve_earned: 0 } } }))
+      ]);
+      
+      // Calculate additional earnings from external sources
+      const marketplaceEarnings = marketplaceRes.data.completed?.reduce((sum, c) => sum + (c.ve_paid || 0), 0) || 0;
+      const aiPartnerPending = aiPartnersRes.data.pending_earnings?.ve || 0;
+      const bountyEarnings = bountyRes.data.stats?.total_ve_earned || 0;
+      
+      // Update stats with external data
+      setTodayEarnings(prev => prev + marketplaceEarnings + bountyEarnings);
+      
+      return { marketplaceEarnings, aiPartnerPending, bountyEarnings };
+    } catch (error) {
+      console.error('Failed to load external sources:', error);
+      return null;
+    }
+  }, [userId]);
+  
+  // Refresh all data
+  const refreshAllData = useCallback(async () => {
+    setLoading(true);
+    await Promise.all([loadAccount(), loadEcosystem(), loadExternalSources()]);
+    setLoading(false);
+    toast.success('Earnings data refreshed');
+  }, [loadAccount, loadEcosystem, loadExternalSources]);
   
   useEffect(() => {
     loadAccount();
     loadEcosystem();
-  }, [loadAccount, loadEcosystem]);
+    loadExternalSources();
+    
+    // Auto-refresh every 30 seconds when on earnings tab
+    const interval = setInterval(() => {
+      loadExternalSources();
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, [loadAccount, loadEcosystem, loadExternalSources]);
   
   // Task timer
   useEffect(() => {
@@ -533,8 +573,8 @@ const EarningsHub = () => {
                   <Target className="w-5 h-5" />
                   Available Tasks
                 </h2>
-                <Button variant="ghost" size="sm" onClick={loadAccount}>
-                  <RefreshCw className="w-4 h-4" />
+                <Button variant="ghost" size="sm" onClick={refreshAllData} title="Refresh all earnings data">
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
               </div>
               
