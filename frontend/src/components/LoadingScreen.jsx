@@ -2,41 +2,48 @@ import React, { useState, useEffect } from 'react';
 
 const LoadingScreen = ({ 
   message = "Loading...", 
-  showProgress = false, 
-  progress = 0,
   onComplete = null,
   minDuration = 3500 
 }) => {
   const [visible, setVisible] = useState(true);
-  const [phase, setPhase] = useState('title'); // title, author, fadeout
+  const [phase, setPhase] = useState('title');
   const [titleScale, setTitleScale] = useState(0.5);
   const [titleOpacity, setTitleOpacity] = useState(0);
-  const [authorPhase, setAuthorPhase] = useState('hidden'); // hidden, zoomIn, pause, zoomOut
+  const [authorPhase, setAuthorPhase] = useState('hidden');
+  const [loadProgress, setLoadProgress] = useState(0);
 
   useEffect(() => {
-    // Phase 1: Title grand reveal (0-1.5s)
+    // Animate loading bar
+    const progressInterval = setInterval(() => {
+      setLoadProgress(prev => {
+        if (prev >= 100) return 100;
+        return prev + Math.random() * 15 + 5;
+      });
+    }, 200);
+
+    // Phase 1: Title grand reveal
     const titleReveal = setTimeout(() => {
       setTitleOpacity(1);
       setTitleScale(1);
     }, 100);
 
-    // Phase 2: Author fly-in from right (1.5s)
+    // Phase 2: Author fly-in from right
     const authorIn = setTimeout(() => {
       setPhase('author');
       setAuthorPhase('zoomIn');
     }, 1500);
 
-    // Phase 3: Author pause for reading (1.8s - 3.8s = 2 seconds)
+    // Phase 3: Author pause for reading
     const authorPause = setTimeout(() => {
       setAuthorPhase('pause');
     }, 1800);
 
-    // Phase 4: Author zoom out left (3.8s)
+    // Phase 4: Author zoom out left
     const authorOut = setTimeout(() => {
       setAuthorPhase('zoomOut');
     }, 3800);
 
-    // Phase 5: Complete (4.2s)
+    // Phase 5: Complete
     const complete = setTimeout(() => {
       if (onComplete) {
         setPhase('fadeout');
@@ -48,6 +55,7 @@ const LoadingScreen = ({
     }, minDuration);
 
     return () => {
+      clearInterval(progressInterval);
       clearTimeout(titleReveal);
       clearTimeout(authorIn);
       clearTimeout(authorPause);
@@ -64,20 +72,28 @@ const LoadingScreen = ({
         phase === 'fadeout' ? 'opacity-0' : 'opacity-100'
       }`}
     >
+      {/* Dark fantasy background texture */}
+      <div 
+        className="absolute inset-0 opacity-30"
+        style={{
+          backgroundImage: `
+            radial-gradient(ellipse at 50% 0%, rgba(139, 69, 19, 0.2) 0%, transparent 50%),
+            radial-gradient(ellipse at 80% 80%, rgba(75, 0, 130, 0.15) 0%, transparent 40%),
+            radial-gradient(ellipse at 20% 80%, rgba(139, 0, 0, 0.15) 0%, transparent 40%)
+          `
+        }}
+      />
+      
       {/* Animated background particles */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-amber-600/5 rounded-full blur-[100px] animate-pulse" />
-        <div className="absolute bottom-0 right-1/4 w-[500px] h-[500px] bg-purple-600/5 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '0.5s' }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-orange-500/3 rounded-full blur-[120px]" />
-        
-        {/* Floating particles */}
-        {[...Array(20)].map((_, i) => (
+        {[...Array(25)].map((_, i) => (
           <div
             key={i}
-            className="absolute w-1 h-1 bg-amber-400/30 rounded-full animate-float"
+            className="absolute w-1 h-1 rounded-full animate-float"
             style={{
               left: `${Math.random() * 100}%`,
               top: `${Math.random() * 100}%`,
+              backgroundColor: i % 3 === 0 ? 'rgba(255, 170, 0, 0.4)' : i % 3 === 1 ? 'rgba(200, 100, 50, 0.3)' : 'rgba(150, 100, 200, 0.3)',
               animationDelay: `${Math.random() * 3}s`,
               animationDuration: `${3 + Math.random() * 4}s`
             }}
@@ -85,8 +101,8 @@ const LoadingScreen = ({
         ))}
       </div>
 
-      {/* Main content */}
-      <div className="relative z-10 text-center">
+      {/* Main content - Upper section */}
+      <div className="relative z-10 text-center flex-1 flex flex-col justify-center">
         {/* Grand Title */}
         <div 
           className="transition-all duration-1000 ease-out"
@@ -95,79 +111,190 @@ const LoadingScreen = ({
             opacity: titleOpacity
           }}
         >
-          {/* Decorative top element */}
-          <div className="flex justify-center mb-4">
-            <div className="w-32 h-0.5 bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
+          {/* Decorative top flourish */}
+          <div className="flex justify-center mb-6">
+            <svg width="200" height="20" viewBox="0 0 200 20" className="text-amber-500/50">
+              <path d="M0 10 Q50 0 100 10 Q150 20 200 10" stroke="currentColor" strokeWidth="1" fill="none"/>
+              <circle cx="100" cy="10" r="3" fill="currentColor"/>
+              <circle cx="70" cy="8" r="2" fill="currentColor"/>
+              <circle cx="130" cy="8" r="2" fill="currentColor"/>
+            </svg>
           </div>
           
           {/* Main Logo */}
           <div className="mb-6">
-            <div className="w-24 h-24 mx-auto bg-gradient-to-br from-amber-500 via-orange-500 to-red-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-amber-500/30 border border-amber-400/20">
-              <svg viewBox="0 0 24 24" className="w-14 h-14 text-white drop-shadow-lg" fill="currentColor">
+            <div className="w-28 h-28 mx-auto bg-gradient-to-br from-amber-500 via-orange-600 to-red-700 rounded-2xl flex items-center justify-center shadow-2xl shadow-amber-500/40 border-2 border-amber-400/30 relative">
+              <div className="absolute inset-1 rounded-xl bg-gradient-to-br from-amber-400/20 to-transparent" />
+              <svg viewBox="0 0 24 24" className="w-16 h-16 text-white drop-shadow-lg relative z-10" fill="currentColor">
                 <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
               </svg>
             </div>
           </div>
 
           {/* Title Text - Wide and Proud */}
-          <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-wider mb-2">
-            <span className="bg-gradient-to-r from-amber-300 via-orange-400 to-amber-300 bg-clip-text text-transparent drop-shadow-2xl">
+          <h1 className="text-5xl md:text-7xl lg:text-8xl font-bold tracking-[0.15em] mb-3">
+            <span 
+              className="bg-gradient-to-b from-amber-200 via-amber-400 to-amber-600 bg-clip-text text-transparent drop-shadow-2xl"
+              style={{ 
+                textShadow: '0 0 40px rgba(255, 170, 0, 0.3)',
+                fontFamily: 'Cinzel, serif'
+              }}
+            >
               AI VILLAGE
             </span>
           </h1>
-          <h2 className="text-2xl md:text-3xl lg:text-4xl font-light tracking-[0.3em] text-amber-200/80 mb-8">
+          <h2 
+            className="text-2xl md:text-3xl lg:text-4xl font-light tracking-[0.4em] text-amber-300/70 mb-6"
+            style={{ fontFamily: 'Cinzel, serif' }}
+          >
             THE ECHOES
           </h2>
 
-          {/* Decorative bottom element */}
+          {/* Decorative bottom flourish */}
           <div className="flex justify-center">
-            <div className="w-48 h-0.5 bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
+            <svg width="250" height="20" viewBox="0 0 250 20" className="text-amber-500/40">
+              <path d="M0 10 L80 10 M170 10 L250 10" stroke="currentColor" strokeWidth="1"/>
+              <path d="M90 5 L125 15 L160 5" stroke="currentColor" strokeWidth="1" fill="none"/>
+              <circle cx="125" cy="10" r="2" fill="currentColor"/>
+            </svg>
           </div>
         </div>
+      </div>
 
-        {/* Author credit - Cinematic fly-in */}
-        <div 
-          className={`absolute left-1/2 -translate-x-1/2 transition-all ${
-            authorPhase === 'hidden' ? 'opacity-0 translate-x-[200vw] scale-0' :
-            authorPhase === 'zoomIn' ? 'opacity-100 translate-x-0 scale-100' :
-            authorPhase === 'pause' ? 'opacity-100 translate-x-0 scale-100' :
-            authorPhase === 'zoomOut' ? 'opacity-0 -translate-x-[200vw] scale-0' : ''
-          }`}
-          style={{
-            bottom: '25%',
-            transitionDuration: authorPhase === 'zoomIn' || authorPhase === 'zoomOut' ? '400ms' : '0ms',
-            transitionTimingFunction: authorPhase === 'zoomIn' ? 'cubic-bezier(0.16, 1, 0.3, 1)' : 'cubic-bezier(0.7, 0, 0.84, 0)'
-          }}
-        >
-          <div className="px-8 py-4 bg-black/40 backdrop-blur-sm rounded-lg border border-amber-500/20">
-            <p className="text-lg md:text-xl text-zinc-400 font-medium tracking-wide">
+      {/* Author credit - Lower middle section with action font */}
+      <div 
+        className={`absolute transition-all ${
+          authorPhase === 'hidden' ? 'opacity-0 translate-x-[150vw] scale-75' :
+          authorPhase === 'zoomIn' ? 'opacity-100 translate-x-0 scale-100' :
+          authorPhase === 'pause' ? 'opacity-100 translate-x-0 scale-100' :
+          authorPhase === 'zoomOut' ? 'opacity-0 -translate-x-[150vw] scale-75' : ''
+        }`}
+        style={{
+          top: '58%',
+          left: '50%',
+          transform: `translateX(-50%) ${
+            authorPhase === 'hidden' ? 'translateX(150vw) scale(0.75)' :
+            authorPhase === 'zoomOut' ? 'translateX(-150vw) scale(0.75)' : ''
+          }`,
+          transitionDuration: authorPhase === 'zoomIn' || authorPhase === 'zoomOut' ? '400ms' : '0ms',
+          transitionTimingFunction: authorPhase === 'zoomIn' ? 'cubic-bezier(0.16, 1, 0.3, 1)' : 'cubic-bezier(0.7, 0, 0.84, 0)'
+        }}
+      >
+        <div className="relative">
+          {/* Slashed background effect */}
+          <div 
+            className="absolute inset-0 -skew-x-6 bg-gradient-to-r from-transparent via-red-900/40 to-transparent"
+            style={{ transform: 'skewX(-6deg) scaleX(1.3)' }}
+          />
+          <div className="relative px-10 py-4">
+            <p 
+              className="text-lg text-zinc-400 tracking-widest uppercase mb-1"
+              style={{ fontFamily: 'Cinzel, serif' }}
+            >
               Created by
             </p>
-            <p className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-amber-400 to-orange-400 bg-clip-text text-transparent">
-              ApexForge Collective
+            <p 
+              className="text-3xl md:text-4xl font-black tracking-wider uppercase"
+              style={{ 
+                fontFamily: 'Impact, Haettenschweiler, Arial Narrow Bold, sans-serif',
+                background: 'linear-gradient(180deg, #ffd700 0%, #ff8c00 50%, #ff4500 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                textShadow: '2px 2px 4px rgba(0,0,0,0.5)',
+                letterSpacing: '0.1em'
+              }}
+            >
+              APEXFORGE COLLECTIVE
             </p>
           </div>
         </div>
+      </div>
 
-        {/* Loading indicator at bottom */}
-        <div className="absolute bottom-12 left-1/2 -translate-x-1/2">
-          <div className="flex items-center gap-3">
-            <div className="flex gap-1">
-              {[0, 1, 2].map(i => (
+      {/* RPG Loading Bar - Bottom section */}
+      <div className="absolute bottom-0 left-0 right-0 pb-8 px-8">
+        {/* Loading bar container with RPG frame */}
+        <div className="max-w-xl mx-auto">
+          {/* Ornate frame */}
+          <div className="relative">
+            {/* Corner decorations */}
+            <div className="absolute -top-2 -left-2 w-4 h-4 border-l-2 border-t-2 border-amber-600/60" />
+            <div className="absolute -top-2 -right-2 w-4 h-4 border-r-2 border-t-2 border-amber-600/60" />
+            <div className="absolute -bottom-2 -left-2 w-4 h-4 border-l-2 border-b-2 border-amber-600/60" />
+            <div className="absolute -bottom-2 -right-2 w-4 h-4 border-r-2 border-b-2 border-amber-600/60" />
+            
+            {/* Main bar background with texture */}
+            <div 
+              className="h-6 rounded-sm border-2 border-amber-800/60 relative overflow-hidden"
+              style={{
+                background: 'linear-gradient(180deg, #1a0f0a 0%, #2d1f15 50%, #1a0f0a 100%)',
+                boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5), inset 0 -1px 2px rgba(255,200,100,0.1)'
+              }}
+            >
+              {/* Inner texture pattern */}
+              <div 
+                className="absolute inset-0 opacity-20"
+                style={{
+                  backgroundImage: `repeating-linear-gradient(
+                    90deg,
+                    transparent 0px,
+                    transparent 4px,
+                    rgba(139, 90, 43, 0.3) 4px,
+                    rgba(139, 90, 43, 0.3) 5px
+                  )`
+                }}
+              />
+              
+              {/* Progress fill with glowing effect */}
+              <div 
+                className="h-full relative transition-all duration-200 ease-out"
+                style={{ 
+                  width: `${Math.min(loadProgress, 100)}%`,
+                  background: 'linear-gradient(180deg, #ffd700 0%, #ff8c00 30%, #ff6600 60%, #cc4400 100%)',
+                  boxShadow: '0 0 10px rgba(255, 140, 0, 0.5), inset 0 1px 2px rgba(255, 255, 200, 0.4)'
+                }}
+              >
+                {/* Animated shine effect */}
                 <div 
-                  key={i}
-                  className="w-2 h-2 bg-amber-400 rounded-full animate-bounce"
-                  style={{ animationDelay: `${i * 0.15}s` }}
+                  className="absolute inset-0 animate-shimmer"
+                  style={{
+                    background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%)',
+                    backgroundSize: '200% 100%'
+                  }}
+                />
+                {/* Top highlight */}
+                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-b from-white/30 to-transparent" />
+              </div>
+              
+              {/* Notch marks */}
+              {[25, 50, 75].map(pos => (
+                <div 
+                  key={pos}
+                  className="absolute top-0 bottom-0 w-px bg-amber-900/50"
+                  style={{ left: `${pos}%` }}
                 />
               ))}
             </div>
-            <p className="text-sm text-zinc-500">{message}</p>
+          </div>
+          
+          {/* Status text */}
+          <div className="flex justify-between items-center mt-3">
+            <p 
+              className="text-sm text-amber-600/80 tracking-wider"
+              style={{ fontFamily: 'Cinzel, serif' }}
+            >
+              {message}
+            </p>
+            <p 
+              className="text-sm text-amber-500/60 font-mono"
+            >
+              {Math.min(Math.round(loadProgress), 100)}%
+            </p>
           </div>
         </div>
-
-        {/* Version */}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
-          <p className="text-xs text-zinc-700">v0.1.0</p>
+        
+        {/* Version at very bottom */}
+        <div className="text-center mt-4">
+          <p className="text-xs text-zinc-700 tracking-widest">v0.1.0</p>
         </div>
       </div>
 
@@ -178,6 +305,13 @@ const LoadingScreen = ({
         }
         .animate-float {
           animation: float 4s ease-in-out infinite;
+        }
+        @keyframes shimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
+        }
+        .animate-shimmer {
+          animation: shimmer 2s linear infinite;
         }
       `}</style>
     </div>
