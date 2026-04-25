@@ -888,3 +888,40 @@ Last Updated: April 24, 2026
 - `/app/frontend/src/context/PurchaseContext.jsx` - Purchase blocking
 - `/app/frontend/src/App.js` - Loading screen + PurchaseProvider
 
+---
+
+## QUEUED UPDATES (Future Implementation)
+
+### Bounty Board UI Redesign (P1)
+**Visual Theme:**
+- Emerald oak wall background texture
+- Ragged/worn paper aesthetic for task postings
+- Click-to-expand detailed view matching game's fantasy theme
+- Wax seals, torn edges, handwritten-style fonts
+
+**Exclusive In-Game Tasks (Non-Automatable):**
+These tasks require genuine player engagement and cannot be completed by AI partners:
+
+| Task Type | Description | VE$ Potential |
+|-----------|-------------|---------------|
+| Rescue Missions | Save NPCs from dangerous situations, escort to safety | High |
+| Scouting Uncharted Territory | Explore unmapped regions, report findings | Medium-High |
+| Dangerous Territory Recon | Investigate hostile areas, gather intel | High |
+| Hosting Diversified Meetings | Organize multi-faction diplomatic events | Medium |
+| Artifact Recovery | Retrieve rare items from dungeons | High |
+| Monster Bounties | Hunt specific creatures terrorizing regions | Variable |
+| Trade Route Establishment | Personally negotiate new commerce paths | Medium |
+
+**Purpose:**
+- Incentivize dedicated player engagement for VE$ earnings
+- Create meaningful gameplay that AI cannot replicate
+- Balance passive income (AI Partners) with active earning opportunities
+- Build player investment in the world through exclusive experiences
+
+**Implementation Notes:**
+- Task board component: `/app/frontend/src/pages/TaskMarketplace.jsx` (refactor)
+- Add `exclusive: true` flag to task schema
+- Create `BountyBoard.jsx` component with wood/paper theme
+- Add ambient sounds (paper rustling, creaking wood)
+- Implement task detail expansion animation
+
