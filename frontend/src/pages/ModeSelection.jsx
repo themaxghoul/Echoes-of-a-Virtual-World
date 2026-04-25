@@ -8,7 +8,7 @@ import {
   Gamepad2, MessageSquare, User, Sparkles, Crown,
   ArrowRight, Settings, LogOut, Hammer, ArrowLeftRight,
   Heart, Zap, Shield, Swords, DollarSign, TrendingUp, Briefcase,
-  Map, Globe, Award, Lock, Clock, Cpu, Scroll, ShoppingBag, Trophy
+  Map, Globe, Award, Lock, Clock, Cpu, Scroll, ShoppingBag, Trophy, Target
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -492,6 +492,18 @@ const ModeSelection = () => {
           >
             <Trophy className="w-4 h-4 mr-2" />
             Leaderboard
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/bounty-board');
+              navigate('/bounty-board');
+            }}
+            className="border-orange-500/30 text-orange-400 hover:bg-orange-500/10 rounded-sm"
+            data-testid="bounty-board-btn"
+          >
+            <Target className="w-4 h-4 mr-2" />
+            Bounty Board
           </Button>
         </div>
 

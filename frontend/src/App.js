@@ -39,6 +39,7 @@ import AIPartners from "@/pages/AIPartners";
 import QuestLog from "@/pages/QuestLog";
 import Onboarding from "@/pages/Onboarding";
 import Leaderboard from "@/pages/Leaderboard";
+import BountyBoard from "@/pages/BountyBoard";
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -111,6 +112,7 @@ function App() {
           <Route path="/quest-log" element={<QuestLog />} />
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
+          <Route path="/bounty-board" element={<BountyBoard />} />
         </Routes>
         </BrowserRouter>
       </PurchaseProvider>

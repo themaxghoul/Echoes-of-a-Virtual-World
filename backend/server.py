@@ -7095,6 +7095,13 @@ try:
 except ImportError as e:
     logging.warning(f"Could not load Possession Ledger router: {e}")
 
+try:
+    from bounty_board_router import bounty_board_router
+    app.include_router(bounty_board_router, prefix="/api")
+    logging.info("Bounty Board router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Bounty Board router: {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

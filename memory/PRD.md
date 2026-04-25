@@ -988,3 +988,43 @@ New spells, materials, or elemental combinations cannot be "slot-machined" into 
 - Gradient glows and decorative lines
 - Bouncing loading dots
 
+### Bounty Board UI (Implemented)
+**Files:**
+- `/app/frontend/src/pages/BountyBoard.jsx`
+- `/app/backend/bounty_board_router.py`
+
+**Visual Theme:**
+- Emerald oak wall background with wood grain texture
+- Ragged parchment paper postings with torn edges
+- Wax seals for bounty type icons
+- Pin/nail effects holding papers to wall
+- Click-to-expand detailed scroll view
+
+**7 Exclusive Bounty Types (Non-Automatable):**
+| Type | VE Multiplier | Description |
+|------|---------------|-------------|
+| Rescue Mission | 1.5x | Save NPCs from danger |
+| Scout Uncharted | 1.3x | Explore unmapped regions |
+| Dangerous Recon | 1.8x | Infiltrate hostile areas |
+| Diplomatic Meeting | 1.2x | Host multi-faction events |
+| Artifact Recovery | 1.6x | Retrieve dungeon items |
+| Monster Bounty | 1.4x | Hunt specific creatures |
+| First Discovery | 2.0x | Test untested elements/spells + Pioneer bonus + Royalties |
+
+**Key Features:**
+- Presence verification required (cannot be automated)
+- Time limits with deadlines
+- Difficulty-based rewards (trivial → legendary)
+- First Discovery system with royalty tracking
+- Skills requirements per bounty type
+
+**Endpoints:**
+- `GET /api/bounty-board/types` - All bounty types
+- `GET /api/bounty-board/available` - Open bounties
+- `POST /api/bounty-board/create` - Create bounty
+- `POST /api/bounty-board/accept` - Accept bounty
+- `POST /api/bounty-board/verify-presence` - Anti-automation check
+- `POST /api/bounty-board/complete` - Submit completion
+- `GET /api/bounty-board/my-bounties/{user_id}` - User's bounties
+- `POST /api/bounty-board/seed-bounties` - Seed test data
+
