@@ -170,7 +170,7 @@ const LoadingScreen = ({
           authorPhase === 'zoomOut' ? 'opacity-0 -translate-x-[150vw] scale-75' : ''
         }`}
         style={{
-          top: 'calc(58% + 70px)',
+          top: 'calc(58% + 120px)',
           left: '50%',
           transform: `translateX(-50%) ${
             authorPhase === 'hidden' ? 'translateX(150vw) scale(0.75)' :
