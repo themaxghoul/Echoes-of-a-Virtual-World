@@ -6588,6 +6588,35 @@ async def delete_notification(notification_id: str):
     await db.notifications.delete_one({"id": notification_id})
     return {"notification_id": notification_id, "deleted": True}
 
+# ============ Purchase System Status ============
+# Purchases are DISABLED until Stripe integration is complete
+
+STRIPE_INTEGRATION_COMPLETE = False  # Set to True after Stripe Connect is fully configured
+
+@api_router.get("/purchase/stripe-status")
+async def get_stripe_status():
+    """Check if Stripe/purchases are enabled"""
+    stripe_key = os.environ.get('STRIPE_API_KEY', '')
+    
+    return {
+        "configured": bool(stripe_key and stripe_key.startswith('sk_')),
+        "integration_complete": STRIPE_INTEGRATION_COMPLETE,
+        "purchases_enabled": STRIPE_INTEGRATION_COMPLETE and bool(stripe_key),
+        "message": "Purchases coming soon! Stripe integration is being finalized." if not STRIPE_INTEGRATION_COMPLETE else None
+    }
+
+@api_router.post("/purchase/attempt")
+async def attempt_purchase(user_id: str, item_type: str, item_id: str, amount: float):
+    """Attempt to make a purchase - blocked until Stripe is ready"""
+    if not STRIPE_INTEGRATION_COMPLETE:
+        raise HTTPException(
+            status_code=503, 
+            detail="Purchases are temporarily disabled. Stripe integration is being finalized."
+        )
+    
+    # Normal purchase logic would go here once enabled
+    return {"status": "pending", "message": "Purchase system not yet enabled"}
+
 # ============ Location-Based Discovery System ============
 class LocationDiscoveryRequest(BaseModel):
     user_id: str

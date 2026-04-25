@@ -1,6 +1,9 @@
 import "@/App.css";
+import { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
+import LoadingScreen from "@/components/LoadingScreen";
+import { PurchaseProvider } from "@/context/PurchaseContext";
 import LandingPage from "@/pages/LandingPage";
 import AuthPage from "@/pages/AuthPage";
 import CharacterCreation from "@/pages/CharacterCreation";
@@ -38,9 +41,40 @@ import Onboarding from "@/pages/Onboarding";
 import Leaderboard from "@/pages/Leaderboard";
 
 function App() {
+  const [loading, setLoading] = useState(true);
+  const [loadingMessage, setLoadingMessage] = useState("Initializing...");
+
+  useEffect(() => {
+    // Simulate loading sequence
+    const messages = [
+      "Initializing...",
+      "Loading world data...",
+      "Connecting to Virtual Verse...",
+      "Ready!"
+    ];
+    
+    let i = 0;
+    const interval = setInterval(() => {
+      i++;
+      if (i < messages.length) {
+        setLoadingMessage(messages[i]);
+      }
+    }, 600);
+
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="App min-h-screen bg-obsidian text-foreground">
-      <BrowserRouter>
+      {loading && (
+        <LoadingScreen 
+          message={loadingMessage}
+          minDuration={2500}
+          onComplete={() => setLoading(false)}
+        />
+      )}
+      <PurchaseProvider>
+        <BrowserRouter>
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/terms" element={<TermsOfService />} />
@@ -78,7 +112,8 @@ function App() {
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
         </Routes>
-      </BrowserRouter>
+        </BrowserRouter>
+      </PurchaseProvider>
       <Toaster 
         position="bottom-right"
         toastOptions={{

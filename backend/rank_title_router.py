@@ -738,3 +738,230 @@ async def get_player_achievements(user_id: str):
         "user_id": user_id,
         "achievements": achievements or {}
     }
+
+
+# ============ AUTO-AWARD TITLE SYSTEM ============
+# Automatically check and award titles based on player achievements
+
+ACHIEVEMENT_TRIGGERS = {
+    # Combat achievements
+    "monsters_killed": {"category": "combat", "titles": ["monster_slayer"]},
+    "dragons_killed": {"category": "combat", "titles": ["dragon_hunter"]},
+    "low_hp_victories": {"category": "combat", "titles": ["berserker"]},
+    "gods_defeated": {"category": "combat", "titles": ["godslayer"]},
+    "solo_kill_streak": {"category": "combat", "titles": ["one_man_army"]},
+    "wars_ended_solo": {"category": "combat", "titles": ["extinction_class"]},
+    
+    # Exploration achievements
+    "regions_visited": {"category": "exploration", "titles": ["wanderer", "cartographer"]},
+    "dungeons_cleared": {"category": "exploration", "titles": ["dungeon_delver"]},
+    "continents_discovered": {"category": "exploration", "titles": ["world_walker"]},
+    "secret_areas_found": {"category": "exploration", "titles": ["seeker_of_secrets"]},
+    
+    # Economy achievements
+    "gold_earned": {"category": "economy", "titles": ["gold_digger", "millionaire", "economic_titan"]},
+    "trades_completed": {"category": "economy", "titles": ["trader", "merchant_king"]},
+    "ve_earned": {"category": "economy", "titles": ["crypto_pioneer"]},
+    
+    # Social achievements
+    "npcs_befriended": {"category": "social", "titles": ["friendly_face", "beloved"]},
+    "quests_completed": {"category": "social", "titles": ["quest_master"]},
+    "factions_maxed": {"category": "social", "titles": ["diplomat"]},
+    "ai_trust_maxed": {"category": "social", "titles": ["soulbound_partner"]},
+    
+    # Crafting achievements
+    "items_crafted": {"category": "crafting", "titles": ["artisan", "master_craftsman"]},
+    "legendary_items_crafted": {"category": "crafting", "titles": ["legendary_smith"]},
+    "buildings_constructed": {"category": "crafting", "titles": ["architect"]},
+    
+    # Task achievements
+    "tasks_completed": {"category": "economy", "titles": ["task_master"]},
+    "perfect_ratings": {"category": "economy", "titles": ["perfectionist"]}
+}
+
+@rank_title_router.post("/achievement/trigger")
+async def trigger_achievement_check(user_id: str, achievement_type: str, new_value: int):
+    """
+    Triggered when a player performs an action. Checks if any titles should be awarded.
+    This endpoint should be called by other systems when achievements occur.
+    """
+    db = get_db()
+    
+    # Record the achievement
+    await db.player_achievement_stats.update_one(
+        {"user_id": user_id},
+        {
+            "$set": {achievement_type: new_value, "updated_at": datetime.now(timezone.utc).isoformat()},
+        },
+        upsert=True
+    )
+    
+    # Check if this achievement type triggers any titles
+    if achievement_type not in ACHIEVEMENT_TRIGGERS:
+        return {"checked": True, "new_titles": []}
+    
+    trigger_info = ACHIEVEMENT_TRIGGERS[achievement_type]
+    category = trigger_info["category"]
+    potential_titles = trigger_info["titles"]
+    
+    # Get player's current achievements and titles
+    achievements = await db.player_achievement_stats.find_one({"user_id": user_id}) or {}
+    rank_data = await db.player_ranks.find_one({"user_id": user_id})
+    
+    if not rank_data:
+        # Initialize player rank data
+        rank_data = {
+            "user_id": user_id,
+            "experience": 0,
+            "rebirths": 0,
+            "titles_earned": [],
+            "active_title": None,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.player_ranks.insert_one(rank_data)
+        rank_data = await db.player_ranks.find_one({"user_id": user_id})
+    
+    earned_title_ids = {t.get("title_id") for t in rank_data.get("titles_earned", [])}
+    new_titles = []
+    
+    # Check each potential title
+    for title_id in potential_titles:
+        if title_id in earned_title_ids:
+            continue  # Already has this title
+        
+        if category not in TITLE_CATEGORIES:
+            continue
+            
+        if title_id not in TITLE_CATEGORIES[category]["titles"]:
+            continue
+        
+        title_data = TITLE_CATEGORIES[category]["titles"][title_id]
+        requirements = title_data.get("requirement", {})
+        
+        # Check if all requirements are met
+        requirements_met = True
+        for req_key, req_value in requirements.items():
+            player_value = achievements.get(req_key, 0)
+            if isinstance(req_value, (int, float)):
+                if player_value < req_value:
+                    requirements_met = False
+                    break
+            elif player_value != req_value:
+                requirements_met = False
+                break
+        
+        if requirements_met:
+            # Award the title!
+            new_title_entry = {
+                "category": category,
+                "title_id": title_id,
+                "earned_at": datetime.now(timezone.utc).isoformat(),
+                "name": title_data["name"],
+                "rarity": title_data.get("rarity", "common")
+            }
+            
+            await db.player_ranks.update_one(
+                {"user_id": user_id},
+                {"$push": {"titles_earned": new_title_entry}}
+            )
+            
+            # Calculate total buff after earning title (capped at 1000%)
+            new_titles.append({
+                **new_title_entry,
+                "buffs": title_data.get("buffs", {}),
+                "description": title_data.get("description")
+            })
+            
+            logger.info(f"Player {user_id} earned title: {title_data['name']}")
+    
+    return {
+        "checked": True,
+        "achievement_type": achievement_type,
+        "new_value": new_value,
+        "new_titles": new_titles,
+        "total_new_titles": len(new_titles)
+    }
+
+@rank_title_router.get("/buffs/{user_id}")
+async def get_player_total_buffs(user_id: str):
+    """
+    Calculate total buffs from all earned titles.
+    Buffs are capped at 1000% (10x) per stat.
+    """
+    db = get_db()
+    
+    rank_data = await db.player_ranks.find_one({"user_id": user_id})
+    if not rank_data:
+        return {"user_id": user_id, "buffs": {}, "capped_buffs": {}}
+    
+    # Aggregate all buffs
+    total_buffs = {}
+    
+    for title_entry in rank_data.get("titles_earned", []):
+        category = title_entry.get("category")
+        title_id = title_entry.get("title_id")
+        
+        if category in TITLE_CATEGORIES and title_id in TITLE_CATEGORIES[category]["titles"]:
+            title_data = TITLE_CATEGORIES[category]["titles"][title_id]
+            for buff_type, buff_value in title_data.get("buffs", {}).items():
+                total_buffs[buff_type] = total_buffs.get(buff_type, 0) + buff_value
+    
+    # Cap buffs at 1000% (10.0)
+    MAX_BUFF = 10.0  # 1000%
+    capped_buffs = {k: min(v, MAX_BUFF) for k, v in total_buffs.items()}
+    
+    # Check for any capped values
+    capped_stats = [k for k, v in total_buffs.items() if v > MAX_BUFF]
+    
+    return {
+        "user_id": user_id,
+        "raw_buffs": total_buffs,
+        "capped_buffs": capped_buffs,
+        "max_buff_cap": "1000%",
+        "stats_at_cap": capped_stats,
+        "title_count": len(rank_data.get("titles_earned", []))
+    }
+
+@rank_title_router.post("/xp/award")
+async def award_experience(user_id: str, xp_amount: int, source: str = "gameplay"):
+    """
+    Award XP to a player and check for rank-up.
+    Called by various game systems when XP should be awarded.
+    """
+    db = get_db()
+    
+    rank_data = await db.player_ranks.find_one({"user_id": user_id})
+    if not rank_data:
+        rank_data = {
+            "user_id": user_id,
+            "experience": 0,
+            "rebirths": 0,
+            "titles_earned": [],
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.player_ranks.insert_one(rank_data)
+    
+    old_exp = rank_data.get("experience", 0)
+    new_exp = old_exp + xp_amount
+    rebirths = rank_data.get("rebirths", 0)
+    
+    old_rank = calculate_rank(old_exp, rebirths)
+    new_rank = calculate_rank(new_exp, rebirths)
+    
+    await db.player_ranks.update_one(
+        {"user_id": user_id},
+        {"$set": {"experience": new_exp, "last_xp_source": source, "last_xp_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    ranked_up = old_rank != new_rank
+    
+    return {
+        "user_id": user_id,
+        "xp_awarded": xp_amount,
+        "source": source,
+        "old_experience": old_exp,
+        "new_experience": new_exp,
+        "old_rank": old_rank,
+        "new_rank": new_rank,
+        "ranked_up": ranked_up
+    }

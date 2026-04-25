@@ -853,3 +853,38 @@ Last Updated: April 24, 2026
 - Navigation buttons working on ModeSelection
 - Test credentials: sirix_1 / HCLynnTV04
 
+---
+
+## Pre-Deployment Updates (April 25, 2026)
+
+### Title Achievement Auto-Award System
+**Trigger-based title awards:**
+- Combat: monster_slayer, dragon_hunter, berserker, godslayer, one_man_army, extinction_class
+- Exploration: wanderer, cartographer, dungeon_delver, world_walker, seeker_of_secrets
+- Economy: gold_digger, millionaire, economic_titan, trader, merchant_king, crypto_pioneer
+- Social: friendly_face, beloved, quest_master, diplomat, soulbound_partner
+- Crafting: artisan, master_craftsman, legendary_smith, architect
+
+**New Endpoints:**
+- `POST /api/ranks/achievement/trigger` - Auto-check and award titles
+- `GET /api/ranks/buffs/{user_id}` - Calculate total buffs (capped at 1000%)
+- `POST /api/ranks/xp/award` - Award XP with rank-up check
+
+### Loading Screen
+- "Created by ApexForge Collective" branding
+- Animated loading sequence
+- Progress indicators
+
+### Purchase System (BLOCKED)
+- All purchases disabled until Stripe integration complete
+- `GET /api/purchase/stripe-status` - Check if purchases enabled
+- PurchaseContext provides `attemptPurchase()` that shows "Coming Soon" toast
+- `STRIPE_INTEGRATION_COMPLETE = False` flag in both frontend and backend
+
+### Files Changed
+- `/app/backend/rank_title_router.py` - Auto-award title system
+- `/app/backend/server.py` - Purchase status endpoints
+- `/app/frontend/src/components/LoadingScreen.jsx` - ApexForge branding
+- `/app/frontend/src/context/PurchaseContext.jsx` - Purchase blocking
+- `/app/frontend/src/App.js` - Loading screen + PurchaseProvider
+
