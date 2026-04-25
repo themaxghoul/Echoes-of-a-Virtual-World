@@ -8,7 +8,7 @@ import {
   Gamepad2, MessageSquare, User, Sparkles, Crown,
   ArrowRight, Settings, LogOut, Hammer, ArrowLeftRight,
   Heart, Zap, Shield, Swords, DollarSign, TrendingUp, Briefcase,
-  Map, Globe, Award, Lock, Clock, Cpu, Scroll, ShoppingBag, Trophy, Target
+  Map, Globe, Award, Lock, Clock, Cpu, Scroll, ShoppingBag, Trophy
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -401,8 +401,8 @@ const ModeSelection = () => {
           <Button
             variant="outline"
             onClick={() => {
-              pushNavHistory('/quest-log');
-              navigate('/quest-log');
+              pushNavHistory('/quest-board');
+              navigate('/quest-board');
             }}
             className="border-purple-400/30 text-purple-400 hover:bg-purple-400/10 rounded-sm"
           >
@@ -472,14 +472,14 @@ const ModeSelection = () => {
           <Button
             variant="outline"
             onClick={() => {
-              pushNavHistory('/quest-log');
-              navigate('/quest-log');
+              pushNavHistory('/quest-board');
+              navigate('/quest-board');
             }}
             className="border-amber-500/30 text-amber-500 hover:bg-amber-500/10 rounded-sm"
-            data-testid="quest-log-btn"
+            data-testid="quest-board-btn"
           >
             <Scroll className="w-4 h-4 mr-2" />
-            Quest Log
+            Quest Board
           </Button>
           <Button
             variant="outline"
@@ -492,18 +492,6 @@ const ModeSelection = () => {
           >
             <Trophy className="w-4 h-4 mr-2" />
             Leaderboard
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              pushNavHistory('/bounty-board');
-              navigate('/bounty-board');
-            }}
-            className="border-orange-500/30 text-orange-400 hover:bg-orange-500/10 rounded-sm"
-            data-testid="bounty-board-btn"
-          >
-            <Target className="w-4 h-4 mr-2" />
-            Bounty Board
           </Button>
         </div>
 

@@ -36,10 +36,8 @@ import SkillTrees from "@/pages/SkillTrees";
 import IsometricBuilder from "@/pages/IsometricBuilder";
 import TaskMarketplace from "@/pages/TaskMarketplace";
 import AIPartners from "@/pages/AIPartners";
-import QuestLog from "@/pages/QuestLog";
 import Onboarding from "@/pages/Onboarding";
 import Leaderboard from "@/pages/Leaderboard";
-import BountyBoard from "@/pages/BountyBoard";
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -109,10 +107,9 @@ function App() {
           <Route path="/isometric-builder" element={<IsometricBuilder />} />
           <Route path="/marketplace" element={<TaskMarketplace />} />
           <Route path="/ai-partners" element={<AIPartners />} />
-          <Route path="/quest-log" element={<QuestLog />} />
+          <Route path="/quest-board" element={<QuestBoard />} />
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
-          <Route path="/bounty-board" element={<BountyBoard />} />
         </Routes>
         </BrowserRouter>
       </PurchaseProvider>
