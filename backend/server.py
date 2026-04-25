@@ -7088,6 +7088,13 @@ try:
 except ImportError as e:
     logging.warning(f"Could not load Player Direction router: {e}")
 
+try:
+    from possession_ledger_router import possession_ledger_router
+    app.include_router(possession_ledger_router, prefix="/api")
+    logging.info("Universal Possession Ledger router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Possession Ledger router: {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

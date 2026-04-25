@@ -946,3 +946,45 @@ New spells, materials, or elemental combinations cannot be "slot-machined" into 
 - Add ambient sounds (paper rustling, creaking wood)
 - Implement task detail expansion animation
 
+---
+
+## IMPLEMENTED (April 25, 2026 - Session 2 Continued)
+
+### Universal Possession Ledger
+**File:** `/app/backend/possession_ledger_router.py`
+
+**Purpose:** Authoritative record of ALL possessions - bypasses ALL concealment methods.
+
+**Endpoints:**
+- `POST /api/ledger/record` - Record a possession
+- `POST /api/ledger/transfer` - Record item transfer between entities
+- `GET /api/ledger/entity/{entity_id}` - Get all possessions for an entity
+- `GET /api/ledger/item/{item_id}/history` - Complete ownership history
+- `GET /api/ledger/search` - Search possessions by criteria
+- `GET /api/ledger/concealed` - View ALL concealed items (bypasses hiding)
+- `GET /api/ledger/audit-trail` - Full audit log
+- `GET /api/ledger/stats` - Ledger statistics
+- `DELETE /api/ledger/remove/{ledger_id}` - Remove/destroy possession
+
+**Bypassed Concealment Methods:**
+- invisibility, pocket_dimension, shadow_storage, soul_binding
+- dimensional_pocket, thieves_cant_hiding, assassin_stash
+- magical_concealment, illusion_cover, void_storage
+- time_locked, parallel_dimension, dream_realm_storage, spirit_realm_cache
+
+### Grand Loading Screen
+**File:** `/app/frontend/src/components/LoadingScreen.jsx`
+
+**Cinematic Sequence (~3.5s):**
+1. **0-1.5s:** Title scales up grandly "AI VILLAGE" + "THE ECHOES"
+2. **1.5s:** "Created by" flies in fast from right
+3. **1.8-3.8s:** Pauses for 2 seconds (readable)
+4. **3.8s:** Fast zoom out to left
+5. **4.2s:** Fade out complete
+
+**Visual Features:**
+- Wide proud title with letter-spacing
+- Floating ambient particles
+- Gradient glows and decorative lines
+- Bouncing loading dots
+
