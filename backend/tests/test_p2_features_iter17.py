@@ -14,7 +14,7 @@ BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
 # Test credentials
 TEST_USERNAME = "sirix_1"
-TEST_PASSWORD = "HCLynnTV04"
+TEST_PASSWORD = os.environ.get("SIRIX_ADMIN_PASSWORD", "test_password")
 WORLD_ID = "main-story-realm"
 
 

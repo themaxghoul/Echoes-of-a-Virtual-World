@@ -246,7 +246,7 @@ const QuestLog = () => {
                   {isActive && quest.objectives && (
                     <div className="space-y-1 mb-4">
                       {quest.objectives.map((obj, i) => (
-                        <div key={i} className="flex items-center gap-2 text-xs">
+                        <div key={obj.id || `obj-${obj.description?.slice(0,20) || i}`} className="flex items-center gap-2 text-xs">
                           <div className={`w-4 h-4 rounded border flex items-center justify-center ${
                             obj.completed ? 'bg-green-500 border-green-500' : 'border-zinc-600'
                           }`}>
@@ -365,7 +365,7 @@ const QuestDetailModal = ({ quest, categories, factions, isActive, onClose, onAc
               <div className="space-y-2">
                 {quest.objectives.map((obj, i) => (
                   <div 
-                    key={i}
+                    key={obj.id || `detail-obj-${obj.description?.slice(0,20) || i}`}
                     className={`flex items-center gap-3 p-3 rounded-lg ${
                       obj.completed ? 'bg-green-500/10 border border-green-500/30' : 'bg-zinc-800/50'
                     }`}

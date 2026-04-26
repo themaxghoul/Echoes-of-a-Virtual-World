@@ -140,7 +140,7 @@ class TestGoogleAuthEndpoints:
         # First get a valid user ID by logging in
         login_response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "username": "sirix_1",
-            "password": "HCLynnTV04"
+            "password": os.environ.get("SIRIX_ADMIN_PASSWORD", "test_password")
         })
         
         if login_response.status_code == 200:
@@ -207,7 +207,7 @@ class TestGoogleAuthEndpoints:
         # First login to get valid user ID
         login_response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "username": "sirix_1",
-            "password": "HCLynnTV04"
+            "password": os.environ.get("SIRIX_ADMIN_PASSWORD", "test_password")
         })
         
         if login_response.status_code == 200:
@@ -246,7 +246,7 @@ class TestProfileCustomizationEndpoints:
         # Login first
         login_response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "username": "sirix_1",
-            "password": "HCLynnTV04"
+            "password": os.environ.get("SIRIX_ADMIN_PASSWORD", "test_password")
         })
         
         if login_response.status_code == 200:
@@ -287,7 +287,7 @@ class TestAuthLogin:
         """POST /api/auth/login - Login with valid credentials"""
         response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "username": "sirix_1",
-            "password": "HCLynnTV04"
+            "password": os.environ.get("SIRIX_ADMIN_PASSWORD", "test_password")
         })
         assert response.status_code == 200, f"Expected 200, got {response.status_code}"
         

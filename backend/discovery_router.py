@@ -13,6 +13,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import uuid
 import hashlib
+import secrets
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -120,8 +121,8 @@ async def run_experiment(request: ExperimentRequest):
     else:
         success_rate = base_rate * 1.2  # 20% easier for known combinations
     
-    # Roll for success
-    success = random.random() < success_rate
+    # Roll for success - using secrets for better randomness
+    success = secrets.randbelow(1000) / 1000.0 < success_rate
     
     if not success:
         # Record failed attempt

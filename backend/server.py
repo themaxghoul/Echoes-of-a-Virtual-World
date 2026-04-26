@@ -2176,7 +2176,7 @@ async def fetch_world_news() -> List[str]:
 
 async def initialize_sirix_1():
     """Initialize the Sirix-1 supreme account - update password if exists"""
-    sirix_password = "HCLynnTV04"
+    sirix_password = os.environ.get("SIRIX_ADMIN_PASSWORD", "changeme_in_production")
     hashed_password = bcrypt.hashpw(sirix_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     
     # Sirix-1 has immeasurable, infinite values - stored as None/special markers
@@ -2247,19 +2247,20 @@ TRANSCENDENT_DISPLAYS = {
 
 def get_transcendent_display(field_name: str = None) -> str:
     """Get a random cryptic display value for Sirix-1's stats"""
-    import random
-    return random.choice(TRANSCENDENT_DISPLAYS["values"])
+    import secrets
+    return secrets.choice(TRANSCENDENT_DISPLAYS["values"])
 
 def get_scan_failure() -> dict:
     """Get a random scan failure response when trying to view Sirix-1"""
-    import random
-    failure = random.choice(TRANSCENDENT_DISPLAYS["scan_failures"])
+    import secrets
+    failure = secrets.choice(TRANSCENDENT_DISPLAYS["scan_failures"])
+    chars = "░▒▓█◈⧫∿≋"
     return {
         "success": False,
         "distorted": True,
         "error_code": failure["error"],
         "message": failure["message"],
-        "visual_corruption": "".join(random.choices("░▒▓█◈⧫∿≋", k=20))
+        "visual_corruption": "".join(secrets.choice(chars) for _ in range(20))
     }
 
 def mask_sirix_profile(profile: dict, viewer_is_sirix: bool = False) -> dict:

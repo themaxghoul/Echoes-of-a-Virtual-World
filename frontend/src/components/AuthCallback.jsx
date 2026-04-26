@@ -44,7 +44,9 @@ const AuthCallback = () => {
         if (response.data && response.data.user) {
           const user = response.data.user;
           
-          // Store user data in localStorage
+          // Store non-sensitive user data in localStorage
+          // NOTE: Actual auth tokens are handled via httpOnly cookies by the backend
+          // localStorage only stores display/UI data, not auth credentials
           localStorage.setItem('userId', user.user_id || user.id);
           localStorage.setItem('username', user.username);
           localStorage.setItem('displayName', user.display_name || user.name);
@@ -56,7 +58,7 @@ const AuthCallback = () => {
             localStorage.setItem('profilePicture', user.picture);
           }
 
-          // Clear the hash from URL
+          // Clear the hash from URL (removes session_id for security)
           window.history.replaceState(null, '', window.location.pathname);
 
           // Check if user has characters

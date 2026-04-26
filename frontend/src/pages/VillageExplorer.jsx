@@ -456,7 +456,7 @@ const VillageExplorer = () => {
                                 const Icon = avatar?.icon || User;
                                 return (
                                   <div 
-                                    key={i}
+                                    key={`npc-avatar-${npc}-${i}`}
                                     className={`w-6 h-6 rounded-full ${avatar?.bg || 'bg-surface'} flex items-center justify-center overflow-hidden border border-border/30`}
                                     title={npc}
                                   >
@@ -640,7 +640,7 @@ const VillageExplorer = () => {
                 const Icon = avatar?.icon || User;
                 return (
                   <div 
-                    key={i}
+                    key={`location-npc-${npc}-${i}`}
                     className="flex items-center gap-2 bg-black/60 backdrop-blur-sm rounded-sm px-3 py-2"
                   >
                     <div className={`w-8 h-8 rounded-full ${avatar?.bg || 'bg-surface'} flex items-center justify-center overflow-hidden border border-white/20`}>
@@ -669,7 +669,7 @@ const VillageExplorer = () => {
           <div className="max-w-3xl mx-auto space-y-6">
             {messages.map((msg, i) => (
               <div 
-                key={i} 
+                key={msg.id || `msg-${msg.timestamp || i}-${i}`} 
                 className={`chat-message ${
                   msg.role === 'user' ? 'flex justify-end' : ''
                 }`}
@@ -755,7 +755,7 @@ const VillageExplorer = () => {
                 <span className="font-mono text-xs text-muted-foreground/40 mr-2">Quick:</span>
                 {currentLocation.available_actions.slice(0, 4).map((action, i) => (
                   <button
-                    key={i}
+                    key={`quick-action-${action}`}
                     data-testid={`quick-action-${action}-btn`}
                     onClick={() => setInputMessage(action)}
                     className="text-xs text-muted-foreground hover:text-gold px-3 py-1.5 bg-obsidian/80 border border-border/30 hover:border-gold/50 rounded-sm transition-all duration-200"

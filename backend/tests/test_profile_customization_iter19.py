@@ -375,7 +375,7 @@ class TestProfileCustomizationIntegration:
         # Login
         login_response = requests.post(f"{BASE_URL}/api/auth/login", json={
             "username": "sirix_1",
-            "password": "HCLynnTV04"
+            "password": os.environ.get("SIRIX_ADMIN_PASSWORD", "test_password")
         })
         
         if login_response.status_code != 200:

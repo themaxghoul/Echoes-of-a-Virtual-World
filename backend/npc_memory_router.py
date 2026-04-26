@@ -591,7 +591,7 @@ async def simulate_gossip_round(location_id: str):
     Simulate a round of gossip at a location.
     NPCs present may share memories with each other based on propagation rules.
     """
-    import random
+    import secrets
     
     # Get NPCs at this location (simplified - would need actual NPC tracking)
     # For now, query NPCs who have memories about this location
@@ -610,7 +610,7 @@ async def simulate_gossip_round(location_id: str):
     
     for npc_id in npcs_at_location:
         # Check gossip chance
-        if random.random() > PROPAGATION_RULES["gossip_chance"]:
+        if secrets.randbelow(100) / 100.0 > PROPAGATION_RULES["gossip_chance"]:
             continue
         
         # Get a random memory to share
@@ -621,14 +621,14 @@ async def simulate_gossip_round(location_id: str):
         if not memories:
             continue
         
-        memory_to_share = random.choice(memories)
+        memory_to_share = secrets.choice(memories)
         
         # Pick random recipient
         other_npcs = [n for n in npcs_at_location if n != npc_id]
         if not other_npcs:
             continue
         
-        target_npc = random.choice(other_npcs)
+        target_npc = secrets.choice(other_npcs)
         
         # Attempt transfer
         transfer_result = await transfer_memory(MemoryTransfer(
