@@ -1028,3 +1028,173 @@ New spells, materials, or elemental combinations cannot be "slot-machined" into 
 - `GET /api/bounty-board/my-bounties/{user_id}` - User's bounties
 - `POST /api/bounty-board/seed-bounties` - Seed test data
 
+---
+
+## IMPLEMENTED (April 26, 2026)
+
+### NPC Memory Delocalization System
+**File:** `/app/backend/npc_memory_router.py`
+
+**Concept:** Memory states are NOT centralized. Each NPC maintains individual memory that only updates when they personally encounter information through witnessing events or receiving evidence.
+
+**6 Memory Event Types:**
+| Type | Reliability | Decay Rate | Description |
+|------|-------------|------------|-------------|
+| witnessed_action | 100% | 0.001 | NPC was physically present |
+| heard_rumor | 70% | 0.01 | Heard from another NPC |
+| received_evidence | 90% | 0.002 | Received physical evidence |
+| fabricated_info | 0% | 0.005 | Planted/false information |
+| confession | 95% | 0.003 | Direct confession received |
+| deduced | 60% | 0.008 | Logically inferred |
+
+**5 Evidence Types:**
+| Type | Transfer Reliability Loss | Can Destroy |
+|------|--------------------------|-------------|
+| physical_item | 5% | Yes |
+| written_document | 2% | Yes (copyable) |
+| magical_imprint | 10% | No (fades naturally) |
+| witness_testimony | 15% | No |
+| divine_revelation | 0% | No (requires oracle) |
+
+**Propagation Rules:**
+- 30% chance NPC shares memory in conversation
+- 10% reliability loss per gossip transfer
+- Max 5 propagation hops before memory degrades
+- Merchants 20% more likely to gossip
+- Innkeepers 40% more likely to gossip
+
+**Implications:**
+- Secrets remain hidden unless witnesses talk
+- Players can manipulate information flow
+- False information can spread organically
+- NPC knowledge is verifiable and traceable
+
+**Endpoints:**
+- `GET /api/npc-memory/event-types` - All event/evidence types
+- `POST /api/npc-memory/event/record` - Record world event, create witness memories
+- `POST /api/npc-memory/transfer` - Transfer memory between NPCs
+- `GET /api/npc-memory/npc/{npc_id}/memories` - Get NPC's memories
+- `GET /api/npc-memory/npc/{npc_id}/knows-about/{entity_id}` - What NPC knows about entity
+- `POST /api/npc-memory/evidence/create` - Create evidence item
+- `POST /api/npc-memory/evidence/{evidence_id}/transfer` - Transfer evidence
+- `DELETE /api/npc-memory/evidence/{evidence_id}/destroy` - Destroy evidence
+- `POST /api/npc-memory/gossip/simulate` - Simulate gossip round at location
+- `GET /api/npc-memory/stats` - Memory system statistics
+
+---
+
+### Extended Materials & Components System
+**File:** `/app/backend/materials_router.py`
+
+**27 Materials in 6 Categories:**
+
+| Category | Count | Examples |
+|----------|-------|----------|
+| Basic | 4 | Timber, Cobblestone, Clay, Sand |
+| Metal | 5 | Iron Ore, Forged Iron, Steel, Mithril, Adamantine |
+| Crystal | 5 | Echo Crystal, Void Obsidian, Sunstone, Moonpearl, Bloodstone |
+| Organic | 4 | Ancient Bark, Ether Silk, Dragon Scale, Phoenix Feather |
+| Essence | 4 | Mana Essence, Shadow Essence, Holy Essence, Chaos Essence |
+| Alchemical | 5 | Charcoal, Carbon Dust, Philosopher's Salt, Quicksilver, Demon Ichor |
+
+**6 Rarity Tiers:**
+Common → Uncommon → Rare → Epic → Legendary → Mythic
+
+**16 Craftable Components in 4 Categories:**
+
+| Category | Count | Examples |
+|----------|-------|----------|
+| Structural | 6 | Wooden Beam, Stone Block, Brick, Glass Pane, Iron Nail, Steel Beam |
+| Magical | 4 | Rune Stone, Ward Crystal, Mana Conduit, Shadow Anchor |
+| Decorative | 3 | Ornate Tile, Stained Glass, Gold Trim |
+| Mechanical | 3 | Gear, Spring, Clockwork Core |
+
+**Features:**
+- Crafting trees with material dependencies
+- Gathering by location
+- Processing chains (ore → refined metal)
+- Magical properties for special materials
+- Skill requirements for crafting
+
+**Endpoints:**
+- `GET /api/materials/list` - All 27 materials
+- `GET /api/materials/components` - All 16 components
+- `GET /api/materials/{material_id}` - Specific material details
+- `GET /api/materials/component/{component_id}` - Specific component details
+- `GET /api/materials/by-location/{location_id}` - Gatherable materials
+- `GET /api/materials/by-rarity/{rarity}` - Materials by rarity tier
+- `GET /api/materials/crafting-tree/{material_id}` - Full crafting tree
+- `POST /api/materials/gather` - Gather material at location
+- `POST /api/materials/craft` - Craft component from materials
+- `GET /api/materials/inventory/{user_id}` - User's inventory
+
+---
+
+### AI Digest Summary System
+**File:** `/app/backend/ai_digest_router.py`
+
+**Purpose:** Machine-readable digest of game state for LLM context injection, NPC behavior modeling, and cross-system synchronization.
+
+**Endpoints:**
+- `GET /api/digest/compact` - Minimal digest for limited token budgets
+- `GET /api/digest/full` - Comprehensive game state (20+ sections)
+- `GET /api/digest/world-state` - Current world state for AI simulation
+- `GET /api/digest/for-npc/{npc_id}` - NPC-specific context digest
+
+**Compact Digest Contents:**
+```json
+{
+  "game": "AI Village: The Echoes v0.1.0",
+  "core": "Virtual world with autonomous AI NPCs, real-value economy (VE$), building, quests",
+  "memory": "DELOCALIZED - NPCs only know witnessed/evidence-received events",
+  "first_discovery": "New experiments require human present; automation allowed after first success",
+  "modes": ["Story Mode (active)", "2D Building (active)", "3D (coming soon)"],
+  "regions": 8,
+  "currencies": {"gold": "in-game", "VE$": "real-withdrawable"},
+  "admin": "sirix_1 (level 999, supreme)"
+}
+```
+
+**Full Digest Sections:**
+- Game Identity & Version
+- Core Loop & Activities
+- Game Modes (active vs coming soon)
+- World Structure (8 regions)
+- NPC System Architecture
+- Memory Delocalization Rules
+- First Discovery System
+- Economic Systems (Task Marketplace, AI Partners, Bounties, Compute)
+- Materials & Crafting
+- Progression Systems (Skills, Titles, Ranks)
+- Admin System
+- Multiplayer Features
+- Technical Stack
+- Current Statistics
+- API Summary
+- AI Context Notes
+
+---
+
+### UI Updates
+**Players Button Relocated:**
+- **Before:** Fixed position at bottom-right of screen (line 761-769)
+- **After:** Integrated into header navigation (line 609-619)
+- **Appearance:** Gold button with Users icon, "Players" text on desktop
+- **Location:** Next to XP counter and News indicator in top header bar
+
+---
+
+## Backend Routers (24 Total)
+| Router | Prefix | Description |
+|--------|--------|-------------|
+| npc_memory_router.py | /api/npc-memory | **NEW** Memory Delocalization |
+| materials_router.py | /api/materials | **NEW** Extended Materials & Components |
+| ai_digest_router.py | /api/digest | **NEW** AI Digest Summary |
+| bounty_board_router.py | /api/bounty-board | Exclusive bounties |
+| possession_ledger_router.py | /api/ledger | Universal possession tracking |
+| ...previous 19 routers... | | |
+
+---
+
+Last Updated: April 26, 2026
+
