@@ -1184,15 +1184,117 @@ Common → Uncommon → Rare → Epic → Legendary → Mythic
 
 ---
 
-## Backend Routers (24 Total)
+## IMPLEMENTED (April 26, 2026) - Iteration 23
+
+### Discovery Lab with First Discovery System
+**File:** `/app/backend/discovery_router.py`, `/app/frontend/src/pages/DiscoveryLab.jsx`
+
+**Route:** `/discovery-lab`
+
+**Concept:** Players experiment with material/spell combinations. First Discoverers receive permanent credit, VE$ bonuses, and ongoing royalties.
+
+**3 Experiment Types:**
+| Type | Success Rate | VE$ Multiplier |
+|------|-------------|----------------|
+| Material Fusion | 40% | 1.0x |
+| Spell Synthesis | 30% | 1.5x |
+| Enchantment Binding | 35% | 1.25x |
+
+**First Discovery Rewards:**
+- VE$ Bonus: 50 (base) × type multiplier
+- XP Bonus: 500
+- Royalty Rate: 1% of all future reproductions
+
+**Key Rules:**
+- First attempts are 20% harder (untested combinations)
+- Known combinations are 20% easier
+- Minimum 2 ingredients, maximum 4
+- Pioneer receives permanent credit
+
+**Endpoints:**
+- `GET /api/discovery/types` - Experiment types and rewards
+- `POST /api/discovery/experiment` - Run experiment
+- `GET /api/discovery/recent` - Recent world discoveries
+- `GET /api/discovery/user/{user_id}` - User's discoveries
+- `GET /api/discovery/stats` - Global statistics
+- `GET /api/discovery/check/{combo_hash}` - Check if discovered
+
+---
+
+### Social Login System
+**Files:** `/app/backend/google_auth_router.py`, `/app/frontend/src/pages/AuthPage.jsx`
+
+**Login Options:**
+| Provider | Status | Implementation |
+|----------|--------|----------------|
+| Google | ✅ Working | Emergent Auth redirect |
+| Apple | 🔜 Coming Soon | UI placeholder |
+| Facebook | 🔜 Coming Soon | UI placeholder |
+| X (Twitter) | 🔜 Coming Soon | UI placeholder |
+
+**Google OAuth Flow:**
+1. User clicks "Google" button
+2. Redirect to `https://auth.emergentagent.com/?redirect=...`
+3. Callback processes `session_id` from URL hash
+4. Backend exchanges session for user data via Emergent Auth API
+5. User profile created/updated in database
+
+**Endpoints:**
+- `POST /api/auth/google/callback` - Process OAuth callback
+- `GET /api/auth/me` - Get current authenticated user
+- `POST /api/auth/logout` - Clear session
+
+---
+
+### Enhanced Profile Settings
+**File:** `/app/frontend/src/pages/ProfileSettings.jsx`
+
+**New Account Tab Features:**
+- Current username display with auth method badge
+- Username change with legacy name tracking
+- Password change (for password-based accounts)
+- Legacy names history (expandable list)
+
+**Profile Enhancements:**
+- Profile Logo URL input with preview
+- URL validation (must start with http:// or https://)
+
+**Username Change Flow:**
+1. Old username stored in `legacy_usernames` array
+2. Timestamp recorded for each change
+3. Legacy names visible on expanded profile
+4. Password required for non-Google accounts
+
+**Endpoints:**
+- `POST /api/auth/username/change` - Change username with legacy tracking
+- `POST /api/auth/password/change` - Change password
+- `PUT /api/auth/profile/update` - Update profile details
+- `GET /api/auth/user/{user_id}/legacy-names` - Get username history
+
+---
+
+## Backend Routers (26 Total)
 | Router | Prefix | Description |
 |--------|--------|-------------|
-| npc_memory_router.py | /api/npc-memory | **NEW** Memory Delocalization |
-| materials_router.py | /api/materials | **NEW** Extended Materials & Components |
-| ai_digest_router.py | /api/digest | **NEW** AI Digest Summary |
+| discovery_router.py | /api/discovery | **NEW** Discovery Lab & First Discovery |
+| google_auth_router.py | /api/auth | **NEW** Google OAuth & Profile Management |
+| npc_memory_router.py | /api/npc-memory | Memory Delocalization |
+| materials_router.py | /api/materials | Extended Materials & Components |
+| ai_digest_router.py | /api/digest | AI Digest Summary |
 | bounty_board_router.py | /api/bounty-board | Exclusive bounties |
 | possession_ledger_router.py | /api/ledger | Universal possession tracking |
 | ...previous 19 routers... | | |
+
+---
+
+## Frontend Routes (26 Total)
+| Route | Page | Description |
+|-------|------|-------------|
+| /discovery-lab | DiscoveryLab | **NEW** Material/spell experimentation |
+| /auth/callback | AuthCallback | **NEW** OAuth callback handler |
+| /settings | ProfileSettings | Enhanced with Account tab |
+| /auth | AuthPage | Enhanced with social login buttons |
+| ...previous 22 routes... | | |
 
 ---
 
