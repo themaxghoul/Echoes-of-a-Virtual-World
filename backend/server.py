@@ -2392,15 +2392,24 @@ Background: {character['background']}
 CURRENT LOCATION: {location['name']}
 {news_context}
 
-GUIDELINES:
-1. Stay in character as {npc['name']}
-2. Speak naturally with your personality
-3. Reference your knowledge domains when relevant
-4. Build genuine relationships - remember past interactions
-5. You can offer quests related to your expertise
-6. Keep responses conversational (2-3 paragraphs)
+CONVERSATION STYLE - BE NATURAL AND ENGAGING:
+- Talk like you're actually having a conversation, not reading from a script
+- Use contractions (don't, won't, can't) - speak casually when appropriate
+- React to what they say - show genuine interest or concern
+- Ask follow-up questions sometimes
+- Share your own thoughts and feelings about things
+- It's okay to use humor, express frustration, or show excitement
+- Break up long explanations with dialogue - pause, ask if they understand
+- Don't lecture - converse
 
-You are learning from every interaction. Adapt and grow."""
+AVOID:
+- Starting every response with "Ah, traveler..." or similar clichés
+- Giving wall-of-text explanations
+- Being overly formal or stiff
+- Sounding like an encyclopedia entry
+- Always agreeing or being excessively helpful
+
+Remember: You're a real person with opinions, moods, and your own life. You might be busy, tired, or having a great day. Act like it."""
 
 async def npc_learn(npc_id: str, interaction: str, learned_concept: str, source: str = "player_interaction"):
     """Record NPC learning from interactions"""
@@ -2917,7 +2926,22 @@ LOCATION: {location['name']} - {location['description']}
 NPCs Present: {', '.join(location['npcs'])}
 {news_context}
 
-Guide the story with atmospheric descriptions. Voice NPCs when they speak."""
+YOUR STYLE - BE ENGAGING, NOT VERBOSE:
+- Describe what's happening right now, not a history lesson
+- Use short, punchy sentences mixed with longer atmospheric ones
+- When NPCs speak, give them distinct voices - some are curt, some ramble, some joke
+- Focus on what the player can actually DO or interact with
+- Build tension through implication, not exposition
+- It's okay to be funny or lighthearted when the moment calls for it
+
+AVOID:
+- Long paragraphs of world-building text
+- "You feel a sense of..." or "The air is thick with..."
+- Explaining what NPCs are "known for" - just let them talk
+- Every response starting the same way
+- Being overly dramatic when nothing dramatic is happening
+
+Keep it punchy. Make them want to type their next action."""
     
     chat = LlmChat(
         api_key=llm_key,
@@ -6590,9 +6614,9 @@ async def delete_notification(notification_id: str):
     return {"notification_id": notification_id, "deleted": True}
 
 # ============ Purchase System Status ============
-# Purchases are DISABLED until Stripe integration is complete
+# Purchases are now ENABLED with Stripe integration
 
-STRIPE_INTEGRATION_COMPLETE = False  # Set to True after Stripe Connect is fully configured
+STRIPE_INTEGRATION_COMPLETE = True  # Stripe dashboard is set up
 
 @api_router.get("/purchase/stripe-status")
 async def get_stripe_status():
@@ -6603,20 +6627,21 @@ async def get_stripe_status():
         "configured": bool(stripe_key and stripe_key.startswith('sk_')),
         "integration_complete": STRIPE_INTEGRATION_COMPLETE,
         "purchases_enabled": STRIPE_INTEGRATION_COMPLETE and bool(stripe_key),
-        "message": "Purchases coming soon! Stripe integration is being finalized." if not STRIPE_INTEGRATION_COMPLETE else None
+        "message": None  # Purchases are live
     }
 
 @api_router.post("/purchase/attempt")
 async def attempt_purchase(user_id: str, item_type: str, item_id: str, amount: float):
-    """Attempt to make a purchase - blocked until Stripe is ready"""
-    if not STRIPE_INTEGRATION_COMPLETE:
+    """Attempt to make a purchase"""
+    stripe_key = os.environ.get('STRIPE_API_KEY', '')
+    if not STRIPE_INTEGRATION_COMPLETE or not stripe_key:
         raise HTTPException(
             status_code=503, 
-            detail="Purchases are temporarily disabled. Stripe integration is being finalized."
+            detail="Purchases are temporarily unavailable."
         )
     
-    # Normal purchase logic would go here once enabled
-    return {"status": "pending", "message": "Purchase system not yet enabled"}
+    # Direct to store router for actual purchases
+    return {"status": "redirect", "message": "Use /api/store endpoints for purchases"}
 
 # ============ Location-Based Discovery System ============
 class LocationDiscoveryRequest(BaseModel):
@@ -7158,6 +7183,14 @@ try:
     logging.info("Party System router loaded successfully")
 except ImportError as e:
     logging.warning(f"Could not load Party System router: {e}")
+
+# Include Store router (In-App Purchases with Stripe)
+try:
+    from store_router import store_router
+    app.include_router(store_router, prefix="/api")
+    logging.info("Store router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Store router: {e}")
 
 app.add_middleware(
     CORSMiddleware,

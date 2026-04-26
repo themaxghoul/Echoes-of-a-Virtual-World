@@ -41,6 +41,7 @@ import Onboarding from "@/pages/Onboarding";
 import Leaderboard from "@/pages/Leaderboard";
 import DiscoveryLab from "@/pages/DiscoveryLab";
 import WorldExplorer from "@/pages/WorldExplorer";
+import StorePage from "@/pages/StorePage";
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -116,6 +117,7 @@ function App() {
           <Route path="/discovery-lab" element={<DiscoveryLab />} />
           <Route path="/world-explorer" element={<WorldExplorer />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/store" element={<StorePage />} />
         </Routes>
         </BrowserRouter>
       </PurchaseProvider>

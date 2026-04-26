@@ -404,6 +404,18 @@ const ModeSelection = () => {
           <Button
             variant="outline"
             onClick={() => {
+              pushNavHistory('/store');
+              navigate('/store');
+            }}
+            className="border-gold/30 text-gold hover:bg-gold/10 rounded-sm"
+            data-testid="store-btn"
+          >
+            <ShoppingBag className="w-4 h-4 mr-2" />
+            Store
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
               pushNavHistory('/quest-board');
               navigate('/quest-board');
             }}

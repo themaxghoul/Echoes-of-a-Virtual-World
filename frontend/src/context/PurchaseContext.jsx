@@ -3,9 +3,8 @@ import { toast } from 'sonner';
 
 const API = process.env.REACT_APP_BACKEND_URL;
 
-// Purchase system is DISABLED until Stripe integration is complete
-// Set this to true once Stripe Connect is fully configured
-const STRIPE_INTEGRATION_COMPLETE = false;
+// Purchase system is now ENABLED with Stripe
+const STRIPE_INTEGRATION_COMPLETE = true;
 
 const PurchaseContext = createContext();
 
@@ -24,21 +23,21 @@ export const PurchaseProvider = ({ children }) => {
       if (res.ok) {
         const data = await res.json();
         setStripeConfigured(data.configured);
-        setPurchasesEnabled(data.configured && STRIPE_INTEGRATION_COMPLETE);
+        setPurchasesEnabled(data.purchases_enabled);
       }
     } catch (err) {
       console.log('Stripe status check unavailable');
       setStripeConfigured(false);
-      setPurchasesEnabled(false);
+      setPurchasesEnabled(STRIPE_INTEGRATION_COMPLETE);
     }
   };
 
   const attemptPurchase = (itemName, callback) => {
     if (!purchasesEnabled) {
       toast.error(
-        "Purchases are temporarily disabled", 
+        "Purchases are temporarily unavailable", 
         { 
-          description: "The marketplace is coming soon! Stripe integration is being finalized.",
+          description: "Please try again later.",
           duration: 5000
         }
       );
@@ -52,9 +51,6 @@ export const PurchaseProvider = ({ children }) => {
   const canPurchase = () => purchasesEnabled;
 
   const getPurchaseMessage = () => {
-    if (!STRIPE_INTEGRATION_COMPLETE) {
-      return "Purchases will be enabled once Stripe integration is complete.";
-    }
     if (!stripeConfigured) {
       return "Payment system is being configured. Please try again later.";
     }
@@ -106,13 +102,10 @@ export const PurchaseButton = ({
       onClick={handleClick}
       disabled={disabled || isPurchaseDisabled}
       className={`${className} ${isPurchaseDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-      title={isPurchaseDisabled ? "Purchases coming soon" : ""}
+      title={isPurchaseDisabled ? "Purchases temporarily unavailable" : ""}
       {...props}
     >
       {children}
-      {isPurchaseDisabled && (
-        <span className="ml-2 text-xs text-amber-400">(Coming Soon)</span>
-      )}
     </button>
   );
 };
