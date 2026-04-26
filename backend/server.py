@@ -7102,6 +7102,27 @@ try:
 except ImportError as e:
     logging.warning(f"Could not load Bounty Board router: {e}")
 
+try:
+    from npc_memory_router import router as npc_memory_router
+    app.include_router(npc_memory_router)
+    logging.info("NPC Memory Delocalization router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load NPC Memory router: {e}")
+
+try:
+    from materials_router import router as materials_router
+    app.include_router(materials_router)
+    logging.info("Materials & Components router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Materials router: {e}")
+
+try:
+    from ai_digest_router import router as ai_digest_router
+    app.include_router(ai_digest_router)
+    logging.info("AI Digest Summary router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load AI Digest router: {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

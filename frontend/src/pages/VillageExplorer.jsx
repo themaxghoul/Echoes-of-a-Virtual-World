@@ -606,6 +606,17 @@ const VillageExplorer = () => {
                 <span className="font-mono text-xs text-slate-blue">News</span>
               </button>
             )}
+            {/* Players Button - Multiplayer Chat Toggle */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex items-center gap-2 px-3 py-1 bg-gold/20 hover:bg-gold/30 text-gold rounded-sm"
+              onClick={() => setShowMultiplayerChat(true)}
+              data-testid="multiplayer-chat-toggle"
+            >
+              <Users className="w-4 h-4" />
+              <span className="hidden sm:inline font-mono text-xs">Players</span>
+            </Button>
             <Sparkles className="w-4 h-4 text-slate-blue animate-pulse sm:hidden" />
           </div>
         </header>
@@ -757,16 +768,6 @@ const VillageExplorer = () => {
           </div>
         </div>
       </main>
-      
-      {/* Multiplayer Chat Toggle Button */}
-      <Button
-        className="fixed bottom-20 right-4 z-40 bg-gold text-black hover:bg-gold-light shadow-lg"
-        onClick={() => setShowMultiplayerChat(true)}
-        data-testid="multiplayer-chat-toggle"
-      >
-        <Users className="w-4 h-4 mr-2" />
-        Players
-      </Button>
       
       {/* Multiplayer Chat Panel */}
       {showMultiplayerChat && !chatPopOut && (
