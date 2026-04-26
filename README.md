@@ -35,3 +35,14 @@ Very early prototype.
 - **Other**: Persistent memory system, emergent behavior framework, testing agents
 
 ### Project Structure
+
+Roadmap
+Polish website prototype
+Complete structural virtual economy
+Marketplace implementation
+Unity 1st/3rd person client
+Combat system (virus army defense)
+Full persistent memory + multi-agent society simulation
+Cross-tool companion experience
+Contributing
+This is an ambitious solo-driven project with big dreams. Contributions, ideas, feedback, and collaborations are welcome — especially in economy design, Unity development, memory systems, and emergent AI behavior.
