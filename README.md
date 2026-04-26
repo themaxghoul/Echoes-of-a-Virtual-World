@@ -46,3 +46,21 @@ Full persistent memory + multi-agent society simulation
 Cross-tool companion experience
 Contributing
 This is an ambitious solo-driven project with big dreams. Contributions, ideas, feedback, and collaborations are welcome — especially in economy design, Unity development, memory systems, and emergent AI behavior.
+
+Roadmap
+Polish and document the website prototype
+Complete the structural virtual economy
+Implement the in-game marketplace
+Deliver working Unity 1st/3rd person client
+Add combat/defense system against virus army
+Expand persistent memory and multi-agent society simulation
+Enable true cross-tool companion experience
+
+License
+This project is licensed under the MIT License — see the LICENSE file for details.
+
+Contributing
+This is an ambitious early-stage project with big dreams of emergent virtual societies. Ideas, feedback, code contributions, Unity help, economy design, or testing are all welcome!
+Welcome to Virtuality.
+Found your village. Shape the story. Build something that echoes forever.
+Made with ❤️ by ApexForge Collective
