@@ -617,6 +617,16 @@ const VillageExplorer = () => {
               <Users className="w-4 h-4" />
               <span className="hidden sm:inline font-mono text-xs">Players</span>
             </Button>
+            {/* Profile/Settings Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate('/settings')}
+              className="rounded-sm hover:bg-gold/10"
+              data-testid="header-settings-btn"
+            >
+              <User className="w-4 h-4 text-muted-foreground" />
+            </Button>
             <Sparkles className="w-4 h-4 text-slate-blue animate-pulse sm:hidden" />
           </div>
         </header>

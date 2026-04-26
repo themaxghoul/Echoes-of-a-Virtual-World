@@ -101,7 +101,14 @@ const ModeSelection = () => {
 
       {/* Header */}
       <header className="relative z-10 p-4 sm:p-6 flex justify-between items-center border-b border-border/30">
-        <div className="flex items-center gap-3">
+        <button 
+          onClick={() => {
+            pushNavHistory('/settings');
+            navigate('/settings');
+          }}
+          className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer"
+          data-testid="header-profile-btn"
+        >
           {userProfile && (
             <>
               <div className={`w-10 h-10 rounded-sm flex items-center justify-center ${
@@ -115,7 +122,7 @@ const ModeSelection = () => {
                   <User className="w-5 h-5 text-gold" />
                 )}
               </div>
-              <div>
+              <div className="text-left">
                 <div className="flex items-center gap-2">
                   <p className="font-cinzel text-sm text-foreground">{userProfile.display_name}</p>
                   {isTranscendent && (
@@ -126,7 +133,7 @@ const ModeSelection = () => {
               </div>
             </>
           )}
-        </div>
+        </button>
         
         <div className="flex gap-2">
           <Button
