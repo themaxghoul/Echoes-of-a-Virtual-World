@@ -1395,5 +1395,95 @@ Full Stripe-integrated in-app purchase system with three main categories:
 
 ---
 
+## NEW: AI Training System - Student to Master (April 26, 2026 - Iteration 27)
+
+### Mastery Levels (7 Tiers)
+| Level | XP Required | Efficiency | Description |
+|-------|-------------|------------|-------------|
+| Novice | 0 | 20% | Just beginning to learn |
+| Student | 100 | 40% | Learning the basics |
+| Apprentice | 300 | 60% | Gaining competence |
+| Journeyman | 600 | 75% | Proficient practitioner |
+| Expert | 1,000 | 85% | Highly skilled |
+| Master | 2,000 | 95% | Mastery achieved |
+| Grandmaster | 5,000 | 100% | Legendary mastery |
+
+### Trainable Skills (24+ Skills in 6 Categories)
+- **Combat**: Swordsmanship, Archery, Defense, Tactics
+- **Crafting**: Blacksmithing, Carpentry, Alchemy, Cooking, Tailoring
+- **Magic**: Fire Magic, Ice Magic, Healing, Enchanting, Divination
+- **Social**: Diplomacy, Trade, Leadership, Charm
+- **Knowledge**: Lore, History, Languages, Arcane Theory
+- **Survival**: Tracking, Herbalism, Survival, Hunting
+
+### Training Activities & XP
+| Activity | XP/Minute | Description |
+|----------|-----------|-------------|
+| observe_player | 2 | Watching player perform skill |
+| assist_player | 5 | Assisting player with task |
+| practice_alone | 3 | Independent practice |
+| receive_lesson | 10 | Direct teaching from player |
+| complete_task | 8 | Successfully completing task |
+| fail_and_learn | 4 | Learning from failure |
+| study_materials | 3 | Studying texts/materials |
+| teach_others | 15 | Teaching another (Journeyman+) |
+
+### Training Endpoints
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| /api/ai-training/skills | GET | All trainable skills |
+| /api/ai-training/activities | GET | Training activities |
+| /api/ai-training/train | POST | Train entity in skill |
+| /api/ai-training/entity/{id}/skills | GET | Entity's all skills |
+| /api/ai-training/entity/{id}/skill/{skill} | GET | Specific skill detail |
+| /api/ai-training/leaderboard/{skill} | GET | Skill leaderboard |
+
+---
+
+## NEW: Customizable Control Layout (April 26, 2026)
+
+### Features
+- **Drag-and-Drop**: Move any control button to custom position
+- **Edit Mode**: Toggle to reposition controls
+- **Opacity Control**: Adjust transparency (10%-100%)
+- **Scale Control**: Adjust button size (50%-150%)
+- **Reset to Default**: Restore original positions
+- **Persistence**: Layouts saved to localStorage
+
+### Default Controls
+| Control | Default Position | Key |
+|---------|------------------|-----|
+| Move Up | Left side | W/↑ |
+| Move Down | Left side | S/↓ |
+| Move Left | Left side | A/← |
+| Move Right | Left side | D/→ |
+| Interact | Right side | E |
+| Inventory | Right side | I |
+| Map | Right side | M |
+| Menu | Right side | ESC |
+| Attack | Right side | LMB |
+| Block | Right side | RMB |
+| Sprint | Left bottom | SHIFT |
+| Dodge | Left bottom | SPACE |
+
+---
+
+## Backend Routers (28 Total)
+| Router | Prefix | Description |
+|--------|--------|-------------|
+| ai_training_router.py | /api/ai-training | **NEW** Student→Master skill progression |
+| store_router.py | /api/store | In-App Purchases with Stripe |
+| discovery_router.py | /api/discovery | Discovery Lab & First Discovery |
+| google_auth_router.py | /api/auth | Google OAuth & Profile Management |
+| npc_memory_router.py | /api/npc-memory | Memory Delocalization |
+| materials_router.py | /api/materials | Extended Materials & Components |
+| ai_digest_router.py | /api/digest | AI Digest Summary |
+| party_system_router.py | /api/party | Player/AI Party System |
+| world_memory_router.py | /api/world-memory | Global World Memory Bank |
+| world_exploration_router.py | /api/world | Unified 3D World Explorer |
+| ...previous 18 routers... | | |
+
+---
+
 Last Updated: April 26, 2026
 
