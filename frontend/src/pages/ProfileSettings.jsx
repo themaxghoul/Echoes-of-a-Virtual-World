@@ -11,7 +11,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   ArrowLeft, User, Palette, MessageSquare, Shield, Save,
-  RefreshCw, Eye, EyeOff, Check, Sparkles, Crown
+  RefreshCw, Eye, EyeOff, Check, Sparkles, Crown, AtSign,
+  Key, Image, History, AlertCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -27,9 +28,11 @@ const ProfileSettings = () => {
   const [options, setOptions] = useState(null);
   const [profile, setProfile] = useState({
     display_name: '',
+    username: '',
     bio: '',
     chat_color: 'default',
     profile_picture: '',
+    profile_logo: '',
     model_preset: 'human_male',
     model_colors: {
       skin_color: '#E8BEAC',
@@ -40,8 +43,19 @@ const ProfileSettings = () => {
     title_display: '',
     status_message: '',
     show_online: true,
-    allow_whispers: true
+    allow_whispers: true,
+    legacy_usernames: [],
+    auth_method: 'password'
   });
+  
+  // Account settings state
+  const [newUsername, setNewUsername] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [changingUsername, setChangingUsername] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [showLegacyNames, setShowLegacyNames] = useState(false);
 
   useEffect(() => {
     if (!userId) {
@@ -133,6 +147,7 @@ const ProfileSettings = () => {
         <Tabs defaultValue="profile" className="space-y-6">
           <TabsList className="bg-surface/50">
             <TabsTrigger value="profile">Profile</TabsTrigger>
+            <TabsTrigger value="account">Account</TabsTrigger>
             <TabsTrigger value="appearance">Appearance</TabsTrigger>
             <TabsTrigger value="chat">Chat</TabsTrigger>
             <TabsTrigger value="privacy">Privacy</TabsTrigger>
@@ -158,6 +173,36 @@ const ProfileSettings = () => {
                   <p className="text-xs text-muted-foreground mt-1">
                     {profile.display_name?.length || 0}/30 characters
                   </p>
+                </div>
+                
+                {/* Profile Logo / Avatar URL */}
+                <div>
+                  <Label htmlFor="profile_logo" className="flex items-center gap-2">
+                    <Image className="w-4 h-4" />
+                    Profile Logo URL
+                  </Label>
+                  <Input
+                    id="profile_logo"
+                    value={profile.profile_logo || profile.profile_picture || ''}
+                    onChange={(e) => {
+                      updateField('profile_logo', e.target.value);
+                      updateField('profile_picture', e.target.value);
+                    }}
+                    placeholder="https://example.com/your-logo.png"
+                    className="mt-1"
+                    data-testid="profile-logo-input"
+                  />
+                  {(profile.profile_logo || profile.profile_picture) && (
+                    <div className="mt-3 flex items-center gap-4">
+                      <img 
+                        src={profile.profile_logo || profile.profile_picture} 
+                        alt="Profile preview"
+                        className="w-16 h-16 rounded-full object-cover border-2 border-gold/30"
+                        onError={(e) => e.target.style.display = 'none'}
+                      />
+                      <p className="text-xs text-muted-foreground">Preview of your profile logo</p>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -189,29 +234,234 @@ const ProfileSettings = () => {
                     {profile.bio?.length || 0}/500 characters
                   </p>
                 </div>
-
-                <div>
-                  <Label htmlFor="profile_picture">Profile Picture URL</Label>
-                  <Input
-                    id="profile_picture"
-                    value={profile.profile_picture || ''}
-                    onChange={(e) => updateField('profile_picture', e.target.value)}
-                    placeholder="https://..."
-                    className="mt-1"
-                  />
-                  {profile.profile_picture && (
-                    <div className="mt-2">
-                      <img 
-                        src={profile.profile_picture} 
-                        alt="Profile preview"
-                        className="w-20 h-20 rounded-full object-cover border-2 border-gold/30"
-                        onError={(e) => e.target.style.display = 'none'}
-                      />
-                    </div>
-                  )}
-                </div>
               </div>
             </Card>
+          </TabsContent>
+
+          {/* Account Tab - Username, Password, Legacy Names */}
+          <TabsContent value="account" className="space-y-6">
+            {/* Current Account Info */}
+            <Card className="p-6 bg-surface/50 border-border/30">
+              <h3 className="font-cinzel text-lg text-gold mb-4 flex items-center gap-2">
+                <AtSign className="w-5 h-5" />
+                Account Details
+              </h3>
+              
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 bg-obsidian/50 rounded-lg">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Current Username</p>
+                    <p className="font-medium text-lg">@{profile.username || localStorage.getItem('username')}</p>
+                  </div>
+                  <Badge variant="outline" className="border-gold/30 text-gold">
+                    {profile.auth_method === 'google' ? 'Google Account' : 'Password Account'}
+                  </Badge>
+                </div>
+                
+                {/* Legacy Names (if any) */}
+                {profile.legacy_usernames && profile.legacy_usernames.length > 0 && (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg">
+                    <button 
+                      onClick={() => setShowLegacyNames(!showLegacyNames)}
+                      className="w-full flex items-center justify-between text-left"
+                    >
+                      <div className="flex items-center gap-2">
+                        <History className="w-4 h-4 text-amber-400" />
+                        <span className="text-sm font-medium text-amber-400">
+                          Previous Usernames ({profile.legacy_usernames.length})
+                        </span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {showLegacyNames ? 'Hide' : 'Show'}
+                      </span>
+                    </button>
+                    {showLegacyNames && (
+                      <div className="mt-3 space-y-2">
+                        {profile.legacy_usernames.map((legacy, i) => (
+                          <div key={i} className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">@{legacy.username || legacy}</span>
+                            <span className="text-xs text-muted-foreground/60">
+                              {legacy.changed_at ? new Date(legacy.changed_at).toLocaleDateString() : ''}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </Card>
+
+            {/* Change Username */}
+            <Card className="p-6 bg-surface/50 border-border/30">
+              <h3 className="font-cinzel text-lg text-gold mb-4 flex items-center gap-2">
+                <AtSign className="w-5 h-5" />
+                Change Username
+              </h3>
+              
+              <div className="space-y-4">
+                <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-blue-400 mt-0.5" />
+                    <p className="text-xs text-muted-foreground">
+                      Your old username will be saved as a "legacy name" visible on your expanded profile.
+                      Other players can see your username history.
+                    </p>
+                  </div>
+                </div>
+                
+                <div>
+                  <Label htmlFor="new_username">New Username</Label>
+                  <Input
+                    id="new_username"
+                    value={newUsername}
+                    onChange={(e) => setNewUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                    placeholder="Enter new username"
+                    maxLength={30}
+                    className="mt-1"
+                    data-testid="new-username-input"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Lowercase letters, numbers, and underscores only
+                  </p>
+                </div>
+                
+                {profile.auth_method !== 'google' && (
+                  <div>
+                    <Label htmlFor="confirm_password">Confirm Current Password</Label>
+                    <Input
+                      id="confirm_password"
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="Enter current password to confirm"
+                      className="mt-1"
+                    />
+                  </div>
+                )}
+                
+                <Button
+                  onClick={async () => {
+                    if (!newUsername || newUsername.length < 3) {
+                      toast.error('Username must be at least 3 characters');
+                      return;
+                    }
+                    setChangingUsername(true);
+                    try {
+                      await axios.post(`${API}/auth/username/change`, {
+                        user_id: userId,
+                        new_username: newUsername,
+                        password: currentPassword || undefined
+                      });
+                      toast.success('Username changed successfully!');
+                      localStorage.setItem('username', newUsername);
+                      setNewUsername('');
+                      setCurrentPassword('');
+                      loadData(); // Refresh profile
+                    } catch (error) {
+                      toast.error(error.response?.data?.detail || 'Failed to change username');
+                    }
+                    setChangingUsername(false);
+                  }}
+                  disabled={changingUsername || !newUsername}
+                  className="bg-slate-blue hover:bg-slate-blue-light"
+                  data-testid="change-username-btn"
+                >
+                  {changingUsername ? (
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <AtSign className="w-4 h-4 mr-2" />
+                  )}
+                  Change Username
+                </Button>
+              </div>
+            </Card>
+
+            {/* Change Password (only for password-based accounts) */}
+            {profile.auth_method !== 'google' && (
+              <Card className="p-6 bg-surface/50 border-border/30">
+                <h3 className="font-cinzel text-lg text-gold mb-4 flex items-center gap-2">
+                  <Key className="w-5 h-5" />
+                  Change Password
+                </h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="current_pw">Current Password</Label>
+                    <Input
+                      id="current_pw"
+                      type="password"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      placeholder="Enter current password"
+                      className="mt-1"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="new_pw">New Password</Label>
+                    <Input
+                      id="new_pw"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Enter new password (min 6 characters)"
+                      className="mt-1"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor="confirm_new_pw">Confirm New Password</Label>
+                    <Input
+                      id="confirm_new_pw"
+                      type="password"
+                      value={confirmNewPassword}
+                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                      placeholder="Confirm new password"
+                      className="mt-1"
+                    />
+                  </div>
+                  
+                  <Button
+                    onClick={async () => {
+                      if (newPassword.length < 6) {
+                        toast.error('Password must be at least 6 characters');
+                        return;
+                      }
+                      if (newPassword !== confirmNewPassword) {
+                        toast.error('Passwords do not match');
+                        return;
+                      }
+                      setChangingPassword(true);
+                      try {
+                        await axios.post(`${API}/auth/password/change`, {
+                          user_id: userId,
+                          current_password: currentPassword,
+                          new_password: newPassword
+                        });
+                        toast.success('Password changed successfully!');
+                        setCurrentPassword('');
+                        setNewPassword('');
+                        setConfirmNewPassword('');
+                      } catch (error) {
+                        toast.error(error.response?.data?.detail || 'Failed to change password');
+                      }
+                      setChangingPassword(false);
+                    }}
+                    disabled={changingPassword || !currentPassword || !newPassword}
+                    className="bg-slate-blue hover:bg-slate-blue-light"
+                    data-testid="change-password-btn"
+                  >
+                    {changingPassword ? (
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Key className="w-4 h-4 mr-2" />
+                    )}
+                    Change Password
+                  </Button>
+                </div>
+              </Card>
+            )}
           </TabsContent>
 
           {/* Appearance Tab */}

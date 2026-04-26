@@ -7123,6 +7123,20 @@ try:
 except ImportError as e:
     logging.warning(f"Could not load AI Digest router: {e}")
 
+try:
+    from discovery_router import router as discovery_router
+    app.include_router(discovery_router)
+    logging.info("Discovery Lab router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Discovery router: {e}")
+
+try:
+    from google_auth_router import router as google_auth_router
+    app.include_router(google_auth_router)
+    logging.info("Google OAuth router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Google Auth router: {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

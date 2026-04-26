@@ -6,6 +6,7 @@ import LoadingScreen from "@/components/LoadingScreen";
 import { PurchaseProvider } from "@/context/PurchaseContext";
 import LandingPage from "@/pages/LandingPage";
 import AuthPage from "@/pages/AuthPage";
+import AuthCallback from "@/components/AuthCallback";
 import CharacterCreation from "@/pages/CharacterCreation";
 import ModeSelection from "@/pages/ModeSelection";
 import VillageExplorer from "@/pages/VillageExplorer";
@@ -38,6 +39,7 @@ import TaskMarketplace from "@/pages/TaskMarketplace";
 import AIPartners from "@/pages/AIPartners";
 import Onboarding from "@/pages/Onboarding";
 import Leaderboard from "@/pages/Leaderboard";
+import DiscoveryLab from "@/pages/DiscoveryLab";
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -110,6 +112,8 @@ function App() {
           <Route path="/quest-board" element={<QuestBoard />} />
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
+          <Route path="/discovery-lab" element={<DiscoveryLab />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
         </Routes>
         </BrowserRouter>
       </PurchaseProvider>
