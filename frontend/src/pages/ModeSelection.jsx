@@ -8,7 +8,8 @@ import {
   Gamepad2, MessageSquare, User, Sparkles, Crown,
   ArrowRight, Settings, LogOut, Hammer, ArrowLeftRight,
   Heart, Zap, Shield, Swords, DollarSign, TrendingUp, Briefcase,
-  Map, Globe, Award, Lock, Clock, Cpu, Scroll, ShoppingBag, Trophy
+  Map, Globe, Award, Lock, Clock, Cpu, Scroll, ShoppingBag, Trophy,
+  Compass
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -287,41 +288,36 @@ const ModeSelection = () => {
             </CardContent>
           </Card>
 
-          {/* 3D First Person Mode (Web) - COMING SOON */}
+          {/* World Explorer - Unified Exploration Mode */}
           <Card 
-            className="bg-surface/80 border-border/50 rounded-sm transition-all duration-300 group relative opacity-70"
-            data-testid="firstperson-mode-card"
+            className="bg-surface/80 border-border/50 rounded-sm hover:border-green-500/50 transition-all duration-300 cursor-pointer group"
+            onClick={() => selectMode('explore', '/world-explorer')}
+            data-testid="explore-mode-card"
           >
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-sm">
-              <div className="text-center">
-                <Clock className="w-10 h-10 text-slate-blue mx-auto mb-2" />
-                <Badge className="bg-slate-blue/20 text-slate-blue text-sm px-4 py-1">Coming Soon</Badge>
-              </div>
-            </div>
             <CardContent className="p-6 text-center">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-blue/20 border border-slate-blue/30 flex items-center justify-center">
-                <Gamepad2 className="w-8 h-8 text-slate-blue" />
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Compass className="w-8 h-8 text-green-400" />
               </div>
-              <h3 className="font-cinzel text-lg text-foreground mb-2">First Person 3D</h3>
+              <h3 className="font-cinzel text-lg text-foreground mb-2">World Explorer</h3>
               <p className="font-manrope text-sm text-muted-foreground mb-4">
-                Immersive 3D in browser. Walk through the village, interact with NPCs.
+                Explore the infinite world. Same coordinates across 2D, Isometric, and 3D views.
               </p>
               <div className="flex flex-wrap gap-2 justify-center mb-4">
-                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">Web 3D</Badge>
-                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">D-Pad</Badge>
+                <Badge className="bg-green-500/10 text-green-400 text-xs rounded-sm">Unified Seed</Badge>
+                <Badge className="bg-green-500/10 text-green-400 text-xs rounded-sm">Multi-View</Badge>
               </div>
               <Button 
-                disabled
-                data-testid="select-firstperson-btn"
-                className="w-full bg-slate-blue/50 text-white font-cinzel rounded-sm cursor-not-allowed"
+                data-testid="select-explore-btn"
+                className="w-full bg-green-600 text-white hover:bg-green-500 font-cinzel rounded-sm"
               >
-                <Lock className="w-5 h-5 mr-2" />
-                Coming Soon
+                <Compass className="w-5 h-5 mr-2" />
+                Explore World
+                <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
             </CardContent>
           </Card>
 
-          {/* Unity First Person Mode - COMING SOON */}
+          {/* Unity 3D Client - COMING SOON */}
           <Card 
             className="bg-surface/80 border-border/50 rounded-sm transition-all duration-300 group relative opacity-70"
             data-testid="unity-mode-card"
@@ -336,13 +332,13 @@ const ModeSelection = () => {
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center">
                 <Gamepad2 className="w-8 h-8 text-purple-400" />
               </div>
-              <h3 className="font-cinzel text-lg text-foreground mb-2">Unity 3D</h3>
+              <h3 className="font-cinzel text-lg text-foreground mb-2">Unity 3D Client</h3>
               <p className="font-manrope text-sm text-muted-foreground mb-4">
-                High-fidelity Unity client. Download and play with full graphics.
+                Download the high-fidelity Unity client. Same world, stunning graphics.
               </p>
               <div className="flex flex-wrap gap-2 justify-center mb-4">
                 <Badge className="bg-purple-500/10 text-purple-400 text-xs rounded-sm">Hi-Fi 3D</Badge>
-                <Badge className="bg-purple-500/10 text-purple-400 text-xs rounded-sm">Sync</Badge>
+                <Badge className="bg-purple-500/10 text-purple-400 text-xs rounded-sm">Cross-Platform</Badge>
               </div>
               <Button 
                 disabled

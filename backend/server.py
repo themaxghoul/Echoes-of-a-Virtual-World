@@ -7138,6 +7138,27 @@ try:
 except ImportError as e:
     logging.warning(f"Could not load Google Auth router: {e}")
 
+try:
+    from world_exploration_router import router as world_exploration_router
+    app.include_router(world_exploration_router)
+    logging.info("World Exploration router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load World Exploration router: {e}")
+
+try:
+    from world_memory_router import router as world_memory_router
+    app.include_router(world_memory_router)
+    logging.info("World Memory router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load World Memory router: {e}")
+
+try:
+    from party_system_router import router as party_system_router
+    app.include_router(party_system_router)
+    logging.info("Party System router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Party System router: {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

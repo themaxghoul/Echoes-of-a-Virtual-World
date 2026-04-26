@@ -195,6 +195,8 @@ async def google_oauth_callback(request: GoogleCallbackRequest, response: Respon
         
     except httpx.RequestError as e:
         raise HTTPException(status_code=503, detail=f"Auth service unavailable: {str(e)}")
+    except HTTPException:
+        raise  # Re-raise HTTPException as-is
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

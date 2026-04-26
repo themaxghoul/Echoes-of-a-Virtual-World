@@ -10,7 +10,7 @@ import {
   MapPin, Send, Menu, X, User, BookOpen, 
   ChevronRight, Loader2, Home, Sparkles, Lock, Unlock,
   Crown, Shield, Flame, Eye, Moon, Star, Globe, ArrowLeft, History,
-  MessageSquare, Users
+  MessageSquare, Users, Compass, Hammer
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -411,6 +411,33 @@ const VillageExplorer = () => {
 
             {/* Locations */}
             <ScrollArea className="flex-1 p-4">
+              {/* World Actions - Explore & Build */}
+              <div className="mb-6">
+                <h3 className="font-cinzel text-sm text-muted-foreground mb-3 uppercase tracking-wider">
+                  World Actions
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => navigate('/world-explorer')}
+                    className="p-3 rounded-sm border border-green-500/30 bg-green-500/10 hover:bg-green-500/20 transition-all text-left"
+                    data-testid="sidebar-explore-btn"
+                  >
+                    <Compass className="w-5 h-5 text-green-400 mb-1" />
+                    <span className="text-xs font-cinzel text-green-400">Explore</span>
+                    <p className="text-[10px] text-muted-foreground mt-1">Discover world</p>
+                  </button>
+                  <button
+                    onClick={() => navigate('/isometric-builder')}
+                    className="p-3 rounded-sm border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 transition-all text-left"
+                    data-testid="sidebar-build-btn"
+                  >
+                    <Hammer className="w-5 h-5 text-amber-400 mb-1" />
+                    <span className="text-xs font-cinzel text-amber-400">Build</span>
+                    <p className="text-[10px] text-muted-foreground mt-1">2.5D builder</p>
+                  </button>
+                </div>
+              </div>
+
               <h3 className="font-cinzel text-sm text-muted-foreground mb-4 uppercase tracking-wider">
                 Explore The Village
               </h3>
