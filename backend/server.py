@@ -5923,6 +5923,7 @@ class ProfileCustomization(BaseModel):
     bio: Optional[str] = None
     chat_color: Optional[str] = None
     profile_picture: Optional[str] = None
+    profile_logo: Optional[str] = None
     model_preset: Optional[str] = None
     model_colors: Optional[Dict[str, str]] = None
     title_display: Optional[str] = None
@@ -5965,11 +5966,16 @@ async def get_profile_customization(user_id: str):
         raise HTTPException(status_code=404, detail="User not found")
     return {
         "user_id": user_id, "display_name": user.get("display_name", user.get("username")),
+        "username": user.get("username"),
         "bio": user.get("bio", ""), "chat_color": user.get("chat_color", "default"),
-        "profile_picture": user.get("profile_picture"), "model_preset": user.get("model_preset", "human_male"),
+        "profile_picture": user.get("profile_picture"), 
+        "profile_logo": user.get("profile_logo", user.get("profile_picture")),
+        "model_preset": user.get("model_preset", "human_male"),
         "model_colors": user.get("model_colors", {"skin_color": "#E8BEAC", "hair_color": "#4A3728", "eye_color": "#634E34", "accent_color": "#FFD700"}),
         "title_display": user.get("title_display"), "status_message": user.get("status_message", ""),
-        "show_online": user.get("show_online", True), "allow_whispers": user.get("allow_whispers", True)
+        "show_online": user.get("show_online", True), "allow_whispers": user.get("allow_whispers", True),
+        "legacy_usernames": user.get("legacy_usernames", []),
+        "auth_method": user.get("auth_method", "password")
     }
 
 @api_router.put("/profile/customization/{user_id}")
@@ -5989,6 +5995,10 @@ async def update_profile_customization(user_id: str, customization: ProfileCusto
         updates["chat_color"] = customization.chat_color
     if customization.profile_picture is not None:
         updates["profile_picture"] = customization.profile_picture
+    if customization.profile_logo is not None:
+        updates["profile_logo"] = customization.profile_logo
+        # Also update profile_picture for backward compatibility
+        updates["profile_picture"] = customization.profile_logo
     if customization.model_preset is not None:
         if customization.model_preset not in MODEL_PRESETS:
             raise HTTPException(status_code=400, detail="Invalid model preset")
@@ -7191,6 +7201,14 @@ try:
     logging.info("Store router loaded successfully")
 except ImportError as e:
     logging.warning(f"Could not load Store router: {e}")
+
+# Include AI Training router (Student to Master progression)
+try:
+    from ai_training_router import ai_training_router
+    app.include_router(ai_training_router, prefix="/api")
+    logging.info("AI Training router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load AI Training router: {e}")
 
 app.add_middleware(
     CORSMiddleware,

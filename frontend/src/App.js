@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import LoadingScreen from "@/components/LoadingScreen";
 import { PurchaseProvider } from "@/context/PurchaseContext";
+import { ControlLayoutProvider } from "@/context/ControlLayoutContext";
 import LandingPage from "@/pages/LandingPage";
 import AuthPage from "@/pages/AuthPage";
 import AuthCallback from "@/components/AuthCallback";
@@ -76,6 +77,7 @@ function App() {
           onComplete={() => setLoading(false)}
         />
       )}
+      <ControlLayoutProvider>
       <PurchaseProvider>
         <BrowserRouter>
         <Routes>
@@ -121,6 +123,7 @@ function App() {
         </Routes>
         </BrowserRouter>
       </PurchaseProvider>
+      </ControlLayoutProvider>
       <Toaster 
         position="bottom-right"
         toastOptions={{
