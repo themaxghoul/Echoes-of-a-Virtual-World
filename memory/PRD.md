@@ -280,6 +280,9 @@ Players AND AI earn real currency through activities
 ## Remaining Tasks
 - [ ] VR voice input/output
 - [ ] Real external micro-task provider connections (currently simulated)
+- [x] ~~Stripe Purchases (enabled - April 26, 2026)~~
+- [x] ~~Conversational AI prompts (April 26, 2026)~~
+- [x] ~~Civilization structures store (April 26, 2026)~~
 
 ---
 
@@ -1273,28 +1276,122 @@ Common → Uncommon → Rare → Epic → Legendary → Mythic
 
 ---
 
-## Backend Routers (26 Total)
+## NEW: In-App Store System (April 26, 2026 - Iteration 26)
+
+### Store Overview
+Full Stripe-integrated in-app purchase system with three main categories:
+- **Currency Conversion**: USD to VE$ (1:1 rate)
+- **Compute Power Subscriptions**: Exponentially scaling AI automation tiers
+- **Civilization Structures**: Essential buildings for settlements
+
+### Currency Purchase Presets (5 Packages)
+| Package | Price (USD) | VE$ Received | Bonus |
+|---------|-------------|--------------|-------|
+| Starter Pack | $5.00 | VE$5.00 | 0% |
+| Adventurer Pack | $10.00 | VE$10.50 | 5% |
+| Explorer Pack ⭐ | $25.00 | VE$27.50 | 10% |
+| Champion Pack | $50.00 | VE$57.50 | 15% |
+| Legend Pack | $100.00 | VE$120.00 | 20% |
+
+**Custom Amount**: Any amount $1+ converts 1:1 to VE$
+
+### Compute Power Subscriptions (6 Tiers - Exponential Scaling)
+| Tier | Monthly | Compute Units | AI Slots | Multiplier |
+|------|---------|---------------|----------|------------|
+| Spark | $4.99 | 100 | 1 | 1x |
+| Flame | $9.99 | 250 | 2 | 2.5x |
+| Inferno | $19.99 | 600 | 4 | 6x |
+| Nova | $39.99 | 1,500 | 8 | 15x |
+| Supernova | $79.99 | 4,000 | 16 | 40x |
+| Cosmic | $149.99 | 12,000 | 32 | 120x |
+
+### Civilization Structures (15 Buildings in 4 Categories)
+
+**Philosophy**: *At small civilization sizes, guards defend gates rather than patrol streets. Build walls first, worry about police later.*
+
+**Essential (3):**
+- Campfire (VE$5) - Gathering spot, capacity 4
+- Basic Shelter (VE$25) - Defense 5, capacity 2
+- Village Well (VE$50) - Water production 10
+
+**Defense (6):**
+- Wooden Palisade (VE$30) - Defense 10
+- Wooden Gate (VE$75) - Defense 15, capacity 2
+- Stone Wall (VE$150) - Defense 40
+- Iron Gate (VE$300) - Defense 60, capacity 4
+- Watchtower (VE$200) - Defense 25, vision 5
+- Guard Post (VE$100) - Defense 20, capacity 3
+
+**Production (3):**
+- Small Farm (VE$100) - Food production 5
+- Craftsman Workshop (VE$200) - Tools production 2
+- Iron Forge (VE$350) - Iron goods production 2
+
+**Community (3):**
+- Gathering Hall (VE$250) - Morale 2, capacity 20
+- Tavern (VE$175) - Morale 3, gold 1, capacity 15
+- Small Temple (VE$400) - Blessing 1, capacity 10
+
+### Payment Methods
+- **VE$**: Instant deduction from balance
+- **USD**: Stripe checkout redirect
+
+### Store Router Endpoints
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| /api/store/status | GET | Store availability & Stripe config |
+| /api/store/presets | GET | Currency package options |
+| /api/store/compute-subscriptions | GET | Subscription tiers |
+| /api/store/structures | GET | Civilization structures by category |
+| /api/store/convert-currency | POST | Custom USD→VE$ purchase |
+| /api/store/purchase-preset | POST | Buy preset package |
+| /api/store/subscribe-compute | POST | Subscribe to compute tier |
+| /api/store/purchase-structure | POST | Buy structure (VE$ or USD) |
+| /api/store/my-structures/{user_id} | GET | User's owned structures |
+| /api/store/user/{user_id}/subscription | GET | User's compute subscription |
+| /api/store/transaction/{session_id} | GET | Check transaction status |
+
+---
+
+## Backend Routers (27 Total)
 | Router | Prefix | Description |
 |--------|--------|-------------|
-| discovery_router.py | /api/discovery | **NEW** Discovery Lab & First Discovery |
-| google_auth_router.py | /api/auth | **NEW** Google OAuth & Profile Management |
+| store_router.py | /api/store | **NEW** In-App Purchases with Stripe |
+| discovery_router.py | /api/discovery | Discovery Lab & First Discovery |
+| google_auth_router.py | /api/auth | Google OAuth & Profile Management |
 | npc_memory_router.py | /api/npc-memory | Memory Delocalization |
 | materials_router.py | /api/materials | Extended Materials & Components |
 | ai_digest_router.py | /api/digest | AI Digest Summary |
 | bounty_board_router.py | /api/bounty-board | Exclusive bounties |
 | possession_ledger_router.py | /api/ledger | Universal possession tracking |
-| ...previous 19 routers... | | |
+| party_system_router.py | /api/party | Player/AI Party System |
+| world_memory_router.py | /api/world-memory | Global World Memory Bank |
+| world_exploration_router.py | /api/world | Unified 3D World Explorer |
+| ...previous 16 routers... | | |
 
 ---
 
-## Frontend Routes (26 Total)
+## Frontend Routes (27 Total)
 | Route | Page | Description |
 |-------|------|-------------|
-| /discovery-lab | DiscoveryLab | **NEW** Material/spell experimentation |
-| /auth/callback | AuthCallback | **NEW** OAuth callback handler |
+| /store | StorePage | **NEW** In-App Store with Stripe |
+| /world-explorer | WorldExplorer | Unified 3D/2.5D World |
+| /discovery-lab | DiscoveryLab | Material/spell experimentation |
+| /auth/callback | AuthCallback | OAuth callback handler |
 | /settings | ProfileSettings | Enhanced with Account tab |
 | /auth | AuthPage | Enhanced with social login buttons |
-| ...previous 22 routes... | | |
+| ...previous 21 routes... | | |
+
+---
+
+## AI Conversation Style Update (April 26, 2026)
+
+### NPC & Narrator Prompts Refined
+- **Conversational, not passage-like**: NPCs talk naturally with contractions and casual phrasing
+- **Reactive dialogue**: NPCs ask follow-up questions, show genuine interest
+- **Personality shines through**: Humor, frustration, excitement based on character
+- **Avoid clichés**: No "Ah, traveler..." or wall-of-text explanations
+- **Punchy narration**: Short sentences mixed with atmospheric ones, focus on player actions
 
 ---
 
