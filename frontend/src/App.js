@@ -43,6 +43,7 @@ import Leaderboard from "@/pages/Leaderboard";
 import DiscoveryLab from "@/pages/DiscoveryLab";
 import WorldExplorer from "@/pages/WorldExplorer";
 import StorePage from "@/pages/StorePage";
+import NPCServices from "@/pages/NPCServices";
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -120,6 +121,7 @@ function App() {
           <Route path="/world-explorer" element={<WorldExplorer />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/store" element={<StorePage />} />
+          <Route path="/npc-services" element={<NPCServices />} />
         </Routes>
         </BrowserRouter>
       </PurchaseProvider>

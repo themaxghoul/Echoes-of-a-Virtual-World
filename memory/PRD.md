@@ -1468,11 +1468,14 @@ Full Stripe-integrated in-app purchase system with three main categories:
 
 ---
 
-## Backend Routers (28 Total)
+## Backend Routers (31 Total)
 | Router | Prefix | Description |
 |--------|--------|-------------|
-| ai_training_router.py | /api/ai-training | **NEW** Student→Master skill progression |
+| ai_training_router.py | /api/ai-training | Student→Master skill progression |
 | store_router.py | /api/store | In-App Purchases with Stripe |
+| external_providers_router.py | /api/external-providers | **NEW** Real external micro-task webhooks |
+| npc_services_router.py | /api/npc-services | **NEW** Trained NPCs offer skill-based services |
+| data_api_router.py | /api/data-api | **NEW** Company Data API + Task Factory |
 | discovery_router.py | /api/discovery | Discovery Lab & First Discovery |
 | google_auth_router.py | /api/auth | Google OAuth & Profile Management |
 | npc_memory_router.py | /api/npc-memory | Memory Delocalization |
@@ -1485,5 +1488,24 @@ Full Stripe-integrated in-app purchase system with three main categories:
 
 ---
 
-Last Updated: April 26, 2026
+## Iteration 28 Complete (May 2026)
+### External Provider Webhooks
+- Real webhook endpoints for Toloka, MTurk, Scale AI, Hive, Appen
+- Task mapping and claim/submit flow
+- Event processing with signature verification
+
+### NPC Skill-Based Services (21 Services)
+- 6 Categories: Combat, Crafting, Magic, Social, Knowledge, Survival
+- Services unlock based on NPC training mastery level
+- Quality ratings tied to mastery (Novice→Grandmaster)
+
+### Data API & Task Factory
+- Company analytics API with demo key access
+- Task/Engagement/Economy/Training data exports
+- Task Factory for automated pipeline tasks
+- Template-based task generation
+
+---
+
+Last Updated: May 15, 2026
 

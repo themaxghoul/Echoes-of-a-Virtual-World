@@ -508,6 +508,18 @@ const ModeSelection = () => {
             <Trophy className="w-4 h-4 mr-2" />
             Leaderboard
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/npc-services');
+              navigate('/npc-services');
+            }}
+            className="border-orange-400/30 text-orange-400 hover:bg-orange-400/10 rounded-sm"
+            data-testid="npc-services-btn"
+          >
+            <Hammer className="w-4 h-4 mr-2" />
+            NPC Services
+          </Button>
         </div>
 
         {/* Player Stats Summary */}

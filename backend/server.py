@@ -7210,6 +7210,30 @@ try:
 except ImportError as e:
     logging.warning(f"Could not load AI Training router: {e}")
 
+# Include External Providers router (Real micro-task webhooks)
+try:
+    from external_providers_router import external_providers_router
+    app.include_router(external_providers_router, prefix="/api")
+    logging.info("External Providers router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load External Providers router: {e}")
+
+# Include NPC Services router (Trained NPCs offer services)
+try:
+    from npc_services_router import npc_services_router
+    app.include_router(npc_services_router, prefix="/api")
+    logging.info("NPC Services router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load NPC Services router: {e}")
+
+# Include Data API router (Company analytics + Task Factory)
+try:
+    from data_api_router import data_api_router
+    app.include_router(data_api_router, prefix="/api")
+    logging.info("Data API router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Data API router: {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
