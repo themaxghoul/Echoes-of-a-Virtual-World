@@ -45,6 +45,8 @@ class TaskTemplate(BaseModel):
     task_type: str = Field(default="general")
     time_limit_minutes: int = Field(default=30)
     auto_repeat: bool = Field(default=False)
+    repeat_interval_minutes: int = Field(default=60, description="Minutes between auto-generations")
+    repeat_batch_size: int = Field(default=10, description="Tasks to generate per repeat")
     max_instances: int = Field(default=100)
 
 class SubmitTaskRequest(BaseModel):
@@ -91,6 +93,10 @@ async def create_task_template(template: TaskTemplate, creator_id: str = "system
         "task_type": template.task_type,
         "time_limit_minutes": template.time_limit_minutes,
         "auto_repeat": template.auto_repeat,
+        "repeat_interval_minutes": template.repeat_interval_minutes,
+        "repeat_batch_size": template.repeat_batch_size,
+        "last_repeat_at": None,
+        "next_repeat_at": datetime.now(timezone.utc).isoformat() if template.auto_repeat else None,
         "max_instances": template.max_instances,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "active": True,
@@ -372,3 +378,190 @@ async def create_api_key(company_name: str, admin_id: str = "sirix_1_supreme"):
     key = f"dapi_{secrets.token_urlsafe(24)}"
     await db.company_api_keys.insert_one({"key": key, "company_name": company_name, "created_at": datetime.now(timezone.utc).isoformat(), "active": True})
     return {"key": key, "company": company_name}
+
+
+# ============ SCHEDULER ENDPOINTS ============
+
+@data_api_router.post("/scheduler/run")
+async def run_scheduler():
+    """Run the auto-repeat scheduler - generates tasks for due templates"""
+    db = get_db()
+    now = datetime.now(timezone.utc)
+    
+    # Find templates due for repeat
+    due_templates = await db.factory_templates.find({
+        "active": True,
+        "auto_repeat": True,
+        "next_repeat_at": {"$lte": now.isoformat()}
+    }).to_list(100)
+    
+    results = []
+    for template in due_templates:
+        # Check if under max instances
+        current_available = await db.factory_task_instances.count_documents({
+            "template_id": template["template_id"],
+            "status": "available"
+        })
+        
+        if current_available >= template.get("max_instances", 100):
+            results.append({"template_id": template["template_id"], "skipped": "max_instances_reached"})
+            continue
+        
+        # Generate batch
+        batch_size = min(
+            template.get("repeat_batch_size", 10),
+            template.get("max_instances", 100) - current_available
+        )
+        
+        if batch_size <= 0:
+            continue
+        
+        instances = []
+        base_count = template.get("stats", {}).get("instances_created", 0)
+        for i in range(batch_size):
+            instances.append({
+                "instance_id": str(uuid.uuid4()),
+                "template_id": template["template_id"],
+                "title": f"{template['title']} #{base_count + i + 1}",
+                "objective": template["objective"],
+                "inputs": template.get("inputs", {}),
+                "process": template.get("process", []),
+                "output_spec": template.get("output", {}),
+                "validation": template.get("validation", {"type": "auto"}),
+                "reward_ve": template.get("adjusted_reward_ve", template.get("reward_ve", 0.05)),
+                "difficulty": template.get("difficulty", "medium"),
+                "compute_cost": template.get("compute_cost", 0),
+                "dependencies": template.get("dependencies", []),
+                "time_limit_minutes": template.get("time_limit_minutes", 30),
+                "status": "available",
+                "claimed_by": None,
+                "created_at": now.isoformat(),
+                "auto_generated": True
+            })
+        
+        if instances:
+            await db.factory_task_instances.insert_many(instances)
+        
+        # Update template
+        interval = template.get("repeat_interval_minutes", 60)
+        next_repeat = now + timedelta(minutes=interval)
+        
+        await db.factory_templates.update_one(
+            {"template_id": template["template_id"]},
+            {
+                "$set": {"last_repeat_at": now.isoformat(), "next_repeat_at": next_repeat.isoformat()},
+                "$inc": {"stats.instances_created": len(instances)}
+            }
+        )
+        
+        results.append({
+            "template_id": template["template_id"],
+            "title": template["title"],
+            "generated": len(instances),
+            "next_repeat_at": next_repeat.isoformat()
+        })
+    
+    return {"scheduler_run": True, "timestamp": now.isoformat(), "templates_processed": len(results), "results": results}
+
+@data_api_router.get("/scheduler/status")
+async def get_scheduler_status():
+    """Get status of all auto-repeat templates"""
+    db = get_db()
+    now = datetime.now(timezone.utc)
+    
+    templates = await db.factory_templates.find(
+        {"auto_repeat": True, "active": True},
+        {"_id": 0, "template_id": 1, "title": 1, "repeat_interval_minutes": 1, "repeat_batch_size": 1,
+         "last_repeat_at": 1, "next_repeat_at": 1, "max_instances": 1, "stats": 1}
+    ).to_list(100)
+    
+    for t in templates:
+        # Count current available
+        t["current_available"] = await db.factory_task_instances.count_documents({
+            "template_id": t["template_id"], "status": "available"
+        })
+        # Check if due
+        next_repeat = t.get("next_repeat_at")
+        t["is_due"] = next_repeat and next_repeat <= now.isoformat()
+    
+    return {"auto_repeat_templates": templates, "count": len(templates), "current_time": now.isoformat()}
+
+@data_api_router.post("/scheduler/template/{template_id}/toggle")
+async def toggle_auto_repeat(template_id: str, enabled: bool):
+    """Enable or disable auto-repeat for a template"""
+    db = get_db()
+    
+    update = {"auto_repeat": enabled}
+    if enabled:
+        update["next_repeat_at"] = datetime.now(timezone.utc).isoformat()
+    
+    result = await db.factory_templates.update_one(
+        {"template_id": template_id},
+        {"$set": update}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    return {"template_id": template_id, "auto_repeat": enabled}
+
+@data_api_router.put("/scheduler/template/{template_id}/config")
+async def update_scheduler_config(template_id: str, interval_minutes: int = 60, batch_size: int = 10, max_instances: int = 100):
+    """Update scheduler config for a template"""
+    db = get_db()
+    
+    result = await db.factory_templates.update_one(
+        {"template_id": template_id},
+        {"$set": {
+            "repeat_interval_minutes": interval_minutes,
+            "repeat_batch_size": batch_size,
+            "max_instances": max_instances
+        }}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    return {"updated": True, "template_id": template_id, "interval_minutes": interval_minutes, "batch_size": batch_size, "max_instances": max_instances}
+
+@data_api_router.delete("/factory/template/{template_id}")
+async def delete_template(template_id: str, admin_id: str = "sirix_1_supreme"):
+    """Deactivate a template (soft delete)"""
+    db = get_db()
+    
+    result = await db.factory_templates.update_one(
+        {"template_id": template_id},
+        {"$set": {"active": False, "auto_repeat": False, "deactivated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    return {"deleted": True, "template_id": template_id}
+
+@data_api_router.put("/factory/template/{template_id}")
+async def update_template(template_id: str, updates: Dict[str, Any]):
+    """Update template fields"""
+    db = get_db()
+    
+    # Whitelist updatable fields
+    allowed = {"title", "objective", "inputs", "process", "output", "validation", "reward_ve", 
+               "difficulty", "compute_cost", "dependencies", "task_type", "time_limit_minutes"}
+    
+    filtered = {k: v for k, v in updates.items() if k in allowed}
+    
+    if "difficulty" in filtered and filtered["difficulty"] in DIFFICULTY_MULTIPLIERS:
+        reward = filtered.get("reward_ve") or (await db.factory_templates.find_one({"template_id": template_id})).get("reward_ve", 0.05)
+        filtered["adjusted_reward_ve"] = reward * DIFFICULTY_MULTIPLIERS[filtered["difficulty"]]
+    
+    if not filtered:
+        raise HTTPException(status_code=400, detail="No valid fields to update")
+    
+    filtered["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    result = await db.factory_templates.update_one({"template_id": template_id}, {"$set": filtered})
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    return {"updated": True, "template_id": template_id, "fields": list(filtered.keys())}

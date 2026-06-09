@@ -520,6 +520,18 @@ const ModeSelection = () => {
             <Hammer className="w-4 h-4 mr-2" />
             NPC Services
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/task-factory');
+              navigate('/task-factory');
+            }}
+            className="border-violet-400/30 text-violet-400 hover:bg-violet-400/10 rounded-sm"
+            data-testid="task-factory-btn"
+          >
+            <Cpu className="w-4 h-4 mr-2" />
+            Task Factory
+          </Button>
         </div>
 
         {/* Player Stats Summary */}

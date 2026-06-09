@@ -44,6 +44,7 @@ import DiscoveryLab from "@/pages/DiscoveryLab";
 import WorldExplorer from "@/pages/WorldExplorer";
 import StorePage from "@/pages/StorePage";
 import NPCServices from "@/pages/NPCServices";
+import TaskFactory from "@/pages/TaskFactory";
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -122,6 +123,7 @@ function App() {
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/store" element={<StorePage />} />
           <Route path="/npc-services" element={<NPCServices />} />
+          <Route path="/task-factory" element={<TaskFactory />} />
         </Routes>
         </BrowserRouter>
       </PurchaseProvider>

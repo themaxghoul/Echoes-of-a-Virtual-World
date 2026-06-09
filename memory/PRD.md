@@ -1502,6 +1502,13 @@ Every task contains:
 | difficulty | Affects VE$ minting rate (trivial→legendary: 0.5x→3.0x) |
 | compute_cost | If AI is involved |
 
+### Auto-Repeat Scheduler
+- `repeat_interval_minutes`: Time between automatic generations
+- `repeat_batch_size`: Tasks generated per cycle
+- `max_instances`: Cap on available tasks
+- Scheduler endpoint: `POST /api/data-api/scheduler/run`
+- Frontend: `/task-factory` with Templates, Tasks, and Scheduler tabs
+
 ---
 
 Last Updated: June 9, 2026
