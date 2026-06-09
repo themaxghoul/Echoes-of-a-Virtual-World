@@ -7210,14 +7210,6 @@ try:
 except ImportError as e:
     logging.warning(f"Could not load AI Training router: {e}")
 
-# Include External Providers router (Real micro-task webhooks)
-try:
-    from external_providers_router import external_providers_router
-    app.include_router(external_providers_router, prefix="/api")
-    logging.info("External Providers router loaded successfully")
-except ImportError as e:
-    logging.warning(f"Could not load External Providers router: {e}")
-
 # Include NPC Services router (Trained NPCs offer services)
 try:
     from npc_services_router import npc_services_router
