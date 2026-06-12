@@ -177,6 +177,12 @@ async def train_entity(request: TrainEntityRequest):
     base_xp = activity_info["xp"] * request.duration_minutes
     xp_gain = calculate_xp_gain(base_xp, skill_info["base_difficulty"])
     
+    # Apply Mind Amplifier boost (VE$ Boutique) if the trainer has one active
+    from cosmetics_router import get_boost_multiplier
+    xp_multiplier = await get_boost_multiplier(db, request.trainer_id, "training_xp")
+    if xp_multiplier > 1.0:
+        xp_gain = int(xp_gain * xp_multiplier)
+    
     new_xp = current_xp + xp_gain
     new_level = get_mastery_level(new_xp)
     level_up = new_level["level"] > current_level["level"]

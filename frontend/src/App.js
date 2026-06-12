@@ -45,6 +45,9 @@ import WorldExplorer from "@/pages/WorldExplorer";
 import StorePage from "@/pages/StorePage";
 import NPCServices from "@/pages/NPCServices";
 import TaskFactory from "@/pages/TaskFactory";
+import TaskWorkbench from "@/pages/TaskWorkbench";
+import AvatarStudio from "@/pages/AvatarStudio";
+import VEBoutique from "@/pages/VEBoutique";
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -124,6 +127,9 @@ function App() {
           <Route path="/store" element={<StorePage />} />
           <Route path="/npc-services" element={<NPCServices />} />
           <Route path="/task-factory" element={<TaskFactory />} />
+          <Route path="/task-workbench" element={<TaskWorkbench />} />
+          <Route path="/avatar-studio" element={<AvatarStudio />} />
+          <Route path="/boutique" element={<VEBoutique />} />
         </Routes>
         </BrowserRouter>
       </PurchaseProvider>

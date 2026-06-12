@@ -12,10 +12,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   ArrowLeft, User, Palette, MessageSquare, Shield, Save,
   RefreshCw, Eye, EyeOff, Check, Sparkles, Crown, AtSign,
-  Key, Image, History, AlertCircle, Link, Unlink, Lock
+  Key, History, AlertCircle, Link, Unlink, Lock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
+import PixelAvatar from '@/components/PixelAvatar';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -60,8 +61,7 @@ const ProfileSettings = () => {
     email: '',
     bio: '',
     chat_color: 'default',
-    profile_picture: '',
-    profile_logo: '',
+    pixel_avatar_url: null,
     model_preset: 'human_male',
     model_colors: {
       skin_color: '#E8BEAC',
@@ -92,6 +92,8 @@ const ProfileSettings = () => {
   const [changingPassword, setChangingPassword] = useState(false);
   const [showLegacyNames, setShowLegacyNames] = useState(false);
   const [linkingAccount, setLinkingAccount] = useState(null);
+  const [ownedCosmetics, setOwnedCosmetics] = useState([]);
+  const [avatarFrame, setAvatarFrame] = useState(null);
 
   useEffect(() => {
     if (!userId) {
@@ -110,6 +112,11 @@ const ProfileSettings = () => {
       ]);
       setOptions(optionsRes.data);
       setProfile(profileRes.data);
+      try {
+        const cosRes = await axios.get(`${API}/cosmetics/owned/${userId}`);
+        setOwnedCosmetics(cosRes.data.owned || []);
+        setAvatarFrame(cosRes.data.equipped?.frame || null);
+      } catch (e) { /* cosmetics optional */ }
     } catch (error) {
       console.error('Failed to load profile:', error);
       toast.error('Failed to load profile settings');
@@ -701,13 +708,49 @@ const ProfileSettings = () => {
                 ))}
               </div>
 
+              {/* Premium colors from the VE$ Boutique */}
+              {options?.premium_chat_colors && (
+                <div className="mt-6">
+                  <p className="text-sm text-gold mb-3 flex items-center gap-2">
+                    <Crown className="w-4 h-4" /> Premium Colors (VE$ Boutique)
+                  </p>
+                  <div className="grid grid-cols-4 md:grid-cols-6 gap-3">
+                    {Object.entries(options.premium_chat_colors).map(([name, hex]) => {
+                      const owned = ownedCosmetics.includes(`color_${name}`);
+                      return (
+                        <div
+                          key={name}
+                          className={`relative p-3 rounded-lg transition-all border-2 ${
+                            profile.chat_color === name
+                              ? 'border-white scale-105'
+                              : 'border-transparent hover:border-white/30'
+                          } ${owned ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'}`}
+                          onClick={() => {
+                            if (owned) updateField('chat_color', name);
+                            else { toast.info('Unlock this color in the VE$ Boutique'); navigate('/boutique'); }
+                          }}
+                          data-testid={`premium-color-${name}`}
+                        >
+                          <div className="w-full h-8 rounded mb-2" style={{ backgroundColor: hex }} />
+                          <div className="text-xs text-center capitalize">{name.replace(/_/g, ' ')}</div>
+                          {!owned && <Lock className="absolute top-2 right-2 w-3.5 h-3.5 text-white/70" />}
+                          {profile.chat_color === name && (
+                            <Check className="w-4 h-4 mx-auto mt-1 text-gold" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* Preview */}
               <div className="mt-6 p-4 bg-black/30 rounded-lg">
                 <p className="text-sm text-muted-foreground mb-2">Preview:</p>
                 <div className="flex items-center gap-2">
                   <span 
                     className="font-medium"
-                    style={{ color: options?.chat_colors?.[profile.chat_color] || '#FFFFFF' }}
+                    style={{ color: options?.chat_colors?.[profile.chat_color] || options?.premium_chat_colors?.[profile.chat_color] || '#FFFFFF' }}
                   >
                     {profile.display_name || 'YourName'}
                   </span>

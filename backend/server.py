@@ -2465,12 +2465,31 @@ async def broadcast_to_location(location_id: str, message: dict, exclude_user: s
 
 # ============ Startup Events ============
 
+async def task_factory_scheduler_loop():
+    """Background worker: auto-runs the Task Factory scheduler every 5 minutes"""
+    from data_api_router import run_scheduler
+    await asyncio.sleep(10)  # let app finish booting
+    while True:
+        try:
+            result = await run_scheduler()
+            if result.get("templates_processed", 0) > 0:
+                logger.info(f"Task Factory scheduler: {result['templates_processed']} templates processed")
+        except Exception as e:
+            logger.error(f"Task Factory scheduler error: {e}")
+        await asyncio.sleep(300)  # 5 minutes
+
 @app.on_event("startup")
 async def startup_event():
     await initialize_sirix_1()
     await initialize_npcs()
     await initialize_ai_villagers()
-    logger.info("AI Village initialized with Sirix-1, NPCs, and AI Villagers")
+    # One-time cleanup: profile pictures dropped in favor of pixel avatars
+    await db.user_profiles.update_many(
+        {"$or": [{"profile_picture": {"$exists": True}}, {"profile_logo": {"$exists": True}}]},
+        {"$unset": {"profile_picture": "", "profile_logo": ""}}
+    )
+    asyncio.create_task(task_factory_scheduler_loop())
+    logger.info("AI Village initialized with Sirix-1, NPCs, AI Villagers and Task Factory scheduler")
 
 # ============ API Routes ============
 
@@ -5922,8 +5941,6 @@ class ProfileCustomization(BaseModel):
     display_name: Optional[str] = None
     bio: Optional[str] = None
     chat_color: Optional[str] = None
-    profile_picture: Optional[str] = None
-    profile_logo: Optional[str] = None
     model_preset: Optional[str] = None
     model_colors: Optional[Dict[str, str]] = None
     title_display: Optional[str] = None
@@ -5936,6 +5953,12 @@ CHAT_COLORS = {
     "emerald": "#50C878", "sapphire": "#0F52BA", "amethyst": "#9966CC",
     "rose": "#FF007F", "sunset": "#FF4500", "ocean": "#00CED1",
     "forest": "#228B22", "royal": "#4169E1", "shadow": "#36454F",
+}
+
+# Premium name colors - purchasable in the VE$ Boutique (cosmetics_router)
+PREMIUM_CHAT_COLORS = {
+    "neon_pink": "#FF10F0", "electric_cyan": "#00FFF7", "toxic_green": "#39FF14",
+    "blood_orange": "#FF3C00", "void_purple": "#7B2FFF", "white_gold": "#FFF3C2",
 }
 
 MODEL_PRESETS = {
@@ -5956,7 +5979,7 @@ MODEL_PRESETS = {
 @api_router.get("/profile/customization-options")
 async def get_customization_options():
     """Get available customization options"""
-    return {"chat_colors": CHAT_COLORS, "model_presets": MODEL_PRESETS, "color_fields": ["skin_color", "hair_color", "eye_color", "accent_color"], "max_bio_length": 500, "max_status_length": 100}
+    return {"chat_colors": CHAT_COLORS, "premium_chat_colors": PREMIUM_CHAT_COLORS, "model_presets": MODEL_PRESETS, "color_fields": ["skin_color", "hair_color", "eye_color", "accent_color"], "max_bio_length": 500, "max_status_length": 100}
 
 @api_router.get("/profile/customization/{user_id}")
 async def get_profile_customization(user_id: str):
@@ -5968,8 +5991,7 @@ async def get_profile_customization(user_id: str):
         "user_id": user_id, "display_name": user.get("display_name", user.get("username")),
         "username": user.get("username"),
         "bio": user.get("bio", ""), "chat_color": user.get("chat_color", "default"),
-        "profile_picture": user.get("profile_picture"), 
-        "profile_logo": user.get("profile_logo", user.get("profile_picture")),
+        "pixel_avatar_url": (user.get("pixel_avatar") or {}).get("data_url"),
         "model_preset": user.get("model_preset", "human_male"),
         "model_colors": user.get("model_colors", {"skin_color": "#E8BEAC", "hair_color": "#4A3728", "eye_color": "#634E34", "accent_color": "#FFD700"}),
         "title_display": user.get("title_display"), "status_message": user.get("status_message", ""),
@@ -5993,12 +6015,6 @@ async def update_profile_customization(user_id: str, customization: ProfileCusto
         updates["bio"] = customization.bio[:500]
     if customization.chat_color is not None:
         updates["chat_color"] = customization.chat_color
-    if customization.profile_picture is not None:
-        updates["profile_picture"] = customization.profile_picture
-    if customization.profile_logo is not None:
-        updates["profile_logo"] = customization.profile_logo
-        # Also update profile_picture for backward compatibility
-        updates["profile_picture"] = customization.profile_logo
     if customization.model_preset is not None:
         if customization.model_preset not in MODEL_PRESETS:
             raise HTTPException(status_code=400, detail="Invalid model preset")
@@ -7225,6 +7241,22 @@ try:
     logging.info("Data API router loaded successfully")
 except ImportError as e:
     logging.warning(f"Could not load Data API router: {e}")
+
+# Include Pixel Avatar router
+try:
+    from avatar_router import avatar_router
+    app.include_router(avatar_router, prefix="/api")
+    logging.info("Avatar router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Avatar router: {e}")
+
+# Include Cosmetics (VE$ Boutique) router
+try:
+    from cosmetics_router import cosmetics_router
+    app.include_router(cosmetics_router, prefix="/api")
+    logging.info("Cosmetics router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Cosmetics router: {e}")
 
 app.add_middleware(
     CORSMiddleware,

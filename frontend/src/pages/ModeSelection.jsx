@@ -532,6 +532,42 @@ const ModeSelection = () => {
             <Cpu className="w-4 h-4 mr-2" />
             Task Factory
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/task-workbench');
+              navigate('/task-workbench');
+            }}
+            className="border-cyan-400/30 text-cyan-400 hover:bg-cyan-400/10 rounded-sm"
+            data-testid="task-workbench-btn"
+          >
+            <Hammer className="w-4 h-4 mr-2" />
+            Task Workbench
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/avatar-studio');
+              navigate('/avatar-studio');
+            }}
+            className="border-pink-400/30 text-pink-400 hover:bg-pink-400/10 rounded-sm"
+            data-testid="avatar-studio-btn"
+          >
+            <Sparkles className="w-4 h-4 mr-2" />
+            Avatar Studio
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/boutique');
+              navigate('/boutique');
+            }}
+            className="border-emerald-400/30 text-emerald-400 hover:bg-emerald-400/10 rounded-sm"
+            data-testid="boutique-btn"
+          >
+            <ShoppingBag className="w-4 h-4 mr-2" />
+            VE$ Boutique
+          </Button>
         </div>
 
         {/* Player Stats Summary */}

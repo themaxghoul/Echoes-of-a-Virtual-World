@@ -174,13 +174,19 @@ async def generate_tasks(data: GenerateTasksRequest):
     return {"generated": len(instances), "template_id": data.template_id, "instance_ids": [i["instance_id"] for i in instances]}
 
 @data_api_router.get("/factory/tasks")
-async def get_available_tasks(status: str = "available", difficulty: Optional[str] = None, limit: int = 50):
-    """Get tasks from the factory"""
+async def get_available_tasks(status: str = "available", difficulty: Optional[str] = None, worker_id: Optional[str] = None, limit: int = 50):
+    """Get tasks from the factory. Pass worker_id to get a worker's own claimed/completed tasks."""
     db = get_db()
-    query = {"status": status}
+    if worker_id:
+        query = {"claimed_by": worker_id}
+        if status != "all":
+            query["status"] = status
+    else:
+        query = {"status": status}
     if difficulty:
         query["difficulty"] = difficulty
-    tasks = await db.factory_task_instances.find(query, {"_id": 0}).limit(limit).to_list(limit)
+    sort_field = "claimed_at" if worker_id else "created_at"
+    tasks = await db.factory_task_instances.find(query, {"_id": 0}).sort(sort_field, -1).limit(limit).to_list(limit)
     return {"tasks": tasks, "count": len(tasks)}
 
 @data_api_router.get("/factory/task/{instance_id}")
@@ -242,8 +248,15 @@ async def submit_task(instance_id: str, data: SubmitTaskRequest):
     )
     
     reward_paid = 0
+    boost_applied = False
     if validation_result["passed"]:
         reward_paid = task.get("reward_ve", 0)
+        # Apply Forge Surge boost (VE$ Boutique) if active
+        from cosmetics_router import get_boost_multiplier
+        multiplier = await get_boost_multiplier(db, data.worker_id, "task_reward")
+        if multiplier > 1.0:
+            reward_paid = round(reward_paid * multiplier, 4)
+            boost_applied = True
         await db.entity_wallets.update_one(
             {"entity_id": data.worker_id},
             {"$inc": {"balance_ve": reward_paid, "total_earned": reward_paid}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
@@ -253,7 +266,7 @@ async def submit_task(instance_id: str, data: SubmitTaskRequest):
     else:
         await db.factory_templates.update_one({"template_id": task["template_id"]}, {"$inc": {"stats.instances_failed": 1}})
     
-    return {"submitted": True, "status": new_status, "validation": validation_result, "reward_ve": reward_paid}
+    return {"submitted": True, "status": new_status, "validation": validation_result, "reward_ve": reward_paid, "boost_applied": boost_applied}
 
 async def validate_output(task: dict, output: dict) -> dict:
     """Validate task output against spec"""

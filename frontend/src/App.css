@@ -134,3 +134,18 @@
     background: linear-gradient(to bottom, transparent 0%, rgba(5, 5, 5, 0.8) 100%);
     pointer-events: none;
 }
+
+/* Prismatic legendary avatar frame (VE$ Boutique) */
+@keyframes prismatic-cycle {
+    0% { box-shadow: 0 0 10px 3px #ff0040; border-color: #ff0040; }
+    20% { box-shadow: 0 0 10px 3px #ff8c00; border-color: #ff8c00; }
+    40% { box-shadow: 0 0 10px 3px #ffee00; border-color: #ffee00; }
+    60% { box-shadow: 0 0 10px 3px #00ff80; border-color: #00ff80; }
+    80% { box-shadow: 0 0 10px 3px #00cfff; border-color: #00cfff; }
+    100% { box-shadow: 0 0 10px 3px #ff0040; border-color: #ff0040; }
+}
+
+.pixel-frame-prismatic {
+    border: 2px solid #ff0040;
+    animation: prismatic-cycle 4s linear infinite;
+}

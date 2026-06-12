@@ -40,7 +40,6 @@ class UsernameChangeRequest(BaseModel):
 class ProfileUpdateRequest(BaseModel):
     user_id: str
     display_name: Optional[str] = None
-    profile_logo: Optional[str] = None  # URL to logo image
     bio: Optional[str] = None
     status_message: Optional[str] = None
 
@@ -127,7 +126,6 @@ async def google_oauth_callback(request: GoogleCallbackRequest, response: Respon
                 "display_name": name or username,
                 "email": email,
                 "google_picture": picture,
-                "profile_picture": picture,  # Use Google picture as default
                 "auth_method": "google",
                 "password_hash": None,  # No password for Google auth
                 "permission_level": "basic",
@@ -302,16 +300,6 @@ async def update_profile_details(request: ProfileUpdateRequest):
                 detail="Display name must be 2-30 characters"
             )
         updates["display_name"] = request.display_name
-    
-    if request.profile_logo is not None:
-        # Validate URL format (basic check)
-        if request.profile_logo and not request.profile_logo.startswith(("http://", "https://")):
-            raise HTTPException(
-                status_code=400,
-                detail="Profile logo must be a valid URL"
-            )
-        updates["profile_logo"] = request.profile_logo
-        updates["profile_picture"] = request.profile_logo  # Also set as profile picture
     
     if request.bio is not None:
         if len(request.bio) > 500:
