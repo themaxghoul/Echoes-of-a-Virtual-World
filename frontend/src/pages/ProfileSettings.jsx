@@ -218,34 +218,30 @@ const ProfileSettings = () => {
                   </p>
                 </div>
                 
-                {/* Profile Logo / Avatar URL */}
+                {/* Pixel Avatar */}
                 <div>
-                  <Label htmlFor="profile_logo" className="flex items-center gap-2">
-                    <Image className="w-4 h-4" />
-                    Profile Logo URL
+                  <Label className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4" />
+                    Pixel Avatar
                   </Label>
-                  <Input
-                    id="profile_logo"
-                    value={profile.profile_logo || profile.profile_picture || ''}
-                    onChange={(e) => {
-                      updateField('profile_logo', e.target.value);
-                      updateField('profile_picture', e.target.value);
-                    }}
-                    placeholder="https://example.com/your-logo.png"
-                    className="mt-1"
-                    data-testid="profile-logo-input"
-                  />
-                  {(profile.profile_logo || profile.profile_picture) && (
-                    <div className="mt-3 flex items-center gap-4">
-                      <img 
-                        src={profile.profile_logo || profile.profile_picture} 
-                        alt="Profile preview"
-                        className="w-16 h-16 rounded-full object-cover border-2 border-gold/30"
-                        onError={(e) => e.target.style.display = 'none'}
-                      />
-                      <p className="text-xs text-muted-foreground">Preview of your profile logo</p>
+                  <div className="mt-2 flex items-center gap-4 p-3 bg-obsidian/50 rounded-lg border border-border/30">
+                    <PixelAvatar dataUrl={profile.pixel_avatar_url} frame={avatarFrame} size={64} testId="settings-pixel-avatar" />
+                    <div className="flex-1">
+                      <p className="text-sm">
+                        {profile.pixel_avatar_url ? 'Your designed 64×64 logo avatar' : 'No avatar yet — design your unique 64×64 pixel logo'}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Profile pictures have been replaced by designable pixel avatars.</p>
                     </div>
-                  )}
+                    <Button
+                      variant="outline"
+                      onClick={() => navigate('/avatar-studio')}
+                      className="border-gold/30 text-gold hover:bg-gold/10 shrink-0"
+                      data-testid="open-avatar-studio-btn"
+                    >
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      {profile.pixel_avatar_url ? 'Edit in Studio' : 'Design Avatar'}
+                    </Button>
+                  </div>
                 </div>
 
                 <div>

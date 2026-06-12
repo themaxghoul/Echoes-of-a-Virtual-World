@@ -1513,3 +1513,46 @@ Every task contains:
 
 Last Updated: June 9, 2026
 
+
+## IMPLEMENTED (June 12, 2026) - Iteration 29: VE$ Appeal, Pixel Avatars, Worker UX, Auto-Scheduler
+
+### Auto-Run Task Factory Scheduler (P0 - DONE)
+- `task_factory_scheduler_loop()` asyncio background task in server.py startup
+- Runs `run_scheduler()` from data_api_router every 5 minutes autonomously
+- Verified: templates auto-generate task instances without manual API calls
+
+### Task Workbench - Worker Submission UI (P0 - DONE)
+- `/task-workbench` route, `TaskWorkbench.jsx`
+- Tabs: Available / My Active / History; claim, dynamic output form from output_spec
+  (field_types: str/int/float/list/bool; constraints respected), submit for auto-validation
+- `GET /api/data-api/factory/tasks?worker_id=X&status=all` added for worker's own tasks
+- Boosted reward shown in submit response (`boost_applied`)
+
+### Pixel Avatar System (P1 - DONE, replaces profile pictures)
+- Profile pictures DROPPED: fields unset from DB at startup, removed from all APIs
+  (server.py ProfileCustomization, google_auth_router) and frontend (ProfileSettings)
+- `avatar_router.py`: GET/PUT/DELETE `/api/avatar/user/{user_id}`, GET `/api/avatar/palettes`
+- Storage: `user_profiles.pixel_avatar = {pixels[4096 indices], palette[hex], data_url(PNG), updated_at}`
+- `AvatarStudio.jsx` (/avatar-studio): 64x64 canvas editor - pencil/eraser/fill/eyedropper,
+  brush sizes 1/2/4, undo, clear, 32-color base palette + premium packs, live preview, Hall of Echoes
+- `PixelAvatar.jsx` component renders avatars (data_url, pixelated) with frame classes everywhere
+
+### VE$ Boutique (P1 - DONE, gives VE$ real spending appeal)
+- `cosmetics_router.py`, `/boutique` route, `VEBoutique.jsx`
+- 24-item catalog: 6 avatar frames (bronze→prismatic legendary, 75-1500 VE$),
+  6 premium name colors (100-200 VE$, equip sets chat_color), 5 titles (50-2000 VE$),
+  2 boosts (Forge Surge 1.5x task rewards 24h / Mind Amplifier 2x training XP 24h),
+  4 avatar palette packs (unlock Studio colors), Avatar Spotlight (100 VE$/24h Hall of Echoes)
+- Endpoints: `/api/cosmetics/catalog|purchase|equip|owned/{id}|spotlight|wallet/{id}`
+- Boost hooks: data_api_router submit_task (task_reward) + ai_training_router (training_xp)
+- PREMIUM_CHAT_COLORS added to server.py customization-options; ProfileSettings shows locked premium swatches
+
+### Testing
+- iteration_29.json: backend 21/21 passed, frontend all pages pass after ProfileSettings fix
+- pytest suite: /app/backend/tests/test_iteration29_boutique_avatar_workbench.py
+
+## REMAINING BACKLOG
+- P2: VR voice input/output integration
+- Future: Consensus validation mode for Task Factory (multi-worker agreement)
+- Future: Data API rate limiting and billing
+- Refactor: split data_api_router.py (analytics vs factory vs scheduler); ProfileSettings.jsx >800 lines

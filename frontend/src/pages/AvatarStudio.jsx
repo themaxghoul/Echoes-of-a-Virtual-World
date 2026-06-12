@@ -336,10 +336,10 @@ const AvatarStudio = () => {
             </div>
             {(palettes?.packs || []).map(pack => (
               <div key={pack.pack_id}>
-                <p className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wider flex items-center gap-2">
-                  {pack.name}
+                <div className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wider flex items-center gap-2">
+                  <span>{pack.name}</span>
                   {!pack.owned && <Badge variant="outline" className="text-[10px] border-gold/30 text-gold py-0">VE$ Boutique</Badge>}
-                </p>
+                </div>
                 <div className="flex flex-wrap gap-1.5">
                   {pack.colors.map(hex => <ColorSwatch key={`${pack.pack_id}-${hex}`} hex={hex} locked={!pack.owned} />)}
                 </div>
