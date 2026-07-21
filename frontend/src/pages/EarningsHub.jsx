@@ -81,6 +81,8 @@ const EarningsHub = () => {
   const [todayEarnings, setTodayEarnings] = useState(0);
   const [weeklyEarnings, setWeeklyEarnings] = useState(0);
   const [hourlyRate, setHourlyRate] = useState(0);
+  const [taskHistory, setTaskHistory] = useState([]);
+  const [withdrawalPrefs, setWithdrawalPrefs] = useState(null);
   
   // Ecosystem state
   const [ecosystemStatus, setEcosystemStatus] = useState(null);
@@ -101,22 +103,38 @@ const EarningsHub = () => {
     
     setLoading(true);
     try {
-      const [accountRes, streamsRes, tasksRes] = await Promise.all([
+      const [accountRes, streamsRes, tasksRes, historyRes, prefsRes] = await Promise.all([
         axios.get(`${API}/earnings/account/${userId}`),
         axios.get(`${API}/earnings/income-streams`),
-        axios.get(`${API}/earnings/tasks/available?user_id=${userId}&limit=10`).catch(() => ({ data: { tasks: [] } }))
+        axios.get(`${API}/earnings/tasks/available?user_id=${userId}&limit=10`).catch(() => ({ data: { tasks: [] } })),
+        axios.get(`${API}/earnings/history/${userId}?days=7`).catch(() => ({ data: null })),
+        axios.get(`${API}/earnings/preferences/${userId}`).catch(() => ({ data: null }))
       ]);
       
       setAccount(accountRes.data);
       setIncomeStreams(streamsRes.data.streams || {});
       setAvailableTasks(tasksRes.data.tasks || []);
       
-      // Calculate stats
-      const totalEarned = accountRes.data.total_earned_usd || 0;
+      // Use real earnings data from history endpoint
+      if (historyRes.data) {
+        setTodayEarnings(historyRes.data.today_earned || 0);
+        setWeeklyEarnings(historyRes.data.week_earned || 0);
+      } else {
+        // Fallback to estimates if history not available
+        const totalEarned = accountRes.data.total_earned_usd || 0;
+        setTodayEarnings(totalEarned * 0.1);
+        setWeeklyEarnings(totalEarned * 0.5);
+      }
+      
+      // Calculate hourly rate from actual data
       const tasksCompleted = accountRes.data.tasks_completed || 0;
+      const totalEarned = accountRes.data.total_earned_usd || 0;
       setHourlyRate(tasksCompleted > 0 ? (totalEarned / (tasksCompleted * 0.1)).toFixed(2) : 0);
-      setTodayEarnings(totalEarned * 0.1); // Simulated
-      setWeeklyEarnings(totalEarned * 0.5); // Simulated
+      
+      // Load withdrawal preferences
+      if (prefsRes.data) {
+        setWithdrawalPrefs(prefsRes.data);
+      }
       
       // Check wallet
       if (accountRes.data.connected_wallets?.length > 0) {
@@ -143,11 +161,51 @@ const EarningsHub = () => {
       console.error('Failed to load ecosystem:', error);
     }
   }, [userId]);
+
+  // Load marketplace & AI partner data for sync
+  const loadExternalSources = useCallback(async () => {
+    try {
+      const [marketplaceRes, aiPartnersRes, bountyRes] = await Promise.all([
+        axios.get(`${API}/task-marketplace/hybrid/my-tasks/${userId}`).catch(() => ({ data: { completed: [] } })),
+        axios.get(`${API}/ai-partner/user/${userId}/status`).catch(() => ({ data: { pending_earnings: { gold: 0, ve: 0 } } })),
+        axios.get(`${API}/bounty-board/my-bounties/${userId}`).catch(() => ({ data: { stats: { total_ve_earned: 0 } } }))
+      ]);
+      
+      // Calculate additional earnings from external sources
+      const marketplaceEarnings = marketplaceRes.data.completed?.reduce((sum, c) => sum + (c.ve_paid || 0), 0) || 0;
+      const aiPartnerPending = aiPartnersRes.data.pending_earnings?.ve || 0;
+      const bountyEarnings = bountyRes.data.stats?.total_ve_earned || 0;
+      
+      // Update stats with external data
+      setTodayEarnings(prev => prev + marketplaceEarnings + bountyEarnings);
+      
+      return { marketplaceEarnings, aiPartnerPending, bountyEarnings };
+    } catch (error) {
+      console.error('Failed to load external sources:', error);
+      return null;
+    }
+  }, [userId]);
+  
+  // Refresh all data
+  const refreshAllData = useCallback(async () => {
+    setLoading(true);
+    await Promise.all([loadAccount(), loadEcosystem(), loadExternalSources()]);
+    setLoading(false);
+    toast.success('Earnings data refreshed');
+  }, [loadAccount, loadEcosystem, loadExternalSources]);
   
   useEffect(() => {
     loadAccount();
     loadEcosystem();
-  }, [loadAccount, loadEcosystem]);
+    loadExternalSources();
+    
+    // Auto-refresh every 30 seconds when on earnings tab
+    const interval = setInterval(() => {
+      loadExternalSources();
+    }, 30000);
+    
+    return () => clearInterval(interval);
+  }, [loadAccount, loadEcosystem, loadExternalSources]);
   
   // Task timer
   useEffect(() => {
@@ -244,7 +302,7 @@ const EarningsHub = () => {
   };
   
   // Process withdrawal
-  const processWithdrawal = async (destinationType) => {
+  const processWithdrawal = async (destinationType, saveAsDefault = false) => {
     try {
       // Create withdrawal request
       const withdrawRes = await axios.post(`${API}/earnings/withdraw`, {
@@ -263,7 +321,23 @@ const EarningsHub = () => {
         wallet_percentage: destinationType === 'wallet' ? 100 : 0
       });
       
-      toast.success(`Withdrawal of ${formatVE(withdrawAmount)} initiated!`);
+      // Save as default preferences if requested
+      if (saveAsDefault) {
+        await axios.put(`${API}/earnings/preferences/${userId}`, {
+          user_id: userId,
+          default_method: destinationType === 'wallet' ? 'crypto' : 'game_balance',
+          default_wallet: destinationType === 'wallet' ? walletAddress : null,
+          wallet_percentage: destinationType === 'wallet' ? 100 : 0
+        });
+        setWithdrawalPrefs({
+          default_method: destinationType === 'wallet' ? 'crypto' : 'game_balance',
+          default_wallet: destinationType === 'wallet' ? walletAddress : null
+        });
+        toast.success(`Withdrawal initiated! Preferences saved for future transfers.`);
+      } else {
+        toast.success(`Withdrawal of ${formatVE(withdrawAmount)} initiated!`);
+      }
+      
       setShowWithdrawModal(false);
       setWithdrawAmount('');
       loadAccount();
@@ -394,6 +468,28 @@ const EarningsHub = () => {
           
           {/* Wallet Connection */}
           <div className="flex items-center gap-4">
+            {/* Quick Access Buttons */}
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => navigate('/tasks')}
+              className="border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10"
+              data-testid="quick-tasks-btn"
+            >
+              <Target className="w-4 h-4 mr-1" />
+              RT Tasks
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => navigate('/compute')}
+              className="border-purple-500/50 text-purple-400 hover:bg-purple-500/10"
+              data-testid="quick-compute-btn"
+            >
+              <Cpu className="w-4 h-4 mr-1" />
+              Compute
+            </Button>
+            
             {walletConnected ? (
               <div className="flex items-center gap-2 px-4 py-2 bg-green-500/10 border border-green-500/30 rounded-lg">
                 <Wallet className="w-4 h-4 text-green-500" />
@@ -477,8 +573,8 @@ const EarningsHub = () => {
                   <Target className="w-5 h-5" />
                   Available Tasks
                 </h2>
-                <Button variant="ghost" size="sm" onClick={loadAccount}>
-                  <RefreshCw className="w-4 h-4" />
+                <Button variant="ghost" size="sm" onClick={refreshAllData} title="Refresh all earnings data">
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </Button>
               </div>
               
@@ -849,32 +945,90 @@ const EarningsHub = () => {
                 </div>
               </div>
               
+              {/* Show saved preference if exists */}
+              {withdrawalPrefs && !withdrawalPrefs.is_default && (
+                <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                  <div className="flex items-center gap-2 text-sm text-green-400">
+                    <CheckCircle className="w-4 h-4" />
+                    <span>
+                      Default: {withdrawalPrefs.default_method === 'crypto' 
+                        ? `Wallet (${withdrawalPrefs.default_wallet?.slice(0,6)}...${withdrawalPrefs.default_wallet?.slice(-4)})`
+                        : 'Game Balance'}
+                    </span>
+                  </div>
+                </div>
+              )}
+              
               <p className="text-sm text-muted-foreground mb-4">Where should we send your funds?</p>
               
               <div className="space-y-3">
                 {walletConnected && (
-                  <Button 
-                    onClick={() => processWithdrawal('wallet')}
-                    className="w-full bg-purple-600 hover:bg-purple-500 justify-start"
-                  >
-                    <Wallet className="w-4 h-4 mr-3" />
-                    <div className="text-left">
-                      <div>Send to Wallet</div>
-                      <div className="text-xs opacity-70">{walletAddress.slice(0, 10)}...{walletAddress.slice(-6)}</div>
-                    </div>
-                  </Button>
+                  <div className="space-y-2">
+                    <Button 
+                      onClick={() => processWithdrawal('wallet', false)}
+                      className={`w-full justify-start ${
+                        withdrawalPrefs?.default_method === 'crypto' 
+                          ? 'bg-purple-600 hover:bg-purple-500 ring-2 ring-purple-400' 
+                          : 'bg-purple-600 hover:bg-purple-500'
+                      }`}
+                      data-testid="withdraw-wallet-btn"
+                    >
+                      <Wallet className="w-4 h-4 mr-3" />
+                      <div className="text-left flex-1">
+                        <div className="flex items-center gap-2">
+                          Send to Wallet
+                          {withdrawalPrefs?.default_method === 'crypto' && (
+                            <Badge className="bg-green-500/20 text-green-400 text-xs">Default</Badge>
+                          )}
+                        </div>
+                        <div className="text-xs opacity-70">{walletAddress.slice(0, 10)}...{walletAddress.slice(-6)}</div>
+                      </div>
+                    </Button>
+                    {withdrawalPrefs?.default_method !== 'crypto' && (
+                      <Button 
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => processWithdrawal('wallet', true)}
+                        className="w-full text-xs text-purple-400 hover:text-purple-300"
+                      >
+                        Send to Wallet & Set as Default
+                      </Button>
+                    )}
+                  </div>
                 )}
                 
-                <Button 
-                  onClick={() => processWithdrawal('game_balance')}
-                  className="w-full bg-gold text-black hover:bg-gold-light justify-start"
-                >
-                  <DollarSign className="w-4 h-4 mr-3" />
-                  <div className="text-left">
-                    <div>Keep in Game Balance</div>
-                    <div className="text-xs opacity-70">Use for in-game purchases</div>
-                  </div>
-                </Button>
+                <div className="space-y-2">
+                  <Button 
+                    onClick={() => processWithdrawal('game_balance', false)}
+                    className={`w-full justify-start ${
+                      withdrawalPrefs?.default_method === 'game_balance' || (!withdrawalPrefs?.default_method && !walletConnected)
+                        ? 'bg-gold text-black hover:bg-gold-light ring-2 ring-gold' 
+                        : 'bg-gold text-black hover:bg-gold-light'
+                    }`}
+                    data-testid="withdraw-game-btn"
+                  >
+                    <DollarSign className="w-4 h-4 mr-3" />
+                    <div className="text-left flex-1">
+                      <div className="flex items-center gap-2">
+                        Keep in Game Balance
+                        {(withdrawalPrefs?.default_method === 'game_balance' || !withdrawalPrefs?.default_method) && (
+                          <Badge className="bg-black/20 text-black text-xs">Default</Badge>
+                        )}
+                      </div>
+                      <div className="text-xs opacity-70">Use for in-game purchases</div>
+                    </div>
+                  </Button>
+                  {withdrawalPrefs?.default_method !== 'game_balance' && withdrawalPrefs?.default_method && (
+                    <Button 
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => processWithdrawal('game_balance', true)}
+                      className="w-full text-xs text-gold hover:text-gold-light"
+                    >
+                      Keep in Game & Set as Default
+                    </Button>
+                  )}
+                </div>
                 
                 <Button 
                   variant="outline" 
@@ -886,7 +1040,7 @@ const EarningsHub = () => {
               </div>
               
               <p className="text-xs text-muted-foreground text-center mt-4">
-                Processing time: 1-3 business days
+                Processing time: 1-3 business days | Default preferences are saved permanently
               </p>
             </div>
           </Card>

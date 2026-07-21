@@ -142,7 +142,7 @@ export const GameNavigation = ({
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate('/profile')}
+            onClick={() => navigate('/settings')}
             className="rounded-sm"
             data-testid="nav-profile-btn"
           >

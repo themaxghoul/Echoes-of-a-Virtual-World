@@ -7,7 +7,9 @@ import { Progress } from '@/components/ui/progress';
 import { 
   Gamepad2, MessageSquare, User, Sparkles, Crown,
   ArrowRight, Settings, LogOut, Hammer, ArrowLeftRight,
-  Heart, Zap, Shield, Swords, DollarSign, TrendingUp, Briefcase
+  Heart, Zap, Shield, Swords, DollarSign, TrendingUp, Briefcase,
+  Map, Globe, Award, Lock, Clock, Cpu, Scroll, ShoppingBag, Trophy,
+  Compass, Camera, Coins
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -100,7 +102,14 @@ const ModeSelection = () => {
 
       {/* Header */}
       <header className="relative z-10 p-4 sm:p-6 flex justify-between items-center border-b border-border/30">
-        <div className="flex items-center gap-3">
+        <button 
+          onClick={() => {
+            pushNavHistory('/settings');
+            navigate('/settings');
+          }}
+          className="flex items-center gap-3 hover:opacity-80 transition-opacity cursor-pointer"
+          data-testid="header-profile-btn"
+        >
           {userProfile && (
             <>
               <div className={`w-10 h-10 rounded-sm flex items-center justify-center ${
@@ -114,7 +123,7 @@ const ModeSelection = () => {
                   <User className="w-5 h-5 text-gold" />
                 )}
               </div>
-              <div>
+              <div className="text-left">
                 <div className="flex items-center gap-2">
                   <p className="font-cinzel text-sm text-foreground">{userProfile.display_name}</p>
                   {isTranscendent && (
@@ -125,18 +134,18 @@ const ModeSelection = () => {
               </div>
             </>
           )}
-        </div>
+        </button>
         
         <div className="flex gap-2">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => {
-              pushNavHistory('/profile');
-              navigate('/profile');
+              pushNavHistory('/settings');
+              navigate('/settings');
             }}
             className="rounded-sm"
-            data-testid="profile-btn"
+            data-testid="settings-btn"
           >
             <Settings className="w-5 h-5 text-muted-foreground" />
           </Button>
@@ -279,60 +288,65 @@ const ModeSelection = () => {
             </CardContent>
           </Card>
 
-          {/* 3D First Person Mode (Web) */}
+          {/* World Explorer - Unified Exploration Mode */}
           <Card 
-            className="bg-surface/80 border-border/50 rounded-sm hover:border-slate-blue/50 transition-all duration-300 cursor-pointer group"
-            onClick={() => selectMode('firstperson', '/play')}
-            data-testid="firstperson-mode-card"
+            className="bg-surface/80 border-border/50 rounded-sm hover:border-green-500/50 transition-all duration-300 cursor-pointer group"
+            onClick={() => selectMode('explore', '/world-explorer')}
+            data-testid="explore-mode-card"
           >
             <CardContent className="p-6 text-center">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-blue/20 border border-slate-blue/30 flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Gamepad2 className="w-8 h-8 text-slate-blue" />
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+                <Compass className="w-8 h-8 text-green-400" />
               </div>
-              <h3 className="font-cinzel text-lg text-foreground mb-2">First Person 3D</h3>
+              <h3 className="font-cinzel text-lg text-foreground mb-2">World Explorer</h3>
               <p className="font-manrope text-sm text-muted-foreground mb-4">
-                Immersive 3D in browser. Walk through the village, interact with NPCs.
+                Explore the infinite world. Same coordinates across 2D, Isometric, and 3D views.
               </p>
               <div className="flex flex-wrap gap-2 justify-center mb-4">
-                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">Web 3D</Badge>
-                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">D-Pad</Badge>
+                <Badge className="bg-green-500/10 text-green-400 text-xs rounded-sm">Unified Seed</Badge>
+                <Badge className="bg-green-500/10 text-green-400 text-xs rounded-sm">Multi-View</Badge>
               </div>
               <Button 
-                data-testid="select-firstperson-btn"
-                className="w-full bg-slate-blue text-white hover:bg-slate-blue-light font-cinzel rounded-sm"
+                data-testid="select-explore-btn"
+                className="w-full bg-green-600 text-white hover:bg-green-500 font-cinzel rounded-sm"
               >
-                <Gamepad2 className="w-5 h-5 mr-2" />
-                Enter 3D Web
+                <Compass className="w-5 h-5 mr-2" />
+                Explore World
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
             </CardContent>
           </Card>
 
-          {/* Unity First Person Mode */}
+          {/* Unity 3D Client - COMING SOON */}
           <Card 
-            className="bg-surface/80 border-border/50 rounded-sm hover:border-purple-500/50 transition-all duration-300 cursor-pointer group"
-            onClick={() => selectMode('unity', '/unity')}
+            className="bg-surface/80 border-border/50 rounded-sm transition-all duration-300 group relative opacity-70"
             data-testid="unity-mode-card"
           >
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-sm">
+              <div className="text-center">
+                <Clock className="w-10 h-10 text-purple-400 mx-auto mb-2" />
+                <Badge className="bg-purple-500/20 text-purple-400 text-sm px-4 py-1">Coming Soon</Badge>
+              </div>
+            </div>
             <CardContent className="p-6 text-center">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-purple-500/20 border border-purple-500/30 flex items-center justify-center">
                 <Gamepad2 className="w-8 h-8 text-purple-400" />
               </div>
-              <h3 className="font-cinzel text-lg text-foreground mb-2">Unity 3D</h3>
+              <h3 className="font-cinzel text-lg text-foreground mb-2">Unity 3D Client</h3>
               <p className="font-manrope text-sm text-muted-foreground mb-4">
-                High-fidelity Unity client. Download and play with full graphics.
+                Download the high-fidelity Unity client. Same world, stunning graphics.
               </p>
               <div className="flex flex-wrap gap-2 justify-center mb-4">
                 <Badge className="bg-purple-500/10 text-purple-400 text-xs rounded-sm">Hi-Fi 3D</Badge>
-                <Badge className="bg-purple-500/10 text-purple-400 text-xs rounded-sm">Sync</Badge>
+                <Badge className="bg-purple-500/10 text-purple-400 text-xs rounded-sm">Cross-Platform</Badge>
               </div>
               <Button 
+                disabled
                 data-testid="select-unity-btn"
-                className="w-full bg-purple-600 text-white hover:bg-purple-500 font-cinzel rounded-sm"
+                className="w-full bg-purple-600/50 text-white font-cinzel rounded-sm cursor-not-allowed"
               >
-                <Gamepad2 className="w-5 h-5 mr-2" />
-                Unity Offload
-                <ArrowRight className="w-5 h-5 ml-2" />
+                <Lock className="w-5 h-5 mr-2" />
+                Coming Soon
               </Button>
             </CardContent>
           </Card>
@@ -355,8 +369,8 @@ const ModeSelection = () => {
           <Button
             variant="outline"
             onClick={() => {
-              pushNavHistory('/building');
-              navigate('/building');
+              pushNavHistory('/isometric-builder');
+              navigate('/isometric-builder');
             }}
             className="border-gold/30 text-gold hover:bg-gold/10 rounded-sm"
             data-testid="building-btn"
@@ -390,13 +404,192 @@ const ModeSelection = () => {
           <Button
             variant="outline"
             onClick={() => {
-              pushNavHistory('/quests');
-              navigate('/quests');
+              pushNavHistory('/store');
+              navigate('/store');
+            }}
+            className="border-gold/30 text-gold hover:bg-gold/10 rounded-sm"
+            data-testid="store-btn"
+          >
+            <ShoppingBag className="w-4 h-4 mr-2" />
+            Store
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/quest-board');
+              navigate('/quest-board');
             }}
             className="border-purple-400/30 text-purple-400 hover:bg-purple-400/10 rounded-sm"
           >
             <Sparkles className="w-4 h-4 mr-2" />
             Quests
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/world-map');
+              navigate('/world-map');
+            }}
+            className="border-cyan-400/30 text-cyan-400 hover:bg-cyan-400/10 rounded-sm"
+            data-testid="world-map-btn"
+          >
+            <Map className="w-4 h-4 mr-2" />
+            World Map
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/webgl');
+              navigate('/webgl');
+            }}
+            className="border-pink-400/30 text-pink-400 hover:bg-pink-400/10 rounded-sm"
+            data-testid="webgl-btn"
+          >
+            <Globe className="w-4 h-4 mr-2" />
+            WebGL
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/skill-trees');
+              navigate('/skill-trees');
+            }}
+            className="border-yellow-400/30 text-yellow-400 hover:bg-yellow-400/10 rounded-sm"
+            data-testid="skill-trees-btn"
+          >
+            <Award className="w-4 h-4 mr-2" />
+            Skills
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/marketplace');
+              navigate('/marketplace');
+            }}
+            className="border-emerald-400/30 text-emerald-400 hover:bg-emerald-400/10 rounded-sm"
+            data-testid="marketplace-btn"
+          >
+            <ShoppingBag className="w-4 h-4 mr-2" />
+            Marketplace
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/ai-partners');
+              navigate('/ai-partners');
+            }}
+            className="border-cyan-500/30 text-cyan-400 hover:bg-cyan-400/10 rounded-sm"
+            data-testid="ai-partners-btn"
+          >
+            <Cpu className="w-4 h-4 mr-2" />
+            AI Partners
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/quest-board');
+              navigate('/quest-board');
+            }}
+            className="border-amber-500/30 text-amber-500 hover:bg-amber-500/10 rounded-sm"
+            data-testid="quest-board-btn"
+          >
+            <Scroll className="w-4 h-4 mr-2" />
+            Quest Board
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/leaderboard');
+              navigate('/leaderboard');
+            }}
+            className="border-rose-400/30 text-rose-400 hover:bg-rose-400/10 rounded-sm"
+            data-testid="leaderboard-btn"
+          >
+            <Trophy className="w-4 h-4 mr-2" />
+            Leaderboard
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/npc-services');
+              navigate('/npc-services');
+            }}
+            className="border-orange-400/30 text-orange-400 hover:bg-orange-400/10 rounded-sm"
+            data-testid="npc-services-btn"
+          >
+            <Hammer className="w-4 h-4 mr-2" />
+            NPC Services
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/task-factory');
+              navigate('/task-factory');
+            }}
+            className="border-violet-400/30 text-violet-400 hover:bg-violet-400/10 rounded-sm"
+            data-testid="task-factory-btn"
+          >
+            <Cpu className="w-4 h-4 mr-2" />
+            Task Factory
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/task-workbench');
+              navigate('/task-workbench');
+            }}
+            className="border-cyan-400/30 text-cyan-400 hover:bg-cyan-400/10 rounded-sm"
+            data-testid="task-workbench-btn"
+          >
+            <Hammer className="w-4 h-4 mr-2" />
+            Task Workbench
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/avatar-studio');
+              navigate('/avatar-studio');
+            }}
+            className="border-pink-400/30 text-pink-400 hover:bg-pink-400/10 rounded-sm"
+            data-testid="avatar-studio-btn"
+          >
+            <Sparkles className="w-4 h-4 mr-2" />
+            Avatar Studio
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/boutique');
+              navigate('/boutique');
+            }}
+            className="border-emerald-400/30 text-emerald-400 hover:bg-emerald-400/10 rounded-sm"
+            data-testid="boutique-btn"
+          >
+            <ShoppingBag className="w-4 h-4 mr-2" />
+            VE$ Boutique
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/field-ops');
+              navigate('/field-ops');
+            }}
+            className="border-amber-400/30 text-amber-400 hover:bg-amber-400/10 rounded-sm"
+            data-testid="field-ops-btn"
+          >
+            <Camera className="w-4 h-4 mr-2" />
+            Field Ops
+          </Button>
+          <Button
+            onClick={() => {
+              pushNavHistory('/economy');
+              navigate('/economy');
+            }}
+            className="bg-gradient-to-r from-emerald-500 to-cyan-500 text-black hover:opacity-90 rounded-sm font-cinzel"
+            data-testid="economy-hub-btn"
+          >
+            <Coins className="w-4 h-4 mr-2" />
+            Economy Hub
           </Button>
         </div>
 
@@ -432,7 +625,7 @@ const ModeSelection = () => {
       {/* Footer */}
       <footer className="relative z-10 p-4 text-center border-t border-border/30">
         <p className="font-mono text-xs text-muted-foreground/50">
-          Story Mode = 2D Chat + Building | First Person = 3D Models
+          AI Village: The Echoes | v0.1.0
         </p>
       </footer>
     </div>

@@ -9,11 +9,13 @@ import { Badge } from '@/components/ui/badge';
 import { 
   MapPin, Send, Menu, X, User, BookOpen, 
   ChevronRight, Loader2, Home, Sparkles, Lock, Unlock,
-  Crown, Shield, Flame, Eye, Moon, Star, Globe, ArrowLeft, History
+  Crown, Shield, Flame, Eye, Moon, Star, Globe, ArrowLeft, History,
+  MessageSquare, Users, Compass, Hammer
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
 import { pushNavHistory } from '@/components/GameNavigation';
+import MultiplayerChat from '@/components/MultiplayerChat';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -78,6 +80,10 @@ const VillageExplorer = () => {
   const [conversationCount, setConversationCount] = useState(0);
   const [visitedLocations, setVisitedLocations] = useState(new Set(['village_square']));
   const [worldNews, setWorldNews] = useState([]);
+  
+  // Multiplayer chat state
+  const [showMultiplayerChat, setShowMultiplayerChat] = useState(false);
+  const [chatPopOut, setChatPopOut] = useState(false);
 
   // Track navigation
   useEffect(() => {
@@ -405,6 +411,33 @@ const VillageExplorer = () => {
 
             {/* Locations */}
             <ScrollArea className="flex-1 p-4">
+              {/* World Actions - Explore & Build */}
+              <div className="mb-6">
+                <h3 className="font-cinzel text-sm text-muted-foreground mb-3 uppercase tracking-wider">
+                  World Actions
+                </h3>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => navigate('/world-explorer')}
+                    className="p-3 rounded-sm border border-green-500/30 bg-green-500/10 hover:bg-green-500/20 transition-all text-left"
+                    data-testid="sidebar-explore-btn"
+                  >
+                    <Compass className="w-5 h-5 text-green-400 mb-1" />
+                    <span className="text-xs font-cinzel text-green-400">Explore</span>
+                    <p className="text-[10px] text-muted-foreground mt-1">Discover world</p>
+                  </button>
+                  <button
+                    onClick={() => navigate('/isometric-builder')}
+                    className="p-3 rounded-sm border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 transition-all text-left"
+                    data-testid="sidebar-build-btn"
+                  >
+                    <Hammer className="w-5 h-5 text-amber-400 mb-1" />
+                    <span className="text-xs font-cinzel text-amber-400">Build</span>
+                    <p className="text-[10px] text-muted-foreground mt-1">2.5D builder</p>
+                  </button>
+                </div>
+              </div>
+
               <h3 className="font-cinzel text-sm text-muted-foreground mb-4 uppercase tracking-wider">
                 Explore The Village
               </h3>
@@ -450,7 +483,7 @@ const VillageExplorer = () => {
                                 const Icon = avatar?.icon || User;
                                 return (
                                   <div 
-                                    key={i}
+                                    key={`npc-avatar-${npc}-${i}`}
                                     className={`w-6 h-6 rounded-full ${avatar?.bg || 'bg-surface'} flex items-center justify-center overflow-hidden border border-border/30`}
                                     title={npc}
                                   >
@@ -600,6 +633,27 @@ const VillageExplorer = () => {
                 <span className="font-mono text-xs text-slate-blue">News</span>
               </button>
             )}
+            {/* Players Button - Multiplayer Chat Toggle */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex items-center gap-2 px-3 py-1 bg-gold/20 hover:bg-gold/30 text-gold rounded-sm"
+              onClick={() => setShowMultiplayerChat(true)}
+              data-testid="multiplayer-chat-toggle"
+            >
+              <Users className="w-4 h-4" />
+              <span className="hidden sm:inline font-mono text-xs">Players</span>
+            </Button>
+            {/* Profile/Settings Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate('/settings')}
+              className="rounded-sm hover:bg-gold/10"
+              data-testid="header-settings-btn"
+            >
+              <User className="w-4 h-4 text-muted-foreground" />
+            </Button>
             <Sparkles className="w-4 h-4 text-slate-blue animate-pulse sm:hidden" />
           </div>
         </header>
@@ -623,7 +677,7 @@ const VillageExplorer = () => {
                 const Icon = avatar?.icon || User;
                 return (
                   <div 
-                    key={i}
+                    key={`location-npc-${npc}-${i}`}
                     className="flex items-center gap-2 bg-black/60 backdrop-blur-sm rounded-sm px-3 py-2"
                   >
                     <div className={`w-8 h-8 rounded-full ${avatar?.bg || 'bg-surface'} flex items-center justify-center overflow-hidden border border-white/20`}>
@@ -652,7 +706,7 @@ const VillageExplorer = () => {
           <div className="max-w-3xl mx-auto space-y-6">
             {messages.map((msg, i) => (
               <div 
-                key={i} 
+                key={msg.id || `msg-${msg.timestamp || i}-${i}`} 
                 className={`chat-message ${
                   msg.role === 'user' ? 'flex justify-end' : ''
                 }`}
@@ -738,7 +792,7 @@ const VillageExplorer = () => {
                 <span className="font-mono text-xs text-muted-foreground/40 mr-2">Quick:</span>
                 {currentLocation.available_actions.slice(0, 4).map((action, i) => (
                   <button
-                    key={i}
+                    key={`quick-action-${action}`}
                     data-testid={`quick-action-${action}-btn`}
                     onClick={() => setInputMessage(action)}
                     className="text-xs text-muted-foreground hover:text-gold px-3 py-1.5 bg-obsidian/80 border border-border/30 hover:border-gold/50 rounded-sm transition-all duration-200"
@@ -751,6 +805,30 @@ const VillageExplorer = () => {
           </div>
         </div>
       </main>
+      
+      {/* Multiplayer Chat Panel */}
+      {showMultiplayerChat && !chatPopOut && (
+        <div className="fixed bottom-4 right-4 w-96 h-[500px] z-50">
+          <MultiplayerChat 
+            isOpen={showMultiplayerChat}
+            onClose={() => setShowMultiplayerChat(false)}
+            onPopOut={() => setChatPopOut(true)}
+            currentRegion={currentLocation?.id}
+            userId={localStorage.getItem('userId')}
+          />
+        </div>
+      )}
+      
+      {/* Pop-out Chat */}
+      {chatPopOut && (
+        <MultiplayerChat 
+          isOpen={true}
+          isPopOut={true}
+          onClose={() => { setChatPopOut(false); setShowMultiplayerChat(false); }}
+          currentRegion={currentLocation?.id}
+          userId={localStorage.getItem('userId')}
+        />
+      )}
     </div>
   );
 };

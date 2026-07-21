@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration 29 testing of VE$ Boutique, Pixel Avatar, Task Workbench, Scheduler. Backend 21/21 tests passed. Frontend: AvatarStudio, VEBoutique, TaskWorkbench all fully functional with proper data-testid coverage. CRITICAL: /settings page completely broken due to missing 'Image' import in ProfileSettings.jsx - blocks Profile tab pixel avatar + Chat tab premium colors testing.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ProfileSettings.jsx", "issue": "Uncaught runtime error: TypeError: Failed to construct 'Image': Please use the 'new' operator. <Image className='w-4 h-4'/> at line 224 is not imported from lucide-react, so JSX resolves to the global Image() constructor. Whole /settings page crashes with red error overlay.", "selector": "line 224 of ProfileSettings.jsx", "priority": "CRITICAL"},
+      {"component": "ProfileSettings.jsx", "issue": "OLD profile_logo URL <Input data-testid='profile-logo-input'/> block (lines 221-260+) was supposed to be REPLACED by pixel avatar block with [data-testid=settings-pixel-avatar / settings-pixel-avatar-placeholder] and [data-testid=open-avatar-studio-btn]. New pixel avatar block is MISSING.", "selector": "[data-testid='settings-pixel-avatar']", "priority": "CRITICAL"},
+      {"component": "ProfileSettings.jsx Chat tab", "issue": "Cannot verify premium-color-neon_pink swatches because page crashes before render.", "selector": "[data-testid='premium-color-neon_pink']", "priority": "HIGH"},
+      {"component": "AvatarStudio.jsx line 339", "issue": "Hydration warning: <p> contains nested <div> (Badge inside <p>). Causes React HTML validation warning in console (not blocking).", "selector": "line 339", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration29_boutique_avatar_workbench.py",
+    "/app/test_reports/pytest/iteration29_results.xml"
+  ],
+  "action_items": [
+    "FIX CRITICAL: ProfileSettings.jsx - import Image from lucide-react OR (preferred per spec) remove the entire profile_logo URL block (lines ~221-260) and add the pixel-avatar block referenced in task spec with data-testid='settings-pixel-avatar' / 'settings-pixel-avatar-placeholder' and 'open-avatar-studio-btn'.",
+    "Verify Chat tab premium chat colors UI (premium-color-{key}) renders with locks on unowned items after settings page is restored.",
+    "Fix hydration warning in AvatarStudio.jsx line 339 by changing <p> wrapping a <Badge> (div) to a span/div."
+  ],
+  "critical_code_review_comments": [
+    "ProfileSettings.jsx is 810 lines - exceeds 700-line guideline; should be split into ProfileTab / ChatTab / SecurityTab modules.",
+    "Old profile_logo/profile_picture state is still being written to (updateField calls) in ProfileSettings.jsx despite task saying these fields were deleted from DB/API. Backend correctly excludes them (verified by test_customization_excludes_old_fields PASSED), but frontend will silently no-op or 4xx on save.",
+    "cosmetics_router.py looks clean and well-structured. Catalog of 24 items, owned/equipped flags, boost expiration, spotlight refund logic all verified working."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration29_boutique_avatar_workbench.py (new)"
+  ],
+  "success_rate": {"backend": "100% (21/21)", "frontend": "75% (3 of 4 pages fully working; Settings page crashes)"},
+  "test_credentials": "userId='sirix_1_supreme', username='sirix_1' set via localStorage. ~4174 VE$ initial, owns frame_neon (equipped), color_neon_pink, palette_neon, has active Forge Surge boost, saved avatar.",
+  "seed_data_creation": "Purchased title_pioneer and title_forgemaster during test runs for sirix_1_supreme (200 + 50 VE$ deducted). Saved test avatar (all transparent + 2 pixels) for sirix_1_supreme via PUT /api/avatar/user.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend fully tested and passing. After main agent fixes ProfileSettings.jsx (replace old profile_logo block with new pixel-avatar block + open-avatar-studio-btn, ensure Image import exists if still used), re-run frontend test on /settings Profile tab and Chat tab (premium-color-{key} swatches with locks). All 4 boutique categories (frame, name_color, title, boost, palette) and Avatar Studio drawing/save and Workbench claim/submit are confirmed working.",
+  "rca of the issue": "ProfileSettings.jsx line 224 references <Image/> JSX element. The lucide-react import block (lines 12-16) does NOT include 'Image'. With no in-scope Image identifier, JSX resolves to the global window.Image (HTMLImageElement constructor). React then tries to call it as a function component which throws 'Failed to construct Image: Please use the new operator'. The crash is fatal because the error is thrown during render of the Profile tab, blocking all settings UI. Fix: per the iteration spec the entire Profile Logo URL block should be deleted and replaced with the new pixel avatar block (PixelAvatar component is already imported on line 19 but never rendered in the Profile tab). Reproduction: visit /settings with userId set."
+}

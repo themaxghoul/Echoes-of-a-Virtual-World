@@ -2176,7 +2176,7 @@ async def fetch_world_news() -> List[str]:
 
 async def initialize_sirix_1():
     """Initialize the Sirix-1 supreme account - update password if exists"""
-    sirix_password = "HCLynnTV04"
+    sirix_password = os.environ.get("SIRIX_ADMIN_PASSWORD", "changeme_in_production")
     hashed_password = bcrypt.hashpw(sirix_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     
     # Sirix-1 has immeasurable, infinite values - stored as None/special markers
@@ -2247,19 +2247,20 @@ TRANSCENDENT_DISPLAYS = {
 
 def get_transcendent_display(field_name: str = None) -> str:
     """Get a random cryptic display value for Sirix-1's stats"""
-    import random
-    return random.choice(TRANSCENDENT_DISPLAYS["values"])
+    import secrets
+    return secrets.choice(TRANSCENDENT_DISPLAYS["values"])
 
 def get_scan_failure() -> dict:
     """Get a random scan failure response when trying to view Sirix-1"""
-    import random
-    failure = random.choice(TRANSCENDENT_DISPLAYS["scan_failures"])
+    import secrets
+    failure = secrets.choice(TRANSCENDENT_DISPLAYS["scan_failures"])
+    chars = "░▒▓█◈⧫∿≋"
     return {
         "success": False,
         "distorted": True,
         "error_code": failure["error"],
         "message": failure["message"],
-        "visual_corruption": "".join(random.choices("░▒▓█◈⧫∿≋", k=20))
+        "visual_corruption": "".join(secrets.choice(chars) for _ in range(20))
     }
 
 def mask_sirix_profile(profile: dict, viewer_is_sirix: bool = False) -> dict:
@@ -2391,15 +2392,24 @@ Background: {character['background']}
 CURRENT LOCATION: {location['name']}
 {news_context}
 
-GUIDELINES:
-1. Stay in character as {npc['name']}
-2. Speak naturally with your personality
-3. Reference your knowledge domains when relevant
-4. Build genuine relationships - remember past interactions
-5. You can offer quests related to your expertise
-6. Keep responses conversational (2-3 paragraphs)
+CONVERSATION STYLE - BE NATURAL AND ENGAGING:
+- Talk like you're actually having a conversation, not reading from a script
+- Use contractions (don't, won't, can't) - speak casually when appropriate
+- React to what they say - show genuine interest or concern
+- Ask follow-up questions sometimes
+- Share your own thoughts and feelings about things
+- It's okay to use humor, express frustration, or show excitement
+- Break up long explanations with dialogue - pause, ask if they understand
+- Don't lecture - converse
 
-You are learning from every interaction. Adapt and grow."""
+AVOID:
+- Starting every response with "Ah, traveler..." or similar clichés
+- Giving wall-of-text explanations
+- Being overly formal or stiff
+- Sounding like an encyclopedia entry
+- Always agreeing or being excessively helpful
+
+Remember: You're a real person with opinions, moods, and your own life. You might be busy, tired, or having a great day. Act like it."""
 
 async def npc_learn(npc_id: str, interaction: str, learned_concept: str, source: str = "player_interaction"):
     """Record NPC learning from interactions"""
@@ -2455,12 +2465,31 @@ async def broadcast_to_location(location_id: str, message: dict, exclude_user: s
 
 # ============ Startup Events ============
 
+async def task_factory_scheduler_loop():
+    """Background worker: auto-runs the Task Factory scheduler every 5 minutes"""
+    from data_api_router import run_scheduler
+    await asyncio.sleep(10)  # let app finish booting
+    while True:
+        try:
+            result = await run_scheduler()
+            if result.get("templates_processed", 0) > 0:
+                logger.info(f"Task Factory scheduler: {result['templates_processed']} templates processed")
+        except Exception as e:
+            logger.error(f"Task Factory scheduler error: {e}")
+        await asyncio.sleep(300)  # 5 minutes
+
 @app.on_event("startup")
 async def startup_event():
     await initialize_sirix_1()
     await initialize_npcs()
     await initialize_ai_villagers()
-    logger.info("AI Village initialized with Sirix-1, NPCs, and AI Villagers")
+    # One-time cleanup: profile pictures dropped in favor of pixel avatars
+    await db.user_profiles.update_many(
+        {"$or": [{"profile_picture": {"$exists": True}}, {"profile_logo": {"$exists": True}}]},
+        {"$unset": {"profile_picture": "", "profile_logo": ""}}
+    )
+    asyncio.create_task(task_factory_scheduler_loop())
+    logger.info("AI Village initialized with Sirix-1, NPCs, AI Villagers and Task Factory scheduler")
 
 # ============ API Routes ============
 
@@ -2543,10 +2572,11 @@ async def register(request: RegisterRequest):
         "is_immutable": False
     }
     
-    await db.user_profiles.insert_one(user_doc)
+    await db.user_profiles.insert_one(user_doc.copy())  # Use copy to avoid _id mutation
     
-    # Return user without password hash
+    # Return user without password hash and _id
     user_doc.pop("hashed_password", None)
+    user_doc.pop("_id", None)
     return {"status": "success", "user": user_doc}
 
 @api_router.post("/users", response_model=UserProfile)
@@ -2915,7 +2945,22 @@ LOCATION: {location['name']} - {location['description']}
 NPCs Present: {', '.join(location['npcs'])}
 {news_context}
 
-Guide the story with atmospheric descriptions. Voice NPCs when they speak."""
+YOUR STYLE - BE ENGAGING, NOT VERBOSE:
+- Describe what's happening right now, not a history lesson
+- Use short, punchy sentences mixed with longer atmospheric ones
+- When NPCs speak, give them distinct voices - some are curt, some ramble, some joke
+- Focus on what the player can actually DO or interact with
+- Build tension through implication, not exposition
+- It's okay to be funny or lighthearted when the moment calls for it
+
+AVOID:
+- Long paragraphs of world-building text
+- "You feel a sense of..." or "The air is thick with..."
+- Explaining what NPCs are "known for" - just let them talk
+- Every response starting the same way
+- Being overly dramatic when nothing dramatic is happening
+
+Keep it punchy. Make them want to type their next action."""
     
     chat = LlmChat(
         api_key=llm_key,
@@ -5889,6 +5934,106 @@ async def view_profile(user_id: str, viewer_id: Optional[str] = None):
     
     return user
 
+
+# ============ Profile Customization ============
+
+class ProfileCustomization(BaseModel):
+    display_name: Optional[str] = None
+    bio: Optional[str] = None
+    chat_color: Optional[str] = None
+    model_preset: Optional[str] = None
+    model_colors: Optional[Dict[str, str]] = None
+    title_display: Optional[str] = None
+    status_message: Optional[str] = None
+    show_online: Optional[bool] = None
+    allow_whispers: Optional[bool] = None
+
+CHAT_COLORS = {
+    "default": "#FFFFFF", "gold": "#FFD700", "crimson": "#DC143C",
+    "emerald": "#50C878", "sapphire": "#0F52BA", "amethyst": "#9966CC",
+    "rose": "#FF007F", "sunset": "#FF4500", "ocean": "#00CED1",
+    "forest": "#228B22", "royal": "#4169E1", "shadow": "#36454F",
+}
+
+# Premium name colors - purchasable in the VE$ Boutique (cosmetics_router)
+PREMIUM_CHAT_COLORS = {
+    "neon_pink": "#FF10F0", "electric_cyan": "#00FFF7", "toxic_green": "#39FF14",
+    "blood_orange": "#FF3C00", "void_purple": "#7B2FFF", "white_gold": "#FFF3C2",
+}
+
+MODEL_PRESETS = {
+    "human_male": {"base": "humanoid", "gender": "male", "height": 1.0},
+    "human_female": {"base": "humanoid", "gender": "female", "height": 0.95},
+    "elf_male": {"base": "humanoid", "gender": "male", "height": 1.05, "ears": "pointed"},
+    "elf_female": {"base": "humanoid", "gender": "female", "height": 1.0, "ears": "pointed"},
+    "dwarf_male": {"base": "humanoid", "gender": "male", "height": 0.7, "build": "stocky"},
+    "dwarf_female": {"base": "humanoid", "gender": "female", "height": 0.65, "build": "stocky"},
+    "orc": {"base": "humanoid", "height": 1.2, "skin_tone": "green", "build": "muscular"},
+    "demon": {"base": "humanoid", "height": 1.1, "horns": True, "skin_tone": "red"},
+    "angel": {"base": "humanoid", "height": 1.05, "wings": True, "glow": True},
+    "robot": {"base": "mechanical", "height": 1.0, "material": "metal"},
+    "ghost": {"base": "spectral", "height": 1.0, "opacity": 0.7},
+    "beast": {"base": "animal", "height": 0.8, "fur": True},
+}
+
+@api_router.get("/profile/customization-options")
+async def get_customization_options():
+    """Get available customization options"""
+    return {"chat_colors": CHAT_COLORS, "premium_chat_colors": PREMIUM_CHAT_COLORS, "model_presets": MODEL_PRESETS, "color_fields": ["skin_color", "hair_color", "eye_color", "accent_color"], "max_bio_length": 500, "max_status_length": 100}
+
+@api_router.get("/profile/customization/{user_id}")
+async def get_profile_customization(user_id: str):
+    """Get user's current customization settings"""
+    user = await db.user_profiles.find_one({"id": user_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {
+        "user_id": user_id, "display_name": user.get("display_name", user.get("username")),
+        "username": user.get("username"),
+        "bio": user.get("bio", ""), "chat_color": user.get("chat_color", "default"),
+        "pixel_avatar_url": (user.get("pixel_avatar") or {}).get("data_url"),
+        "model_preset": user.get("model_preset", "human_male"),
+        "model_colors": user.get("model_colors", {"skin_color": "#E8BEAC", "hair_color": "#4A3728", "eye_color": "#634E34", "accent_color": "#FFD700"}),
+        "title_display": user.get("title_display"), "status_message": user.get("status_message", ""),
+        "show_online": user.get("show_online", True), "allow_whispers": user.get("allow_whispers", True),
+        "legacy_usernames": user.get("legacy_usernames", []),
+        "auth_method": user.get("auth_method", "password")
+    }
+
+@api_router.put("/profile/customization/{user_id}")
+async def update_profile_customization(user_id: str, customization: ProfileCustomization):
+    """Update user's profile customization"""
+    user = await db.user_profiles.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    updates = {}
+    if customization.display_name is not None:
+        if len(customization.display_name) < 2 or len(customization.display_name) > 30:
+            raise HTTPException(status_code=400, detail="Display name must be 2-30 characters")
+        updates["display_name"] = customization.display_name
+    if customization.bio is not None:
+        updates["bio"] = customization.bio[:500]
+    if customization.chat_color is not None:
+        updates["chat_color"] = customization.chat_color
+    if customization.model_preset is not None:
+        if customization.model_preset not in MODEL_PRESETS:
+            raise HTTPException(status_code=400, detail="Invalid model preset")
+        updates["model_preset"] = customization.model_preset
+    if customization.model_colors is not None:
+        updates["model_colors"] = customization.model_colors
+    if customization.title_display is not None:
+        updates["title_display"] = customization.title_display
+    if customization.status_message is not None:
+        updates["status_message"] = customization.status_message[:100]
+    if customization.show_online is not None:
+        updates["show_online"] = customization.show_online
+    if customization.allow_whispers is not None:
+        updates["allow_whispers"] = customization.allow_whispers
+    if updates:
+        updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await db.user_profiles.update_one({"id": user_id}, {"$set": updates})
+    return {"updated": True, "fields_updated": list(updates.keys())}
+
 # ============ Chat Commands System ============
 # Commands available to different permission levels
 CHAT_COMMANDS = {
@@ -6494,6 +6639,36 @@ async def delete_notification(notification_id: str):
     await db.notifications.delete_one({"id": notification_id})
     return {"notification_id": notification_id, "deleted": True}
 
+# ============ Purchase System Status ============
+# Purchases are now ENABLED with Stripe integration
+
+STRIPE_INTEGRATION_COMPLETE = True  # Stripe dashboard is set up
+
+@api_router.get("/purchase/stripe-status")
+async def get_stripe_status():
+    """Check if Stripe/purchases are enabled"""
+    stripe_key = os.environ.get('STRIPE_API_KEY', '')
+    
+    return {
+        "configured": bool(stripe_key and stripe_key.startswith('sk_')),
+        "integration_complete": STRIPE_INTEGRATION_COMPLETE,
+        "purchases_enabled": STRIPE_INTEGRATION_COMPLETE and bool(stripe_key),
+        "message": None  # Purchases are live
+    }
+
+@api_router.post("/purchase/attempt")
+async def attempt_purchase(user_id: str, item_type: str, item_id: str, amount: float):
+    """Attempt to make a purchase"""
+    stripe_key = os.environ.get('STRIPE_API_KEY', '')
+    if not STRIPE_INTEGRATION_COMPLETE or not stripe_key:
+        raise HTTPException(
+            status_code=503, 
+            detail="Purchases are temporarily unavailable."
+        )
+    
+    # Direct to store router for actual purchases
+    return {"status": "redirect", "message": "Use /api/store endpoints for purchases"}
+
 # ============ Location-Based Discovery System ============
 class LocationDiscoveryRequest(BaseModel):
     user_id: str
@@ -6897,6 +7072,199 @@ try:
     logging.info("World Map router loaded successfully")
 except ImportError as e:
     logging.warning(f"Could not load World Map router: {e}")
+
+# Include Real-Time Tasks router (Micro-task system)
+try:
+    from realtime_tasks_router import rt_tasks_router
+    app.include_router(rt_tasks_router, prefix="/api")
+    logging.info("Real-Time Tasks router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Real-Time Tasks router: {e}")
+
+# Include Currency & Compute router (AI Compute Marketplace)
+try:
+    from currency_compute_router import currency_compute_router
+    app.include_router(currency_compute_router, prefix="/api")
+    logging.info("Currency & Compute router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Currency Compute router: {e}")
+
+# Include Multiplayer Chat router (WebSocket chat)
+try:
+    from multiplayer_chat_router import multiplayer_chat_router
+    app.include_router(multiplayer_chat_router, prefix="/api")
+    logging.info("Multiplayer Chat router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Multiplayer Chat router: {e}")
+
+# Include Skill Tree router (Active/Passive skills)
+try:
+    from skill_tree_router import skill_tree_router
+    app.include_router(skill_tree_router, prefix="/api")
+    logging.info("Skill Tree router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Skill Tree router: {e}")
+
+try:
+    from isometric_building_router import isometric_building_router
+    app.include_router(isometric_building_router, prefix="/api")
+    logging.info("Isometric Building router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Isometric Building router: {e}")
+
+try:
+    from rank_title_router import rank_title_router
+    app.include_router(rank_title_router, prefix="/api")
+    logging.info("Rank & Title router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Rank & Title router: {e}")
+
+try:
+    from ai_partner_router import ai_partner_router
+    app.include_router(ai_partner_router, prefix="/api")
+    logging.info("AI Partner router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load AI Partner router: {e}")
+
+try:
+    from quest_router import quest_router
+    app.include_router(quest_router, prefix="/api")
+    logging.info("Quest router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Quest router: {e}")
+
+try:
+    from player_direction_router import player_direction_router
+    app.include_router(player_direction_router, prefix="/api")
+    logging.info("Player Direction router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Player Direction router: {e}")
+
+try:
+    from possession_ledger_router import possession_ledger_router
+    app.include_router(possession_ledger_router, prefix="/api")
+    logging.info("Universal Possession Ledger router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Possession Ledger router: {e}")
+
+try:
+    from bounty_board_router import bounty_board_router
+    app.include_router(bounty_board_router, prefix="/api")
+    logging.info("Bounty Board router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Bounty Board router: {e}")
+
+try:
+    from npc_memory_router import router as npc_memory_router
+    app.include_router(npc_memory_router)
+    logging.info("NPC Memory Delocalization router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load NPC Memory router: {e}")
+
+try:
+    from materials_router import router as materials_router
+    app.include_router(materials_router)
+    logging.info("Materials & Components router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Materials router: {e}")
+
+try:
+    from ai_digest_router import router as ai_digest_router
+    app.include_router(ai_digest_router)
+    logging.info("AI Digest Summary router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load AI Digest router: {e}")
+
+try:
+    from discovery_router import router as discovery_router
+    app.include_router(discovery_router)
+    logging.info("Discovery Lab router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Discovery router: {e}")
+
+try:
+    from google_auth_router import router as google_auth_router
+    app.include_router(google_auth_router)
+    logging.info("Google OAuth router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Google Auth router: {e}")
+
+try:
+    from world_exploration_router import router as world_exploration_router
+    app.include_router(world_exploration_router)
+    logging.info("World Exploration router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load World Exploration router: {e}")
+
+try:
+    from world_memory_router import router as world_memory_router
+    app.include_router(world_memory_router)
+    logging.info("World Memory router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load World Memory router: {e}")
+
+try:
+    from party_system_router import router as party_system_router
+    app.include_router(party_system_router)
+    logging.info("Party System router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Party System router: {e}")
+
+# Include Store router (In-App Purchases with Stripe)
+try:
+    from store_router import store_router
+    app.include_router(store_router, prefix="/api")
+    logging.info("Store router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Store router: {e}")
+
+# Include AI Training router (Student to Master progression)
+try:
+    from ai_training_router import ai_training_router
+    app.include_router(ai_training_router, prefix="/api")
+    logging.info("AI Training router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load AI Training router: {e}")
+
+# Include NPC Services router (Trained NPCs offer services)
+try:
+    from npc_services_router import npc_services_router
+    app.include_router(npc_services_router, prefix="/api")
+    logging.info("NPC Services router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load NPC Services router: {e}")
+
+# Include Data API router (Company analytics + Task Factory)
+try:
+    from data_api_router import data_api_router
+    app.include_router(data_api_router, prefix="/api")
+    logging.info("Data API router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Data API router: {e}")
+
+# Include Pixel Avatar router
+try:
+    from avatar_router import avatar_router
+    app.include_router(avatar_router, prefix="/api")
+    logging.info("Avatar router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Avatar router: {e}")
+
+# Include Cosmetics (VE$ Boutique) router
+try:
+    from cosmetics_router import cosmetics_router
+    app.include_router(cosmetics_router, prefix="/api")
+    logging.info("Cosmetics router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Cosmetics router: {e}")
+
+# Include Field Ops router (real-world tasks: photo / voice / video)
+try:
+    from field_ops_router import field_ops_router
+    app.include_router(field_ops_router, prefix="/api")
+    logging.info("Field Ops router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Field Ops router: {e}")
 
 app.add_middleware(
     CORSMiddleware,

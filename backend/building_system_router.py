@@ -197,8 +197,10 @@ async def get_region_grid(world_id: str, region_id: str):
     
     if not grid:
         # Create new grid
-        grid = BuildingGrid(world_id=world_id, region_id=region_id).dict()
-        await db.building_grids.insert_one(grid)
+        new_grid = BuildingGrid(world_id=world_id, region_id=region_id)
+        grid_dict = new_grid.dict()
+        await db.building_grids.insert_one(grid_dict.copy())  # Use copy to avoid _id mutation
+        grid = new_grid.dict()  # Return clean dict without _id
     
     # Get all buildings
     buildings = await db.placed_buildings.find(
@@ -235,17 +237,20 @@ async def place_building(data: PlaceBuildingRequest, owner_id: str, owner_type: 
         raise HTTPException(status_code=400, detail=f"Collision with {collision_name}")
     
     # Check resources (simplified - just check cost)
-    wallet = await db.entity_wallets.find_one({"entity_id": owner_id})
+    wallet = await db.entity_wallets.find_one({
+        "entity_id": owner_id,
+        "entity_type": owner_type
+    })
     balance = wallet.get("balance_ve", 0) if wallet else 0
     cost = building_info.get("cost", 0)
     
     if balance < cost:
-        raise HTTPException(status_code=400, detail=f"Insufficient funds (need {cost} VE$)")
+        raise HTTPException(status_code=400, detail=f"Insufficient funds (need {cost} VE$, have {balance} VE$)")
     
     # Deduct cost
     if cost > 0:
         await db.entity_wallets.update_one(
-            {"entity_id": owner_id},
+            {"entity_id": owner_id, "entity_type": owner_type},
             {"$inc": {"balance_ve": -cost}}
         )
     
@@ -265,7 +270,8 @@ async def place_building(data: PlaceBuildingRequest, owner_id: str, owner_type: 
         custom_name=data.custom_name
     )
     
-    await db.placed_buildings.insert_one(building.dict())
+    building_dict = building.dict()
+    await db.placed_buildings.insert_one(building_dict.copy())  # Use copy to avoid _id mutation
     
     # Update grid
     await db.building_grids.update_one(
@@ -291,14 +297,14 @@ async def place_building(data: PlaceBuildingRequest, owner_id: str, owner_type: 
         "initiator_type": owner_type,
         "action": "build_structure",
         "location": data.region_id,
-        "details": {"building_type": data.building_type, "position": data.position},
+        "details": {"building_type": data.building_type, "position": list(data.position)},
         "timestamp": datetime.now(timezone.utc).isoformat()
     })
     
     return {
         "placed": True,
         "building_id": building.building_id,
-        "building": building.dict(),
+        "building": building_dict,
         "cost_paid": cost
     }
 
@@ -366,7 +372,7 @@ async def demolish_building(building_id: str, owner_id: str):
     # Refund partial cost
     if refund > 0:
         await db.entity_wallets.update_one(
-            {"entity_id": owner_id},
+            {"entity_id": owner_id, "entity_type": building.get("owner_type", "player")},
             {"$inc": {"balance_ve": refund}}
         )
     

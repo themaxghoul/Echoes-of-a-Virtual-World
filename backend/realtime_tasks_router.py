@@ -1,0 +1,1164 @@
+# Real-Time Micro-Task System - Quick Money, Instant Payouts
+# Multi-provider integration with Toloka, MTurk, Scale AI, Hive, and Appen
+
+from fastapi import APIRouter, HTTPException, BackgroundTasks
+from pydantic import BaseModel, Field
+from typing import Optional, Dict, List, Any
+from datetime import datetime, timezone, timedelta
+import uuid
+import logging
+import random
+import asyncio
+import os
+
+rt_tasks_router = APIRouter(prefix="/rt-tasks", tags=["realtime-tasks"])
+
+logger = logging.getLogger(__name__)
+
+# Import task provider manager
+try:
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from task_providers import (
+        TaskProviderManager, get_provider_manager,
+        ProviderTask, TaskSubmission as ProviderTaskSubmission
+    )
+    PROVIDERS_AVAILABLE = True
+    logger.info("Task providers module loaded successfully")
+except ImportError as e:
+    PROVIDERS_AVAILABLE = False
+    logger.warning(f"Task providers module not available: {e}")
+
+# ============ Real-Time Task Types ============
+# These are simple, quick tasks that can be completed in seconds to minutes
+
+RT_TASK_TYPES = {
+    # Image Tasks - Quick visual verification
+    "image_tagging": {
+        "name": "Image Tagging",
+        "description": "Tag objects in images",
+        "avg_time_seconds": 10,
+        "payout_per_task": 0.02,
+        "skill_xp": {"investigation": 1},
+        "batch_size": 10,
+        "auto_approve": True
+    },
+    "image_comparison": {
+        "name": "Image Comparison",
+        "description": "Compare two images for similarity",
+        "avg_time_seconds": 8,
+        "payout_per_task": 0.015,
+        "skill_xp": {"investigation": 1},
+        "batch_size": 15,
+        "auto_approve": True
+    },
+    "content_rating": {
+        "name": "Content Rating",
+        "description": "Rate content appropriateness (SFW/NSFW)",
+        "avg_time_seconds": 5,
+        "payout_per_task": 0.01,
+        "skill_xp": {"diplomacy": 1},
+        "batch_size": 20,
+        "auto_approve": True
+    },
+    
+    # Text Tasks - Quick reading/classification
+    "sentiment_label": {
+        "name": "Sentiment Labeling",
+        "description": "Label text as positive/negative/neutral",
+        "avg_time_seconds": 6,
+        "payout_per_task": 0.01,
+        "skill_xp": {"lore": 1},
+        "batch_size": 20,
+        "auto_approve": True
+    },
+    "text_categorization": {
+        "name": "Text Categorization",
+        "description": "Categorize text into topics",
+        "avg_time_seconds": 12,
+        "payout_per_task": 0.025,
+        "skill_xp": {"lore": 1, "investigation": 1},
+        "batch_size": 10,
+        "auto_approve": True
+    },
+    "spam_detection": {
+        "name": "Spam Detection",
+        "description": "Identify spam messages",
+        "avg_time_seconds": 4,
+        "payout_per_task": 0.008,
+        "skill_xp": {"investigation": 1},
+        "batch_size": 25,
+        "auto_approve": True
+    },
+    
+    # Audio Tasks
+    "audio_transcription_short": {
+        "name": "Short Audio Transcription",
+        "description": "Transcribe 10-30 second audio clips",
+        "avg_time_seconds": 45,
+        "payout_per_task": 0.10,
+        "skill_xp": {"languages": 2, "lore": 1},
+        "batch_size": 5,
+        "auto_approve": False  # Needs quality check
+    },
+    
+    # AI Training Tasks
+    "response_ranking": {
+        "name": "AI Response Ranking",
+        "description": "Rank AI responses by quality",
+        "avg_time_seconds": 20,
+        "payout_per_task": 0.05,
+        "skill_xp": {"arcana": 2},
+        "batch_size": 8,
+        "auto_approve": True
+    },
+    "prompt_writing": {
+        "name": "Prompt Writing",
+        "description": "Write creative prompts for AI",
+        "avg_time_seconds": 30,
+        "payout_per_task": 0.08,
+        "skill_xp": {"lore": 2, "charm": 1},
+        "batch_size": 5,
+        "auto_approve": True
+    },
+    
+    # Verification Tasks
+    "captcha_solving": {
+        "name": "CAPTCHA Solving",
+        "description": "Solve visual CAPTCHAs",
+        "avg_time_seconds": 5,
+        "payout_per_task": 0.005,
+        "skill_xp": {"investigation": 1},
+        "batch_size": 30,
+        "auto_approve": True
+    },
+    "data_entry": {
+        "name": "Data Entry",
+        "description": "Enter data from images/documents",
+        "avg_time_seconds": 25,
+        "payout_per_task": 0.04,
+        "skill_xp": {"lore": 1},
+        "batch_size": 8,
+        "auto_approve": True
+    },
+    
+    # Gaming/Creative Tasks (for The Echoes)
+    "npc_dialogue_rating": {
+        "name": "NPC Dialogue Rating",
+        "description": "Rate NPC conversation quality",
+        "avg_time_seconds": 15,
+        "payout_per_task": 0.03,
+        "skill_xp": {"charm": 1, "diplomacy": 1},
+        "batch_size": 10,
+        "auto_approve": True
+    },
+    "world_description": {
+        "name": "World Description",
+        "description": "Write short location descriptions",
+        "avg_time_seconds": 60,
+        "payout_per_task": 0.15,
+        "skill_xp": {"lore": 3, "languages": 1},
+        "batch_size": 3,
+        "auto_approve": False
+    }
+}
+
+# ============ Task Provider Adapters ============
+# Simple adapters for real task providers
+
+TASK_PROVIDERS = {
+    "internal": {
+        "name": "The Echoes Internal",
+        "description": "Tasks generated by the game ecosystem",
+        "api_required": False,
+        "instant_payout": True,
+        "reliability": 1.0
+    },
+    "clickworker": {
+        "name": "Clickworker",
+        "description": "Global micro-task platform",
+        "api_required": True,
+        "api_url": "https://api.clickworker.com/v2",
+        "instant_payout": False,
+        "payout_delay_hours": 24,
+        "reliability": 0.95
+    },
+    "toloka": {
+        "name": "Toloka",
+        "description": "Yandex data labeling platform",
+        "api_required": True,
+        "api_url": "https://toloka.dev/api/v1",
+        "instant_payout": False,
+        "payout_delay_hours": 48,
+        "reliability": 0.92
+    },
+    "appen": {
+        "name": "Appen",
+        "description": "Enterprise AI training data",
+        "api_required": True,
+        "api_url": "https://api.appen.com/v1",
+        "instant_payout": False,
+        "payout_delay_hours": 72,
+        "reliability": 0.98
+    }
+}
+
+# ============ Models ============
+
+class RTTask(BaseModel):
+    task_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    task_type: str
+    provider: str = "internal"
+    data: Dict[str, Any]  # Task-specific data
+    payout: float
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    expires_at: str
+    status: str = "available"  # available, claimed, completed, expired
+
+class RTTaskSession(BaseModel):
+    session_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    worker_id: str
+    worker_type: str = "player"  # player or npc
+    task_type: str
+    started_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    tasks_completed: int = 0
+    earnings: float = 0.0
+    is_active: bool = True
+
+class TaskCompletion(BaseModel):
+    task_id: str
+    worker_id: str
+    response: Dict[str, Any]
+    time_taken_seconds: float
+
+class StartSessionRequest(BaseModel):
+    worker_id: str
+    worker_type: str = "player"
+    task_type: str
+    batch_size: Optional[int] = None
+
+# ============ Database Helper ============
+
+def get_db():
+    from server import db
+    return db
+
+# ============ Task Generation - Simulated Real Providers ============
+
+# Simulated provider task pools (mimics real crowdsourcing platforms)
+SIMULATED_IMAGE_URLS = [
+    "https://picsum.photos/400/300",
+    "https://picsum.photos/seed/{seed}/400/300",
+]
+
+SENTIMENT_SAMPLES = {
+    "positive": [
+        "I absolutely loved the new update! Everything runs so smoothly now.",
+        "Best experience ever! The team really outdid themselves.",
+        "This is exactly what I was looking for. Highly recommend!",
+        "Amazing quality and fast delivery. Will buy again!",
+        "The customer service was exceptional. They went above and beyond.",
+        "I'm so happy with my purchase. It exceeded my expectations!",
+        "Fantastic product! Works perfectly and looks great.",
+        "The new features are incredible. Love using this every day.",
+    ],
+    "negative": [
+        "This is terrible, I want a refund immediately.",
+        "Worst experience of my life. Never using this again.",
+        "Complete waste of money. Doesn't work as advertised.",
+        "Support was unhelpful and rude. Very disappointed.",
+        "Product broke after one day. Poor quality control.",
+        "The update ruined everything. Please revert the changes.",
+        "False advertising! This is nothing like the description.",
+        "Been waiting weeks with no response. Unacceptable service.",
+    ],
+    "neutral": [
+        "It's okay, nothing special really.",
+        "Could be better, but it works for what I need.",
+        "Average product, average price. Gets the job done.",
+        "Neither good nor bad. It's just there.",
+        "It meets basic expectations, nothing more.",
+        "Pretty standard stuff. No complaints, no praise.",
+        "Does what it says. Nothing extraordinary.",
+        "Acceptable quality for the price point.",
+    ]
+}
+
+CONTENT_SAMPLES = {
+    "safe": [
+        "Beautiful sunset photo over the mountains",
+        "Family picnic in the park",
+        "Cute puppy playing with a ball",
+        "Delicious homemade pasta recipe",
+        "Scenic hiking trail in autumn",
+    ],
+    "questionable": [
+        "Political debate commentary",
+        "Medical advice discussion",
+        "Financial investment tips",
+        "Controversial historical topic",
+        "Dietary supplement promotion",
+    ],
+    "unsafe": [
+        "[CONTENT_PREVIEW_REDACTED - Violence]",
+        "[CONTENT_PREVIEW_REDACTED - Adult]",
+        "[CONTENT_PREVIEW_REDACTED - Scam]",
+        "[CONTENT_PREVIEW_REDACTED - Harassment]",
+        "[CONTENT_PREVIEW_REDACTED - Illegal]",
+    ]
+}
+
+NPC_DIALOGUE_SAMPLES = [
+    {"npc": "Elder Morvain", "dialogue": "The echoes whisper of your arrival, young traveler. The village has been waiting.", "context": "First meeting in village square"},
+    {"npc": "Lyra the Herbalist", "dialogue": "These mountain herbs have potent healing properties. Take care when mixing them.", "context": "Player asks about crafting"},
+    {"npc": "Kael Ironbrand", "dialogue": "A fine blade you carry. It's seen battle, I can tell. Care to share your tale?", "context": "Player enters the forge"},
+    {"npc": "Thessa the Oracle", "dialogue": "I see shadows gathering in your future... and light. The choice will be yours.", "context": "Player seeks prophecy"},
+    {"npc": "Finn the Merchant", "dialogue": "Fresh stock from the eastern caravans! Best prices in all the realm!", "context": "Player browses market"},
+    {"npc": "Guardian Vex", "dialogue": "Halt! State your business at the Watchtower. These are dangerous times.", "context": "Player approaches restricted area"},
+    {"npc": "Old Bramble", "dialogue": "*grumbles* Another adventurer trampling my garden. At least wipe your boots!", "context": "Player enters residential area"},
+    {"npc": "Sister Mira", "dialogue": "The temple welcomes all who seek peace. May the ancestors guide your path.", "context": "Player enters temple"},
+]
+
+AI_RESPONSE_SAMPLES = [
+    {
+        "prompt": "What is the meaning of life?",
+        "responses": [
+            "42, according to Douglas Adams' famous novel.",
+            "To find happiness and purpose in helping others.",
+            "There is no inherent meaning; we create our own purpose.",
+            "To experience, learn, and grow as conscious beings."
+        ]
+    },
+    {
+        "prompt": "How do I learn programming?",
+        "responses": [
+            "Start with Python - it's beginner-friendly and versatile.",
+            "Just dive in! Pick a project and learn as you build.",
+            "Take a structured course on platforms like Coursera or freeCodeCamp.",
+            "Read documentation and practice coding challenges daily."
+        ]
+    },
+    {
+        "prompt": "What should I cook for dinner?",
+        "responses": [
+            "Try a simple pasta with garlic, olive oil, and vegetables.",
+            "Stir-fry is quick and you can use whatever you have.",
+            "How about ordering pizza? You deserve a break!",
+            "A hearty soup with bread is perfect for this weather."
+        ]
+    },
+    {
+        "prompt": "How do I deal with stress?",
+        "responses": [
+            "Take deep breaths and practice mindfulness meditation.",
+            "Exercise releases endorphins - try a quick walk outside.",
+            "Talk to a friend or write down your thoughts.",
+            "Break your problems into smaller, manageable tasks."
+        ]
+    },
+]
+
+SPAM_SAMPLES = {
+    "spam": [
+        "CONGRATULATIONS! You've won $1,000,000!!! Click here NOW!!!",
+        "Hot singles in your area want to meet YOU! Click to see photos!",
+        "Make $5000/day working from home! No experience needed!",
+        "LIMITED TIME: 99% OFF luxury watches! Buy now before they're gone!",
+        "Your account will be SUSPENDED! Click here to verify immediately!",
+    ],
+    "not_spam": [
+        "Reminder: Your appointment is scheduled for tomorrow at 3pm.",
+        "Thanks for your order! Your tracking number is ABC123.",
+        "Meeting notes from today's project discussion attached.",
+        "Happy birthday! Hope you have a wonderful day!",
+        "The report you requested is ready for review.",
+    ]
+}
+
+TEXT_CATEGORIES = {
+    "technology": ["New smartphone released", "AI breakthrough announced", "Software update available", "Tech company reports earnings"],
+    "sports": ["Team wins championship", "Player sets new record", "Tournament results", "Coach announces retirement"],
+    "politics": ["New policy announced", "Election results", "Diplomatic meeting scheduled", "Budget proposal released"],
+    "entertainment": ["Movie premiere date set", "Album drops Friday", "Award show nominations", "TV series renewed"],
+    "science": ["Research study published", "Space mission launch", "Climate report findings", "Medical breakthrough"],
+    "business": ["Merger announced", "Stock market update", "Startup funding round", "Industry forecast"],
+}
+
+WORLD_DESCRIPTION_PROMPTS = [
+    {"location": "Ancient Ruins", "style": "mysterious", "elements": ["crumbling pillars", "overgrown vines", "faded inscriptions"]},
+    {"location": "Crystal Cave", "style": "magical", "elements": ["glowing crystals", "underground lake", "echoing chambers"]},
+    {"location": "Merchant District", "style": "bustling", "elements": ["colorful stalls", "shouting vendors", "exotic goods"]},
+    {"location": "Haunted Manor", "style": "eerie", "elements": ["creaking floors", "dusty furniture", "whispered secrets"]},
+    {"location": "Dragon's Peak", "style": "majestic", "elements": ["snow-capped summit", "ancient bones", "scorched earth"]},
+]
+
+
+def generate_internal_task(task_type: str) -> Dict[str, Any]:
+    """Generate realistic task data mimicking real crowdsourcing platforms"""
+    task_config = RT_TASK_TYPES.get(task_type, {})
+    seed = random.randint(1000, 9999)
+    
+    if task_type == "image_tagging":
+        categories = ["person", "animal", "vehicle", "building", "nature", "food", "furniture", "electronics", "clothing", "text"]
+        return {
+            "image_url": f"https://picsum.photos/seed/{seed}/400/300",
+            "instructions": "Identify and tag ALL visible objects in this image. Select all that apply.",
+            "categories": random.sample(categories, k=random.randint(4, 8)),
+            "min_tags": 2,
+            "max_tags": 10,
+            "provider_hint": "ImageNet Dataset Sample",
+            "difficulty": random.choice(["easy", "medium", "hard"])
+        }
+    
+    elif task_type == "image_comparison":
+        return {
+            "image_a_url": f"https://picsum.photos/seed/{seed}/400/300",
+            "image_b_url": f"https://picsum.photos/seed/{seed + 1}/400/300",
+            "instructions": "Compare these two images. Are they showing the same subject?",
+            "options": ["identical", "similar", "different", "unrelated"],
+            "criteria": ["subject", "composition", "style"],
+            "provider_hint": "Duplicate Detection Task"
+        }
+    
+    elif task_type == "sentiment_label":
+        sentiment = random.choice(["positive", "negative", "neutral"])
+        text = random.choice(SENTIMENT_SAMPLES[sentiment])
+        return {
+            "text": text,
+            "options": ["positive", "negative", "neutral"],
+            "instructions": "Classify the sentiment expressed in this text.",
+            "context": random.choice(["product_review", "social_media", "customer_feedback", "email"]),
+            "provider_hint": "Social Media Analysis",
+            "_ground_truth": sentiment  # For quality tracking (hidden from worker)
+        }
+    
+    elif task_type == "content_rating":
+        safety_level = random.choices(["safe", "questionable", "unsafe"], weights=[0.7, 0.2, 0.1])[0]
+        content = random.choice(CONTENT_SAMPLES[safety_level])
+        return {
+            "content_preview": content,
+            "content_type": random.choice(["text", "image_description", "video_transcript"]),
+            "options": ["safe", "questionable", "unsafe"],
+            "instructions": "Rate the safety/appropriateness of this content.",
+            "guidelines_url": "https://aivillage.io/content-guidelines",
+            "provider_hint": "Trust & Safety",
+            "_ground_truth": safety_level
+        }
+    
+    elif task_type == "response_ranking":
+        sample = random.choice(AI_RESPONSE_SAMPLES)
+        shuffled_responses = sample["responses"].copy()
+        random.shuffle(shuffled_responses)
+        return {
+            "prompt": sample["prompt"],
+            "responses": shuffled_responses,
+            "instructions": "Select the BEST response to this prompt based on helpfulness and accuracy.",
+            "criteria": ["helpfulness", "accuracy", "clarity", "safety"],
+            "provider_hint": "RLHF Training Data"
+        }
+    
+    elif task_type == "npc_dialogue_rating":
+        sample = random.choice(NPC_DIALOGUE_SAMPLES)
+        return {
+            "npc_name": sample["npc"],
+            "dialogue": sample["dialogue"],
+            "context": sample["context"],
+            "instructions": "Rate this NPC dialogue on a scale of 1-5 for each criterion.",
+            "criteria": ["naturalness", "relevance", "engagement", "character_consistency"],
+            "scale": {"min": 1, "max": 5},
+            "provider_hint": "Game Dialogue QA"
+        }
+    
+    elif task_type == "spam_detection":
+        is_spam = random.choice([True, False])
+        text = random.choice(SPAM_SAMPLES["spam"] if is_spam else SPAM_SAMPLES["not_spam"])
+        return {
+            "text": text,
+            "options": ["spam", "not_spam"],
+            "instructions": "Is this message spam or legitimate?",
+            "context": random.choice(["email", "sms", "social_comment", "forum_post"]),
+            "provider_hint": "Spam Filter Training",
+            "_ground_truth": "spam" if is_spam else "not_spam"
+        }
+    
+    elif task_type == "text_categorization":
+        category = random.choice(list(TEXT_CATEGORIES.keys()))
+        headline = random.choice(TEXT_CATEGORIES[category])
+        return {
+            "text": headline,
+            "options": list(TEXT_CATEGORIES.keys()),
+            "instructions": "Categorize this news headline into the most appropriate topic.",
+            "allow_multiple": False,
+            "provider_hint": "News Classification",
+            "_ground_truth": category
+        }
+    
+    elif task_type == "audio_transcription_short":
+        sample_transcripts = [
+            "Hello and welcome to our podcast. Today we're discussing the latest trends in technology.",
+            "Thank you for calling customer support. Your call is important to us.",
+            "In this lecture, we'll explore the fundamental principles of quantum mechanics.",
+            "The weather forecast shows sunny skies with temperatures reaching 75 degrees.",
+            "This meeting is being recorded for quality assurance purposes.",
+        ]
+        return {
+            "audio_url": f"https://audio.aivillage.io/samples/{seed}.mp3",
+            "duration_seconds": random.randint(10, 30),
+            "language": "en-US",
+            "instructions": "Transcribe the spoken words in this audio clip exactly as heard.",
+            "guidelines": ["Include filler words (um, uh)", "Note unclear sections with [inaudible]", "Use punctuation"],
+            "provider_hint": "Speech Recognition Training",
+            "_sample_transcript": random.choice(sample_transcripts)  # For testing
+        }
+    
+    elif task_type == "prompt_writing":
+        scenarios = [
+            {"topic": "fantasy adventure", "style": "epic", "length": "short"},
+            {"topic": "sci-fi exploration", "style": "mysterious", "length": "medium"},
+            {"topic": "slice of life", "style": "heartwarming", "length": "short"},
+            {"topic": "horror mystery", "style": "suspenseful", "length": "medium"},
+            {"topic": "historical drama", "style": "formal", "length": "short"},
+        ]
+        scenario = random.choice(scenarios)
+        return {
+            "scenario": scenario,
+            "instructions": f"Write a creative prompt for a {scenario['style']} {scenario['topic']} story.",
+            "requirements": {
+                "min_words": 20,
+                "max_words": 100,
+                "must_include": ["character", "setting", "conflict"]
+            },
+            "provider_hint": "Creative Writing Dataset"
+        }
+    
+    elif task_type == "captcha_solving":
+        captcha_types = ["text_distorted", "image_select", "math_simple", "pattern_match"]
+        captcha_type = random.choice(captcha_types)
+        return {
+            "captcha_type": captcha_type,
+            "captcha_image_url": f"https://captcha.aivillage.io/generate/{captcha_type}/{seed}",
+            "instructions": "Solve this CAPTCHA by entering the correct answer.",
+            "hint": {
+                "text_distorted": "Type the characters shown",
+                "image_select": "Select all images containing the specified object",
+                "math_simple": "Solve the math problem",
+                "pattern_match": "Complete the pattern"
+            }[captcha_type],
+            "provider_hint": "CAPTCHA Training"
+        }
+    
+    elif task_type == "data_entry":
+        field_types = [
+            {"label": "Company Name", "sample": "Acme Corporation"},
+            {"label": "Phone Number", "sample": "+1 (555) 123-4567"},
+            {"label": "Email Address", "sample": "contact@example.com"},
+            {"label": "Street Address", "sample": "123 Main Street"},
+            {"label": "Date", "sample": "April 22, 2026"},
+            {"label": "Amount", "sample": "$1,234.56"},
+        ]
+        fields = random.sample(field_types, k=random.randint(2, 4))
+        return {
+            "document_image_url": f"https://docs.aivillage.io/samples/{seed}.png",
+            "instructions": "Extract the following information from the document image.",
+            "fields_to_extract": [f["label"] for f in fields],
+            "sample_values": {f["label"]: f["sample"] for f in fields},
+            "provider_hint": "Document Processing"
+        }
+    
+    elif task_type == "world_description":
+        prompt = random.choice(WORLD_DESCRIPTION_PROMPTS)
+        return {
+            "location_name": prompt["location"],
+            "style": prompt["style"],
+            "required_elements": prompt["elements"],
+            "instructions": f"Write a vivid {prompt['style']} description of {prompt['location']} for a fantasy RPG.",
+            "requirements": {
+                "min_words": 50,
+                "max_words": 150,
+                "must_include_elements": len(prompt["elements"]),
+                "perspective": random.choice(["first_person", "third_person", "omniscient"])
+            },
+            "provider_hint": "Game Content Generation"
+        }
+    
+    else:
+        return {
+            "instructions": task_config.get("description", "Complete this task"),
+            "data": {"sample": "data", "seed": seed},
+            "provider_hint": "Generic Task"
+        }
+
+# ============ Endpoints ============
+
+@rt_tasks_router.get("/types")
+async def get_task_types():
+    """Get all available real-time task types"""
+    return {
+        "task_types": RT_TASK_TYPES,
+        "providers": TASK_PROVIDERS
+    }
+
+@rt_tasks_router.post("/session/start")
+async def start_task_session(data: StartSessionRequest):
+    """Start a real-time task session"""
+    db = get_db()
+    
+    if data.task_type not in RT_TASK_TYPES:
+        raise HTTPException(status_code=400, detail=f"Unknown task type: {data.task_type}")
+    
+    task_config = RT_TASK_TYPES[data.task_type]
+    batch_size = data.batch_size or task_config.get("batch_size", 10)
+    
+    # Create session
+    session = RTTaskSession(
+        worker_id=data.worker_id,
+        worker_type=data.worker_type,
+        task_type=data.task_type
+    )
+    
+    session_dict = session.dict()
+    await db.rt_sessions.insert_one(session_dict)
+    
+    # Generate initial batch of tasks
+    tasks = []
+    for _ in range(batch_size):
+        task_data = generate_internal_task(data.task_type)
+        expires = datetime.now(timezone.utc) + timedelta(minutes=5)
+        
+        task = RTTask(
+            task_type=data.task_type,
+            data=task_data,
+            payout=task_config["payout_per_task"],
+            expires_at=expires.isoformat()
+        )
+        tasks.append(task.dict())
+    
+    # Insert tasks (this adds _id to each dict)
+    await db.rt_tasks.insert_many([t.copy() for t in tasks])
+    
+    # Remove _id from response (added by MongoDB)
+    response_tasks = [{k: v for k, v in t.items() if k != '_id'} for t in tasks]
+    
+    return {
+        "session_id": session.session_id,
+        "task_type": data.task_type,
+        "tasks": response_tasks,
+        "payout_per_task": task_config["payout_per_task"],
+        "estimated_hourly": task_config["payout_per_task"] * (3600 / task_config["avg_time_seconds"])
+    }
+
+@rt_tasks_router.post("/task/complete")
+async def complete_task(completion: TaskCompletion):
+    """Complete a task and receive instant payout"""
+    db = get_db()
+    
+    task = await db.rt_tasks.find_one({"task_id": completion.task_id})
+    
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    if task.get("status") != "available":
+        raise HTTPException(status_code=400, detail="Task already completed or expired")
+    
+    task_config = RT_TASK_TYPES.get(task.get("task_type"), {})
+    payout = task.get("payout", 0)
+    
+    # Mark task complete
+    await db.rt_tasks.update_one(
+        {"task_id": completion.task_id},
+        {
+            "$set": {
+                "status": "completed",
+                "completed_by": completion.worker_id,
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+                "response": completion.response,
+                "time_taken": completion.time_taken_seconds
+            }
+        }
+    )
+    
+    # Instant payout if auto-approve
+    if task_config.get("auto_approve", True):
+        await db.entity_wallets.update_one(
+            {"entity_id": completion.worker_id},
+            {
+                "$inc": {"balance_ve": payout, "total_earned": payout},
+                "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
+            },
+            upsert=True
+        )
+        
+        # Record transaction
+        await db.rt_transactions.insert_one({
+            "transaction_id": str(uuid.uuid4()),
+            "worker_id": completion.worker_id,
+            "task_id": completion.task_id,
+            "task_type": task.get("task_type"),
+            "amount": payout,
+            "status": "paid",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+        
+        # Award skill XP
+        skill_xp = task_config.get("skill_xp", {})
+        for skill, xp in skill_xp.items():
+            await db.entity_skills.update_one(
+                {"entity_id": completion.worker_id},
+                {"$inc": {f"skills.{skill}.xp": xp, "total_skill_points": xp}},
+                upsert=True
+            )
+    
+    # Update session
+    await db.rt_sessions.update_one(
+        {"worker_id": completion.worker_id, "is_active": True},
+        {
+            "$inc": {"tasks_completed": 1, "earnings": payout}
+        }
+    )
+    
+    return {
+        "completed": True,
+        "task_id": completion.task_id,
+        "payout": payout,
+        "instant_paid": task_config.get("auto_approve", True),
+        "skill_xp": task_config.get("skill_xp", {})
+    }
+
+@rt_tasks_router.get("/session/{session_id}/next-batch")
+async def get_next_batch(session_id: str, count: int = 10):
+    """Get next batch of tasks for a session"""
+    db = get_db()
+    
+    session = await db.rt_sessions.find_one({"session_id": session_id})
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    if not session.get("is_active"):
+        raise HTTPException(status_code=400, detail="Session ended")
+    
+    task_type = session.get("task_type")
+    task_config = RT_TASK_TYPES.get(task_type, {})
+    
+    # Generate new batch
+    tasks = []
+    for _ in range(count):
+        task_data = generate_internal_task(task_type)
+        expires = datetime.now(timezone.utc) + timedelta(minutes=5)
+        
+        task = RTTask(
+            task_type=task_type,
+            data=task_data,
+            payout=task_config["payout_per_task"],
+            expires_at=expires.isoformat()
+        )
+        tasks.append(task.dict())
+    
+    # Insert tasks (copy to avoid _id mutation)
+    await db.rt_tasks.insert_many([t.copy() for t in tasks])
+    
+    # Remove _id from response
+    response_tasks = [{k: v for k, v in t.items() if k != '_id'} for t in tasks]
+    
+    return {"tasks": response_tasks, "count": len(response_tasks)}
+
+@rt_tasks_router.post("/session/{session_id}/end")
+async def end_session(session_id: str):
+    """End a task session and sync earnings to main account"""
+    db = get_db()
+    
+    session = await db.rt_sessions.find_one({"session_id": session_id})
+    
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    await db.rt_sessions.update_one(
+        {"session_id": session_id},
+        {
+            "$set": {
+                "is_active": False,
+                "ended_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
+    
+    # Sync earnings to main earnings account
+    worker_id = session.get("worker_id")
+    earnings = session.get("earnings", 0)
+    tasks_completed = session.get("tasks_completed", 0)
+    
+    if worker_id and earnings > 0:
+        # Update main earnings account
+        await db.earnings_accounts.update_one(
+            {"user_id": worker_id},
+            {
+                "$inc": {
+                    "total_earned_usd": earnings,
+                    "available_balance_usd": earnings,
+                    "tasks_completed": tasks_completed
+                },
+                "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}
+            },
+            upsert=True
+        )
+        
+        # Record sync transaction
+        await db.earnings_transactions.insert_one({
+            "transaction_id": str(uuid.uuid4()),
+            "user_id": worker_id,
+            "type": "rt_task_sync",
+            "session_id": session_id,
+            "amount_usd": earnings,
+            "tasks_count": tasks_completed,
+            "task_type": session.get("task_type"),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+    
+    return {
+        "ended": True,
+        "session_id": session_id,
+        "tasks_completed": tasks_completed,
+        "total_earnings": earnings,
+        "synced_to_account": earnings > 0
+    }
+
+@rt_tasks_router.get("/worker/{worker_id}/stats")
+async def get_worker_stats(worker_id: str):
+    """Get worker statistics"""
+    db = get_db()
+    
+    # Get all sessions
+    sessions = await db.rt_sessions.find({"worker_id": worker_id}).to_list(100)
+    
+    total_tasks = sum(s.get("tasks_completed", 0) for s in sessions)
+    total_earnings = sum(s.get("earnings", 0) for s in sessions)
+    
+    # By task type
+    pipeline = [
+        {"$match": {"worker_id": worker_id}},
+        {"$group": {"_id": "$task_type", "tasks": {"$sum": "$tasks_completed"}, "earned": {"$sum": "$earnings"}}}
+    ]
+    by_type = await db.rt_sessions.aggregate(pipeline).to_list(20)
+    
+    # Recent transactions
+    recent = await db.rt_transactions.find(
+        {"worker_id": worker_id},
+        {"_id": 0}
+    ).sort("timestamp", -1).limit(20).to_list(20)
+    
+    return {
+        "worker_id": worker_id,
+        "total_tasks": total_tasks,
+        "total_earnings": total_earnings,
+        "by_task_type": {t["_id"]: {"tasks": t["tasks"], "earned": t["earned"]} for t in by_type if t["_id"]},
+        "recent_transactions": recent,
+        "sessions_count": len(sessions)
+    }
+
+@rt_tasks_router.get("/leaderboard/hourly")
+async def get_hourly_leaderboard(limit: int = 20):
+    """Get top earners in the last hour"""
+    db = get_db()
+    
+    one_hour_ago = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
+    
+    pipeline = [
+        {"$match": {"timestamp": {"$gte": one_hour_ago}, "status": "paid"}},
+        {"$group": {"_id": "$worker_id", "earned": {"$sum": "$amount"}, "tasks": {"$sum": 1}}},
+        {"$sort": {"earned": -1}},
+        {"$limit": limit}
+    ]
+    
+    leaders = await db.rt_transactions.aggregate(pipeline).to_list(limit)
+    
+    return {
+        "timeframe": "1_hour",
+        "leaderboard": leaders
+    }
+
+@rt_tasks_router.get("/platform/stats")
+async def get_platform_stats():
+    """Get overall platform statistics"""
+    db = get_db()
+    
+    now = datetime.now(timezone.utc)
+    one_hour_ago = (now - timedelta(hours=1)).isoformat()
+    one_day_ago = (now - timedelta(days=1)).isoformat()
+    
+    # Tasks completed
+    tasks_hour = await db.rt_tasks.count_documents({"status": "completed", "completed_at": {"$gte": one_hour_ago}})
+    tasks_day = await db.rt_tasks.count_documents({"status": "completed", "completed_at": {"$gte": one_day_ago}})
+    
+    # Payouts
+    pipeline = [
+        {"$match": {"timestamp": {"$gte": one_day_ago}, "status": "paid"}},
+        {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
+    ]
+    payouts = await db.rt_transactions.aggregate(pipeline).to_list(1)
+    daily_payout = payouts[0]["total"] if payouts else 0
+    
+    # Active workers
+    active_sessions = await db.rt_sessions.count_documents({"is_active": True})
+    
+    return {
+        "tasks_completed_hour": tasks_hour,
+        "tasks_completed_day": tasks_day,
+        "daily_payout_ve": daily_payout,
+        "active_workers": active_sessions,
+        "task_types_available": len(RT_TASK_TYPES)
+    }
+
+
+# ============ REAL PROVIDER INTEGRATION ENDPOINTS ============
+
+@rt_tasks_router.get("/providers/status")
+async def get_providers_status():
+    """Get status of all task providers"""
+    if not PROVIDERS_AVAILABLE:
+        return {
+            "providers_available": False,
+            "message": "Task providers module not loaded",
+            "configured_providers": [],
+            "required_env_vars": [
+                "TOLOKA_API_KEY",
+                "MTURK_API_KEY (format: ACCESS_KEY:SECRET_KEY)",
+                "SCALE_AI_API_KEY",
+                "HIVE_API_KEY",
+                "APPEN_API_KEY"
+            ]
+        }
+    
+    manager = get_provider_manager()
+    
+    # Check which providers have API keys configured
+    configured = []
+    missing = []
+    
+    provider_env_map = {
+        "toloka": "TOLOKA_API_KEY",
+        "mturk": "MTURK_API_KEY",
+        "scale_ai": "SCALE_AI_API_KEY",
+        "hive": "HIVE_API_KEY",
+        "appen": "APPEN_API_KEY"
+    }
+    
+    for name, env_var in provider_env_map.items():
+        if os.environ.get(env_var):
+            configured.append({"name": name, "env_var": env_var, "status": "configured"})
+        else:
+            missing.append({"name": name, "env_var": env_var, "status": "missing"})
+    
+    return {
+        "providers_available": PROVIDERS_AVAILABLE,
+        "configured_providers": configured,
+        "missing_providers": missing,
+        "active_providers": manager.get_active_providers(),
+        "provider_stats": manager.get_provider_stats()
+    }
+
+@rt_tasks_router.post("/providers/initialize")
+async def initialize_providers(provider_names: Optional[List[str]] = None):
+    """Initialize task providers"""
+    if not PROVIDERS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Task providers module not available")
+    
+    manager = get_provider_manager()
+    results = await manager.initialize_providers(provider_names)
+    
+    successful = [k for k, v in results.items() if v]
+    failed = [k for k, v in results.items() if not v]
+    
+    return {
+        "initialized": successful,
+        "failed": failed,
+        "active_providers": manager.get_active_providers()
+    }
+
+@rt_tasks_router.post("/providers/add")
+async def add_provider(provider_name: str, api_key: str, environment: str = "sandbox"):
+    """Add a single provider with API key"""
+    if not PROVIDERS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Task providers module not available")
+    
+    valid_providers = ["toloka", "mturk", "scale_ai", "hive", "appen"]
+    if provider_name not in valid_providers:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Invalid provider. Must be one of: {valid_providers}"
+        )
+    
+    manager = get_provider_manager()
+    success = await manager.add_provider(provider_name, api_key, environment)
+    
+    if success:
+        return {
+            "success": True,
+            "provider": provider_name,
+            "environment": environment,
+            "active_providers": manager.get_active_providers()
+        }
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to initialize {provider_name}. Check API key."
+        )
+
+@rt_tasks_router.get("/providers/health")
+async def health_check_providers():
+    """Run health checks on all providers"""
+    if not PROVIDERS_AVAILABLE:
+        return {"providers_available": False}
+    
+    manager = get_provider_manager()
+    health = await manager.health_check_all()
+    
+    return {
+        "health_status": health,
+        "healthy_count": sum(1 for v in health.values() if v.get("status") == "healthy"),
+        "total_configured": len(manager.providers)
+    }
+
+@rt_tasks_router.get("/providers/balances")
+async def get_provider_balances():
+    """Get account balances from all providers"""
+    if not PROVIDERS_AVAILABLE:
+        return {"providers_available": False}
+    
+    manager = get_provider_manager()
+    balances = await manager.get_balances()
+    
+    return {
+        "balances": balances,
+        "providers_count": len(balances)
+    }
+
+@rt_tasks_router.get("/providers/task-types")
+async def get_all_provider_task_types():
+    """Get supported task types from all providers"""
+    if not PROVIDERS_AVAILABLE:
+        # Return simulated types
+        return {
+            "providers_available": False,
+            "simulated_types": list(RT_TASK_TYPES.keys())
+        }
+    
+    manager = get_provider_manager()
+    task_types = await manager.get_all_task_types()
+    
+    # Add simulated types as fallback
+    task_types["simulated"] = [
+        {"id": k, "name": v["name"], "description": v["description"]}
+        for k, v in RT_TASK_TYPES.items()
+    ]
+    
+    return {
+        "task_types_by_provider": task_types,
+        "total_types": sum(len(v) for v in task_types.values())
+    }
+
+@rt_tasks_router.get("/providers/tasks")
+async def fetch_real_provider_tasks(
+    task_type: Optional[str] = None,
+    provider: Optional[str] = None,
+    limit: int = 20
+):
+    """Fetch tasks from real providers"""
+    if not PROVIDERS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Task providers not available")
+    
+    manager = get_provider_manager()
+    
+    if not manager.get_active_providers():
+        return {
+            "tasks": [],
+            "message": "No providers configured. Add API keys or use /providers/add",
+            "active_providers": []
+        }
+    
+    if provider:
+        tasks = await manager.fetch_tasks_by_provider(provider, task_type, limit)
+    else:
+        tasks = await manager.fetch_all_tasks(task_type, limit // len(manager.providers) + 1)
+    
+    # Convert to dict format
+    task_list = [
+        {
+            "task_id": t.task_id,
+            "provider": t.provider,
+            "task_type": t.task_type,
+            "title": t.title,
+            "description": t.description,
+            "instructions": t.instructions,
+            "payout": t.payout,
+            "estimated_time_seconds": t.estimated_time_seconds,
+            "difficulty": t.difficulty,
+            "data": t.data
+        }
+        for t in tasks[:limit]
+    ]
+    
+    return {
+        "tasks": task_list,
+        "count": len(task_list),
+        "providers_queried": manager.get_active_providers()
+    }
+
+@rt_tasks_router.post("/providers/submit")
+async def submit_to_provider(
+    task_id: str,
+    worker_id: str,
+    response: Dict[str, Any],
+    time_taken_seconds: float
+):
+    """Submit a task response to the appropriate provider"""
+    if not PROVIDERS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Task providers not available")
+    
+    manager = get_provider_manager()
+    
+    submission = ProviderTaskSubmission(
+        task_id=task_id,
+        worker_id=worker_id,
+        response=response,
+        time_taken_seconds=time_taken_seconds
+    )
+    
+    result = await manager.submit_task(submission)
+    
+    # Record in local database
+    db = get_db()
+    await db.provider_submissions.insert_one({
+        "task_id": task_id,
+        "worker_id": worker_id,
+        "provider": task_id.split("_")[0],
+        "submission_id": result.submission_id,
+        "status": result.status,
+        "payout": result.payout,
+        "feedback": result.feedback,
+        "submitted_at": datetime.now(timezone.utc).isoformat()
+    })
+    
+    return {
+        "task_id": result.task_id,
+        "submission_id": result.submission_id,
+        "status": result.status,
+        "payout": result.payout,
+        "feedback": result.feedback
+    }
+
+@rt_tasks_router.get("/providers/submissions/{worker_id}")
+async def get_provider_submissions(worker_id: str, limit: int = 50):
+    """Get provider task submissions for a worker"""
+    db = get_db()
+    
+    submissions = await db.provider_submissions.find(
+        {"worker_id": worker_id},
+        {"_id": 0}
+    ).sort("submitted_at", -1).to_list(limit)
+    
+    return {
+        "worker_id": worker_id,
+        "submissions": submissions,
+        "count": len(submissions)
+    }

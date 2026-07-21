@@ -238,10 +238,18 @@ async def get_world_map(world_id: str):
     """Get or generate the world map"""
     db = get_db()
     
-    # Get world seed
+    # Get world seed - if world doesn't exist, create a default one
     world = await db.world_instances.find_one({"world_id": world_id})
     if not world:
-        raise HTTPException(status_code=404, detail="World not found")
+        # Create default world for main-story-realm
+        default_world = {
+            "world_id": world_id,
+            "world_name": "The Echoes",
+            "seed": 42,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.world_instances.insert_one(default_world.copy())
+        world = default_world
     
     seed = world.get("seed", 42)
     
@@ -253,15 +261,16 @@ async def get_world_map(world_id: str):
         terrain_grid = generate_terrain_grid(seed, 100, 100)
         roads = generate_roads(MAP_REGIONS)
         
-        world_map = WorldMap(
+        new_map = WorldMap(
             world_id=world_id,
             seed=seed,
             regions=MAP_REGIONS,
             terrain_grid=terrain_grid,
             roads=roads
-        ).dict()
+        )
         
-        await db.world_maps.insert_one(world_map)
+        world_map = new_map.dict()
+        await db.world_maps.insert_one(world_map.copy())  # Use copy to avoid _id mutation
     
     # Get any modifications
     modifications = await db.map_modifications.find(
@@ -275,6 +284,10 @@ async def get_world_map(world_id: str):
             pos = mod.get("position", (0, 0))
             terrain = mod.get("data", {}).get("terrain_type", "grass")
             world_map["terrain_grid"][f"{pos[0]},{pos[1]}"] = terrain
+    
+    # Ensure no _id in response
+    if '_id' in world_map:
+        del world_map['_id']
     
     return world_map
 

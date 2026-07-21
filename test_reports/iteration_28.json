@@ -1,0 +1,186 @@
+{
+  "summary": "Completed e2e testing of Iteration 28 features: External Providers Webhooks (real micro-task provider integration) and NPC Skill-based Services System. All 22 backend tests passed (100%). Frontend NPCServices.jsx page verified with all categories, NPC lookup, and service display working correctly. NPC Services button on ModeSelection page confirmed working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration28_external_npc_services.py",
+    "/app/test_reports/pytest/pytest_results_iter28.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "external_providers_router included at line 7215-7216 with prefix /api",
+    "npc_services_router included at line 7223-7224 with prefix /api",
+    "POST /api/external-providers/webhook/{provider} - Receives webhooks from Toloka, MTurk, Scale AI, Hive, Appen with signature verification",
+    "Webhook events normalized: ASSIGNMENT_ACCEPTED→task_approved, ASSIGNMENT_REJECTED→task_rejected, POOL_OPENED→task_available",
+    "GET /api/external-providers/status returns webhook_secrets_configured, supported_event_types, recent_events, provider_availability, task_mapping_stats",
+    "POST /api/external-providers/tasks/map creates internal tracking for external tasks with external_task_id, provider, task_type, payout",
+    "POST /api/external-providers/tasks/claim allows workers to claim available tasks",
+    "POST /api/external-providers/tasks/submit submits task responses with pending_review status",
+    "GET /api/npc-services/categories returns 6 categories: combat(3), crafting(5), magic(4), social(3), knowledge(3), survival(3) = 21 total services",
+    "GET /api/npc-services/types returns all service definitions with mastery_requirements (novice→grandmaster) and quality_multipliers (0.5→1.5)",
+    "GET /api/npc-services/npc/{npc_id}/available returns services NPC can provide based on trained skills from AI Training system",
+    "POST /api/npc-services/request validates: service exists, NPC has skill at required mastery, player has balance, cooldown not active",
+    "Service quality calculated from NPC mastery level with variance, cost scales with mastery (premium for higher skill)",
+    "NPCServices.jsx has proper data-testid attributes: back-button, refresh-button, tab-browse, tab-history, npc-id-input, check-npc-button",
+    "ModeSelection.jsx has NPC Services button at line 511-522 with data-testid='npc-services-btn'",
+    "App.js has route /npc-services at line 124"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration28_external_npc_services.py"
+  ],
+  "success_rate": {
+    "backend": "100% (22/22 passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "username": "sirix_1",
+    "password": "HCLynnTV04",
+    "test_user_id": "sirix_1_supreme",
+    "test_npc_id": "test_npc_1"
+  },
+  "seed_data_creation": "No new seed data created. Used existing sirix_1 account and test_npc_1 NPC (trained in blacksmithing to Expert level).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 28 External Providers and NPC Services fully tested. Key endpoints: POST /api/external-providers/webhook/{provider} (toloka/mturk/scale_ai/hive/appen), GET /api/external-providers/status, GET /api/external-providers/events, POST /api/external-providers/tasks/map, POST /api/external-providers/tasks/claim, POST /api/external-providers/tasks/submit, GET /api/npc-services/categories (6 categories, 21 services), GET /api/npc-services/types (full service definitions), GET /api/npc-services/npc/{npc_id}/available (services based on trained skills), POST /api/npc-services/request (request service with VE$ payment), GET /api/npc-services/history/{player_id}, GET /api/npc-services/npc/{npc_id}/stats, GET /api/npc-services/leaderboard. Frontend: NPCServices.jsx at /npc-services with Browse/History tabs, category display, NPC lookup, service request. ModeSelection has NPC Services button with data-testid='npc-services-btn'. test_npc_1 is trained in blacksmithing (Expert) and offers: Forge Weapon (VE$17.18), Forge Armor (VE$28.62), Repair Equipment (VE$5.72).",
+  "features_tested": {
+    "external_providers_webhook": {
+      "status": "PASS",
+      "endpoint": "POST /api/external-providers/webhook/{provider}",
+      "details": [
+        "Toloka webhook receives and normalizes events (ASSIGNMENT_ACCEPTED→task_approved)",
+        "MTurk webhook handles SNS notifications",
+        "Unknown providers correctly rejected with 400",
+        "Signature verification supported (optional in dev mode)"
+      ]
+    },
+    "external_providers_status": {
+      "status": "PASS",
+      "endpoint": "GET /api/external-providers/status",
+      "details": [
+        "Returns webhook_secrets_configured for 6 providers",
+        "Returns 8 supported_event_types",
+        "Returns recent_events, provider_availability, task_mapping_stats"
+      ]
+    },
+    "external_providers_events": {
+      "status": "PASS",
+      "endpoint": "GET /api/external-providers/events",
+      "details": [
+        "Returns list of webhook events with count",
+        "Supports filtering by provider, event_type, processed status"
+      ]
+    },
+    "external_providers_task_mapping": {
+      "status": "PASS",
+      "endpoints": ["POST /api/external-providers/tasks/map", "POST /api/external-providers/tasks/claim", "POST /api/external-providers/tasks/submit"],
+      "details": [
+        "Map creates internal tracking with internal_task_id",
+        "Claim assigns worker_id and sets status to claimed",
+        "Submit records response with pending_review status",
+        "Claim fails for non-existent tasks with 400"
+      ]
+    },
+    "npc_services_categories": {
+      "status": "PASS",
+      "endpoint": "GET /api/npc-services/categories",
+      "details": [
+        "Returns 6 categories: combat, crafting, magic, social, knowledge, survival",
+        "21 total services across all categories",
+        "Each service has name, description, min_mastery, base_cost_ve, duration_minutes, cooldown_hours"
+      ]
+    },
+    "npc_services_types": {
+      "status": "PASS",
+      "endpoint": "GET /api/npc-services/types",
+      "details": [
+        "Returns full service definitions",
+        "Mastery requirements: novice(1)→student(2)→apprentice(3)→journeyman(4)→expert(5)→master(6)→grandmaster(7)",
+        "Quality multipliers: novice(0.5)→grandmaster(1.5)"
+      ]
+    },
+    "npc_available_services": {
+      "status": "PASS",
+      "endpoint": "GET /api/npc-services/npc/{npc_id}/available",
+      "details": [
+        "Returns services NPC can provide based on trained skills",
+        "test_npc_1 (Expert blacksmith) offers: craft_weapon, craft_armor, repair_equipment",
+        "Untrained NPCs return empty services list with message"
+      ]
+    },
+    "npc_service_request": {
+      "status": "PASS",
+      "endpoint": "POST /api/npc-services/request",
+      "details": [
+        "Validates service type exists",
+        "Validates NPC has required skill mastery",
+        "Validates player balance for VE$ payment",
+        "Returns 400 for invalid service type"
+      ]
+    },
+    "npc_service_history": {
+      "status": "PASS",
+      "endpoint": "GET /api/npc-services/history/{player_id}",
+      "details": [
+        "Returns player's service history with total_services and total_spent",
+        "New players have empty history"
+      ]
+    },
+    "npc_service_stats": {
+      "status": "PASS",
+      "endpoint": "GET /api/npc-services/npc/{npc_id}/stats",
+      "details": [
+        "Returns total_services, total_revenue, average_quality, by_service_type"
+      ]
+    },
+    "npc_service_leaderboard": {
+      "status": "PASS",
+      "endpoint": "GET /api/npc-services/leaderboard",
+      "details": [
+        "Returns top NPCs by revenue",
+        "Supports limit parameter"
+      ]
+    },
+    "frontend_npc_services_page": {
+      "status": "PASS",
+      "details": [
+        "NPCServices.jsx renders at /npc-services",
+        "Header with Back button and Refresh button",
+        "Browse Services and My History tabs",
+        "Service Categories section with 6 category cards",
+        "Top Service Providers section with leaderboard",
+        "NPC ID input for checking specific NPC services",
+        "Service cards show name, description, mastery, quality, cost, duration, cooldown, Request button"
+      ]
+    },
+    "frontend_mode_selection_button": {
+      "status": "PASS",
+      "details": [
+        "NPC Services button present on ModeSelection page",
+        "Button has data-testid='npc-services-btn'",
+        "Clicking navigates to /npc-services"
+      ]
+    },
+    "ai_training_integration": {
+      "status": "PASS",
+      "details": [
+        "test_npc_1 trained in blacksmithing to Expert level",
+        "NPC can offer crafting services: Forge Weapon, Forge Armor, Repair Equipment",
+        "Service quality (115%) and cost scale with mastery level"
+      ]
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": [
+      "External task provider APIs (Toloka, MTurk, Scale AI, Hive, Appen) - webhooks work but need actual API keys for real task fetching"
+    ],
+    "note": "Webhook endpoints are real and functional. Actual task fetching from providers requires API key configuration in environment variables (TOLOKA_WEBHOOK_SECRET, MTURK_WEBHOOK_SECRET, etc.)"
+  }
+}
