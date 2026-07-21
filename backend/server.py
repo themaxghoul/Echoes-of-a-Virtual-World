@@ -7258,6 +7258,14 @@ try:
 except ImportError as e:
     logging.warning(f"Could not load Cosmetics router: {e}")
 
+# Include Field Ops router (real-world tasks: photo / voice / video)
+try:
+    from field_ops_router import field_ops_router
+    app.include_router(field_ops_router, prefix="/api")
+    logging.info("Field Ops router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Field Ops router: {e}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

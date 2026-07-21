@@ -48,6 +48,9 @@ import TaskFactory from "@/pages/TaskFactory";
 import TaskWorkbench from "@/pages/TaskWorkbench";
 import AvatarStudio from "@/pages/AvatarStudio";
 import VEBoutique from "@/pages/VEBoutique";
+import BountyBoard from "@/pages/BountyBoard";
+import FieldOps from "@/pages/FieldOps";
+import EconomyHub from "@/pages/EconomyHub";
 
 function App() {
   const [loading, setLoading] = useState(true);
@@ -130,6 +133,9 @@ function App() {
           <Route path="/task-workbench" element={<TaskWorkbench />} />
           <Route path="/avatar-studio" element={<AvatarStudio />} />
           <Route path="/boutique" element={<VEBoutique />} />
+          <Route path="/bounty-board" element={<BountyBoard />} />
+          <Route path="/field-ops" element={<FieldOps />} />
+          <Route path="/economy" element={<EconomyHub />} />
         </Routes>
         </BrowserRouter>
       </PurchaseProvider>

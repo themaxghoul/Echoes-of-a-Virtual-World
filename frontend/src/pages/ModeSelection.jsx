@@ -9,7 +9,7 @@ import {
   ArrowRight, Settings, LogOut, Hammer, ArrowLeftRight,
   Heart, Zap, Shield, Swords, DollarSign, TrendingUp, Briefcase,
   Map, Globe, Award, Lock, Clock, Cpu, Scroll, ShoppingBag, Trophy,
-  Compass
+  Compass, Camera, Coins
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -567,6 +567,29 @@ const ModeSelection = () => {
           >
             <ShoppingBag className="w-4 h-4 mr-2" />
             VE$ Boutique
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              pushNavHistory('/field-ops');
+              navigate('/field-ops');
+            }}
+            className="border-amber-400/30 text-amber-400 hover:bg-amber-400/10 rounded-sm"
+            data-testid="field-ops-btn"
+          >
+            <Camera className="w-4 h-4 mr-2" />
+            Field Ops
+          </Button>
+          <Button
+            onClick={() => {
+              pushNavHistory('/economy');
+              navigate('/economy');
+            }}
+            className="bg-gradient-to-r from-emerald-500 to-cyan-500 text-black hover:opacity-90 rounded-sm font-cinzel"
+            data-testid="economy-hub-btn"
+          >
+            <Coins className="w-4 h-4 mr-2" />
+            Economy Hub
           </Button>
         </div>
 
