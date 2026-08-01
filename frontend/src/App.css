@@ -134,3 +134,18 @@
     background: linear-gradient(to bottom, transparent 0%, rgba(5, 5, 5, 0.8) 100%);
     pointer-events: none;
 }
+.eov-reduce-motion *, .eov-reduce-motion *::before, .eov-reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
+}
+
+.eov-high-contrast {
+  filter: contrast(1.22);
+}
+
+.eov-high-contrast :focus-visible {
+  outline: 3px solid #fff !important;
+  outline-offset: 3px;
+}
