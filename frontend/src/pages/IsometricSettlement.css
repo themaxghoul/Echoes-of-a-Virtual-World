@@ -45,6 +45,11 @@
 .jarvis-memory small { color: #d4af37; }
 .jarvis-memory button { color: #739b9f; }
 .jarvis-security { margin: 9px 0 0; color: #657976; font-size: 9px; line-height: 1.4; }
+.desktop-diagnostics { padding: 10px 12px; border: 1px solid #26383e; color: #7e918f; font: 9px 'JetBrains Mono', monospace; }
+.desktop-diagnostics div, .desktop-diagnostics p { display: flex; align-items: center; gap: 6px; margin: 0; }
+.desktop-diagnostics div span { margin-left: auto; }
+.desktop-diagnostics p { margin-top: 6px; }
+.desktop-diagnostics small { display: block; margin-top: 6px; color: #f0d985; }
 @media (max-width: 900px) {
   .iso-main { grid-template-columns: 1fr; height: auto; }
   .iso-viewport { height: 68vh; }
