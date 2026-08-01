@@ -1,5 +1,5 @@
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, HashRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import LandingPage from "@/pages/LandingPage";
 import AuthPage from "@/pages/AuthPage";
@@ -26,9 +26,10 @@ import CharacterCustomization from "@/pages/CharacterCustomization";
 import IsometricSettlement from "@/pages/IsometricSettlement";
 
 function App() {
+  const Router = window.eovDesktop ? HashRouter : BrowserRouter;
   return (
     <div className="App min-h-screen bg-obsidian text-foreground">
-      <BrowserRouter>
+      <Router>
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/terms" element={<TermsOfService />} />
@@ -54,7 +55,7 @@ function App() {
           <Route path="/earnings" element={<EarningsHub />} />
           <Route path="/jobs" element={<JobsHub />} />
         </Routes>
-      </BrowserRouter>
+      </Router>
       <Toaster 
         position="bottom-right"
         toastOptions={{
