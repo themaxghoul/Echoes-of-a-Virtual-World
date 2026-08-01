@@ -3,7 +3,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const SCHEMA_VERSION = 1;
-const ALLOWED_NAMESPACES = new Set(['world', 'jarvis']);
+const ALLOWED_NAMESPACES = new Set(['world', 'jarvis', 'ledger']);
 
 function checksum(value) {
   return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
