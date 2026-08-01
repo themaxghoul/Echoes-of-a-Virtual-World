@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import JarvisPanel from '@/components/JarvisPanel';
 import DesktopDiagnostics from '@/components/DesktopDiagnostics';
+import CausalLedgerPanel from '@/components/CausalLedgerPanel';
+import { appendCausalEvent } from '@/lib/causalLedger';
 import { readDurable, writeDurable } from '@/lib/desktopStorage';
 import './IsometricSettlement.css';
 
@@ -259,6 +261,7 @@ const IsometricSettlement = () => {
       };
       setWorld(nextWorld);
       saveWorld(nextWorld);
+      appendCausalEvent({ actionId: `construct:${nextWorld.blueprints.at(-1).id}`, actorId: localStorage.getItem('currentCharacterId') || 'unknown', state: 'proposed', intent: `Construct ${BUILDINGS[selectedType].label}`, location: `${hoverTile.x},${hoverTile.y}`, parentEventIds: [], inputs: { blueprintType: selectedType }, outputs: {}, evidence: [], physicalEffect: false });
       setBuildMode(false);
       return;
     }
@@ -274,6 +277,7 @@ const IsometricSettlement = () => {
     setWorld(nextWorld);
     setSelected({ ...selected, stage: selected.stage + 1 });
     saveWorld(nextWorld);
+    appendCausalEvent({ actionId: `construct:${selected.id}`, actorId: localStorage.getItem('currentCharacterId') || 'unknown', state: selected.stage === 1 ? 'accepted' : selected.stage === 2 ? 'reserved' : 'in_progress', intent: `Advance ${selected.name} to stage ${selected.stage + 1}`, location: `${selected.x},${selected.y}`, parentEventIds: [], inputs: { priorStage: selected.stage }, outputs: { stage: selected.stage + 1 }, evidence: [{ kind: 'player_confirmation' }], physicalEffect: selected.stage >= 3 });
   };
 
   const resetSettlement = () => {
@@ -353,6 +357,7 @@ const IsometricSettlement = () => {
           </div>
           <JarvisPanel activity={buildMode ? 'Observing blueprint placement' : selected ? `Reviewing ${selected.name}` : 'Monitoring settlement activity'} />
           <DesktopDiagnostics />
+          <CausalLedgerPanel />
         </aside>
       </main>
     </div>
