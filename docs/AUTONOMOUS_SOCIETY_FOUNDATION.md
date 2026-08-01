@@ -38,6 +38,6 @@ Fast-track sequence (VR deferred until embodied actions stabilize):
 5. Autonomous household, guild, laboratory, and settlement planning.
 6. Population stress tests before economic conversion or large model populations.
 7. Chronological tool access, shared action contracts, and maintenance economics.
-8. A fourteen-real-day bootstrap seed before judging economic maturity.
+8. A fourteen-calendar-day persistent bootstrap seed before judging economic maturity.
 
 The detailed production queue is maintained in `docs/NEXT_TASKS_DEPTH_ROADMAP.md`.
