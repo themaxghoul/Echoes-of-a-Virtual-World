@@ -1,6 +1,7 @@
 const path = require('node:path');
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const { createStore } = require('./store.cjs');
+const { authenticateOwner } = require('./auth.cjs');
 
 let store;
 
@@ -36,6 +37,11 @@ function createWindow() {
 app.whenReady().then(() => {
   store = createStore(app.getPath('userData'));
   ipcMain.handle('eov:version', () => app.getVersion());
+  ipcMain.handle('eov:auth:login', (_event, credentials) => {
+    const user = authenticateOwner(credentials?.identifier, credentials?.password);
+    if (!user) return { ok: false, error: 'Invalid username, email, or password' };
+    return { ok: true, user, character: { id: 'sirix_1', name: 'sirix_1' } };
+  });
   ipcMain.handle('eov:store:read', (_event, namespace) => store.read(namespace));
   ipcMain.handle('eov:store:write', (_event, namespace, payload) => store.write(namespace, payload));
   ipcMain.handle('eov:diagnostics', () => ({ appVersion: app.getVersion(), platform: process.platform, ...store.diagnostics() }));
