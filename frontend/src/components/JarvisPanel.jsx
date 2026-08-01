@@ -1,18 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Bot, Brain, Pin, Send, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { readDurable, writeDurable } from '@/lib/desktopStorage';
 
 const MEMORY_KEY = 'eov-jarvis-owner-memory-alpha';
-
-const loadMemory = () => {
-  try {
-    const value = JSON.parse(localStorage.getItem(MEMORY_KEY));
-    return Array.isArray(value) ? value : [];
-  } catch {
-    return [];
-  }
-};
 
 const importanceFor = (text) => {
   const normalized = text.toLowerCase();
@@ -22,14 +14,18 @@ const importanceFor = (text) => {
 
 export default function JarvisPanel({ activity }) {
   const [messages, setMessages] = useState([{ id: 'hello', role: 'jarvis', text: 'Owner workspace online. I can follow settlement context while tasks are active.' }]);
-  const [memories, setMemories] = useState(loadMemory);
+  const [memories, setMemories] = useState([]);
   const [draft, setDraft] = useState('');
   const [view, setView] = useState('chat');
   const relevantMemories = useMemo(() => [...memories].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.importance - a.importance), [memories]);
 
+  useEffect(() => {
+    readDurable('jarvis', MEMORY_KEY, []).then((value) => setMemories(Array.isArray(value) ? value : []));
+  }, []);
+
   const persist = (next) => {
     setMemories(next);
-    localStorage.setItem(MEMORY_KEY, JSON.stringify(next));
+    writeDurable('jarvis', MEMORY_KEY, next);
   };
 
   const send = (event) => {
@@ -70,7 +66,7 @@ export default function JarvisPanel({ activity }) {
           ))}
         </div>
       )}
-      <p className="jarvis-security">Alpha stores memory on this device. Production requires server-enforced owner authorization, encryption, and an audit trail.</p>
+      <p className="jarvis-security">Desktop memory uses recoverable local revisions. Production still requires server-enforced owner authorization, encryption, and an audit trail.</p>
     </section>
   );
 }
