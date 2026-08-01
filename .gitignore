@@ -29,6 +29,8 @@ next-env.d.ts
 /build
 dist/
 dist
+frontend/desktop-stage/
+frontend/out/
 
 # Environment files (comprehensive coverage)
 
