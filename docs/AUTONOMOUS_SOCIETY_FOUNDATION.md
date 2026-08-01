@@ -29,7 +29,7 @@ An eventual general intelligence is a developmental possibility, not a spawn fla
 
 Demand originates in unmet needs, public objectives, maintenance, hazards, and chosen ambitions. Supply originates in materials, time, tools, competence, coordination, and verified outcomes. Speech can coordinate production or alter demand indirectly; it cannot create inventory, structures, geography, or CU.
 
-Fast-track sequence:
+Fast-track sequence (VR deferred until embodied actions stabilize):
 
 1. Deterministic society ticks and replayable life events.
 2. Knowledge provenance and perspective-specific observations.
@@ -37,3 +37,7 @@ Fast-track sequence:
 4. Needs-driven work orders and specialty scarcity.
 5. Autonomous household, guild, laboratory, and settlement planning.
 6. Population stress tests before economic conversion or large model populations.
+7. Chronological tool access, shared action contracts, and maintenance economics.
+8. A fourteen-real-day bootstrap seed before judging economic maturity.
+
+The detailed production queue is maintained in `docs/NEXT_TASKS_DEPTH_ROADMAP.md`.
