@@ -13,7 +13,7 @@ for (const filename of ['main.cjs', 'preload.cjs', 'store.cjs', 'auth.cjs']) {
 fs.writeFileSync(path.join(stage, 'package.json'), JSON.stringify({
   name: 'echoes-of-virtuality',
   productName: 'Echoes of Virtuality',
-  version: '0.3.0-alpha.4',
+  version: '0.3.0-alpha.5',
   main: 'electron/main.cjs',
 }, null, 2));
 
