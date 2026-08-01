@@ -7,7 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import { 
   Gamepad2, MessageSquare, User, Sparkles, Crown,
   ArrowRight, Settings, LogOut, Hammer, ArrowLeftRight,
-  Heart, Zap, Shield, Swords, DollarSign, TrendingUp, Briefcase
+  Heart, Zap, Shield, Swords, DollarSign, TrendingUp, Briefcase, ScanEye, Glasses
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
@@ -259,7 +259,7 @@ const ModeSelection = () => {
         )}
 
         {/* Mode Selection */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 max-w-5xl w-full">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 sm:gap-5 max-w-7xl w-full">
           {/* 2D Story Mode - Text Adventure with Building */}
           <Card 
             className="bg-surface/80 border-border/50 rounded-sm hover:border-gold/50 transition-all duration-300 cursor-pointer group"
@@ -276,7 +276,7 @@ const ModeSelection = () => {
               </p>
               <div className="flex flex-wrap gap-2 justify-center mb-4">
                 <Badge className="bg-gold/10 text-gold text-xs rounded-sm">AI Narrator</Badge>
-                <Badge className="bg-gold/10 text-gold text-xs rounded-sm">All Maps Open</Badge>
+                <Badge className="bg-gold/10 text-gold text-xs rounded-sm">Testimony Discovery</Badge>
               </div>
               <Button 
                 data-testid="select-storymode-btn"
@@ -305,7 +305,7 @@ const ModeSelection = () => {
               </p>
               <div className="flex flex-wrap gap-2 justify-center mb-4">
                 <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">2.5D Alpha</Badge>
-                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">Construction</Badge>
+                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">Spatial Discovery</Badge>
               </div>
               <Button 
                 data-testid="select-firstperson-btn"
@@ -315,6 +315,17 @@ const ModeSelection = () => {
                 Enter Settlement
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* Embodied first-person discovery */}
+          <Card className="bg-surface/80 border-border/50 rounded-sm hover:border-cyan-400/50 transition-all duration-300 cursor-pointer group" onClick={() => selectMode('firstperson', '/play-3d')}>
+            <CardContent className="p-6 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-cyan-500/15 border border-cyan-400/30 flex items-center justify-center group-hover:scale-110 transition-transform"><ScanEye className="w-8 h-8 text-cyan-300" /></div>
+              <h3 className="font-cinzel text-lg text-foreground mb-2">First-Person Discovery</h3>
+              <p className="font-manrope text-sm text-muted-foreground mb-4">Inspect line of sight, sound, surfaces, nearby tools, and occluded evidence.</p>
+              <div className="flex flex-wrap gap-2 justify-center mb-4"><Badge className="bg-cyan-500/10 text-cyan-300 text-xs rounded-sm">Embodied Local</Badge></div>
+              <Button className="w-full bg-cyan-700 text-white hover:bg-cyan-600 font-cinzel rounded-sm"><ScanEye className="w-5 h-5 mr-2" />Enter First Person</Button>
             </CardContent>
           </Card>
 
@@ -344,6 +355,16 @@ const ModeSelection = () => {
                 Unity Offload
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* VR backlog keeps the same authoritative world and adds embodied sensing later. */}
+          <Card className="bg-surface/50 border-dashed border-border/50 rounded-sm opacity-75">
+            <CardContent className="p-6 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-purple-500/10 border border-purple-400/20 flex items-center justify-center"><Glasses className="w-8 h-8 text-purple-300" /></div>
+              <h3 className="font-cinzel text-lg text-foreground mb-2">VR Embodiment</h3>
+              <p className="font-manrope text-sm text-muted-foreground mb-4">Future stereo depth, gesture, dexterity, body position, and tool handling.</p>
+              <Button disabled className="w-full font-cinzel rounded-sm">Backlog Â· Input research</Button>
             </CardContent>
           </Card>
         </div>
