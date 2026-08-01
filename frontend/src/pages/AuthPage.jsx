@@ -18,11 +18,12 @@ const AuthPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   
   // Login state
-  const [loginData, setLoginData] = useState({ username: '', password: '' });
+  const [loginData, setLoginData] = useState({ identifier: '', password: '' });
   
   // Register state
   const [registerData, setRegisterData] = useState({
     username: '',
+    email: '',
     displayName: '',
     password: '',
     confirmPassword: ''
@@ -35,8 +36,8 @@ const AuthPage = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (!loginData.username.trim()) {
-      toast.error('Please enter your username');
+    if (!loginData.identifier.trim()) {
+      toast.error('Please enter your username or email');
       return;
     }
     if (!loginData.password.trim()) {
@@ -46,9 +47,27 @@ const AuthPage = () => {
 
     setIsLoading(true);
     try {
+      if (window.eovDesktop) {
+        const result = await window.eovDesktop.login(loginData.identifier, loginData.password);
+        if (!result.ok) throw new Error(result.error);
+        const { user, character } = result;
+        localStorage.setItem('userId', user.id);
+        localStorage.setItem('username', user.username);
+        localStorage.setItem('displayName', user.display_name);
+        localStorage.setItem('isTranscendent', 'true');
+        localStorage.setItem('permissionLevel', user.permission_level);
+        localStorage.setItem('currentCharacterId', character.id);
+        localStorage.setItem('characterName', character.name);
+        localStorage.setItem('eovDesktopSession', JSON.stringify({ userId: user.id, expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 }));
+        localStorage.setItem('eovLastRoute', '/select-mode');
+        toast.success(`Welcome back, ${user.display_name}!`);
+        navigate('/select-mode');
+        return;
+      }
       // Use the proper login endpoint with password
       const response = await axios.post(`${API}/auth/login`, {
-        username: loginData.username.toLowerCase(),
+        identifier: loginData.identifier.toLowerCase(),
+        username: loginData.identifier.toLowerCase(),
         password: loginData.password
       });
       
@@ -91,7 +110,7 @@ const AuthPage = () => {
       } else if (error.response?.status === 404) {
         toast.error('User not found. Please register first.');
       } else {
-        toast.error(error.response?.data?.detail || 'Login failed. Please try again.');
+        toast.error(error.response?.data?.detail || error.message || 'Login failed. Please try again.');
       }
     } finally {
       setIsLoading(false);
@@ -125,6 +144,7 @@ const AuthPage = () => {
     try {
       const response = await axios.post(`${API}/auth/register`, {
         username: registerData.username.toLowerCase(),
+        email: registerData.email.trim().toLowerCase() || null,
         display_name: registerData.displayName,
         password: registerData.password
       });
@@ -207,12 +227,13 @@ const AuthPage = () => {
             <TabsContent value="login" className="p-6">
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
-                  <Label className="font-manrope text-sm text-muted-foreground">Username</Label>
+                  <Label className="font-manrope text-sm text-muted-foreground">Username or email</Label>
                   <Input
                     data-testid="login-username"
-                    value={loginData.username}
-                    onChange={(e) => setLoginData(prev => ({ ...prev, username: e.target.value }))}
-                    placeholder="Enter your username"
+                    value={loginData.identifier}
+                    onChange={(e) => setLoginData(prev => ({ ...prev, identifier: e.target.value }))}
+                    placeholder="Enter username or email"
+                    autoComplete="username"
                     className="bg-obsidian border-border/50 rounded-sm mt-1"
                     disabled={isLoading}
                   />
@@ -227,6 +248,7 @@ const AuthPage = () => {
                       value={loginData.password}
                       onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))}
                       placeholder="Enter your password"
+                      autoComplete="current-password"
                       className="bg-obsidian border-border/50 rounded-sm mt-1 pr-10"
                       disabled={isLoading}
                     />
@@ -283,6 +305,20 @@ const AuthPage = () => {
                     value={registerData.username}
                     onChange={(e) => setRegisterData(prev => ({ ...prev, username: e.target.value }))}
                     placeholder="Choose a unique username"
+                    autoComplete="username"
+                    className="bg-obsidian border-border/50 rounded-sm mt-1"
+                    disabled={isLoading}
+                  />
+                </div>
+
+                <div>
+                  <Label className="font-manrope text-sm text-muted-foreground">Email (optional in alpha)</Label>
+                  <Input
+                    type="email"
+                    value={registerData.email}
+                    onChange={(e) => setRegisterData(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="name@example.com"
+                    autoComplete="email"
                     className="bg-obsidian border-border/50 rounded-sm mt-1"
                     disabled={isLoading}
                   />
@@ -309,6 +345,7 @@ const AuthPage = () => {
                       value={registerData.password}
                       onChange={(e) => setRegisterData(prev => ({ ...prev, password: e.target.value }))}
                       placeholder="Create a password (min 6 chars)"
+                      autoComplete="new-password"
                       className="bg-obsidian border-border/50 rounded-sm mt-1 pr-10"
                       disabled={isLoading}
                     />
@@ -336,6 +373,7 @@ const AuthPage = () => {
                     value={registerData.confirmPassword}
                     onChange={(e) => setRegisterData(prev => ({ ...prev, confirmPassword: e.target.value }))}
                     placeholder="Confirm your password"
+                    autoComplete="new-password"
                     className="bg-obsidian border-border/50 rounded-sm mt-1"
                     disabled={isLoading}
                   />
@@ -359,10 +397,6 @@ const AuthPage = () => {
           </Tabs>
         </Card>
 
-        {/* Footer */}
-        <p className="text-center mt-6 font-mono text-xs text-muted-foreground/50">
-          v0.3.0 // Pre-Release for itch.io
-        </p>
       </div>
     </div>
   );

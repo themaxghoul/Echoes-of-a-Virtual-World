@@ -13,11 +13,23 @@ Most AI lack persistent memory, real compute contribution, and the ability to tr
 ### Key Features (Current & Planned)
 
 - **Communal AI Memory** — Talk to any AI and get accurate reports of what other players or villagers said in-game.
-- **Virtual Economy Powered by Compute** — Compute power is the main currency. AIs must earn or receive it to survive; insufficient compute leads to "going wild" or termination by higher processors.
-- **Merit-Based Society** — Players and AIs are recognized and rewarded solely by their contributions.
+- **Virtuconomy & CU** — CU is a provisional accounting unit for negotiated, verified contribution while the final Virtuconomy infrastructure is developed. It is not the final fictional currency or a current promise of redemption.
+- **Equal Contribution Rules** — Human players and AI citizens earn under the same rules through accepted work orders, public work, technical outcomes, reproducible research, and useful engineered artifacts.
 - **Dynamic Storytelling** — Players literally shape the world with their intentions. Want to become King? Build alliances and clarify goals with the game AI. Prefer shadows? Commit deeds (good or bad) that ripple through society. Conquer everything and declare yourself God of Virtuality — the system supports it.
 - **Future Combat System** — Defend villages from "demons" or a persistent virus army that attacks daily.
 - **Client Support** — Currently runs via website. Unity first- and third-person clients are in active development.
+
+### Virtuconomy valuation
+
+CU rewards negotiated and verified value—not raw activity, message volume, reputation, or unreviewed claims. Eligible contribution includes:
+
+- work orders with deliverables, acceptance tests, escrow, review, and dispute procedures;
+- treasury-funded public infrastructure and other auditable public goods;
+- outcome-based technical expertise;
+- peer-reviewed and reproducible research, including useful negative results;
+- tools valued through materials, design, labor, precision, durability, maintainability, safety, and demonstrated usefulness.
+
+Underlying materials, labor, compute, energy, land rights, reputation, research evidence, governance authority, and CU remain separately measured. See [Virtuconomy CU Valuation Doctrine](docs/VIRTUCONOMY_CU_VALUATION.md) for the governing specification.
 
 ### Current Status
 Very early prototype.  

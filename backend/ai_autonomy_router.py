@@ -69,6 +69,10 @@ AUTONOMOUS_ACTIONS = {
     "create_quest": {"category": "events", "cost": 100, "cooldown": 7200},
 }
 
+PHYSICAL_GEOGRAPHY_ACTIONS = {
+    "build_structure", "modify_terrain", "create_landmark", "destroy_structure", "claim_territory"
+}
+
 # ============ Models ============
 
 class NPCState(BaseModel):
@@ -124,6 +128,8 @@ class WorldBuildRequest(BaseModel):
     action: str  # build_structure, modify_terrain, etc.
     location: str
     details: Dict[str, Any]
+    work_order_id: Optional[str] = None
+    verification_id: Optional[str] = None
 
 # ============ Database Helper ============
 
@@ -328,7 +334,7 @@ async def start_ai_conversation(data: ConversationStart, background_tasks: Backg
             "timestamp": datetime.now(timezone.utc).isoformat()
         }}}
     )
-    
+
     return {
         "conversation_id": conversation.conversation_id,
         "participants": [initiator.get("name"), target.get("name")],
@@ -387,6 +393,8 @@ async def continue_ai_conversation(conversation_id: str, rounds: int = 1):
                     outcomes.append({
                         "actor": participant_id,
                         "action": action,
+                        "status": "stated_intention",
+                        "physical_world_applied": False,
                         "timestamp": datetime.now(timezone.utc).isoformat()
                     })
             
@@ -421,6 +429,35 @@ async def continue_ai_conversation(conversation_id: str, rounds: int = 1):
             }
         }
     )
+
+    if new_messages:
+        await db.social_influence_events.insert_many([
+            {
+                "event_id": str(uuid.uuid4()),
+                "conversation_id": conversation_id,
+                "speaker_id": message["speaker_id"],
+                "location": conversation.get("location"),
+                "kind": "speech_exposure",
+                "magnitude": 0.05,
+                "physical_world_applied": False,
+                "timestamp": message["timestamp"]
+            }
+            for message in new_messages
+        ])
+        try:
+            from server import broadcast_to_location
+            for message in new_messages:
+                await broadcast_to_location(conversation.get("location"), {
+                    "type": "autonomous_chatter",
+                    "data": {
+                        **message,
+                        "location": conversation.get("location"),
+                        "persistent": True,
+                        "direct_physical_impact": False
+                    }
+                })
+        except Exception as error:
+            logger.warning(f"Could not broadcast autonomous chatter: {error}")
     
     return {
         "conversation_id": conversation_id,
@@ -498,6 +535,25 @@ async def npc_autonomous_action(npc_id: str, data: Optional[AutonomousActionRequ
     action_data = AUTONOMOUS_ACTIONS[action]
     cost = action_data.get("cost", 0)
     cooldown = action_data.get("cooldown", 0)
+
+    if action in PHYSICAL_GEOGRAPHY_ACTIONS:
+        intent = {
+            "intent_id": str(uuid.uuid4()),
+            "npc_id": npc_id,
+            "action": action,
+            "location": npc_state.get("location", "unknown"),
+            "status": "awaiting_interference",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "reason": "Autonomous intent requires materials, labor, and verified physical execution"
+        }
+        await db.physical_action_intents.insert_one(intent)
+        return {
+            "acted": False,
+            "intent_created": True,
+            "intent_id": intent["intent_id"],
+            "action": action,
+            "reason": intent["reason"]
+        }
     
     # Check resources
     if cost > npc_state.get("resources", {}).get("currency", 0):
@@ -552,6 +608,17 @@ async def apply_world_change(data: WorldBuildRequest):
         raise HTTPException(status_code=400, detail=f"Unknown action: {data.action}")
     
     action_data = AUTONOMOUS_ACTIONS[data.action]
+
+    if data.action in PHYSICAL_GEOGRAPHY_ACTIONS:
+        if not data.work_order_id or not data.verification_id:
+            raise HTTPException(status_code=409, detail="Physical geography changes require a work order and independent verification")
+        verification = await db.work_order_verifications.find_one({
+            "verification_id": data.verification_id,
+            "work_order_id": data.work_order_id,
+            "status": "verified"
+        })
+        if not verification:
+            raise HTTPException(status_code=409, detail="No valid verification exists for this physical change")
     
     # Record the change
     change = WorldChange(
@@ -559,7 +626,7 @@ async def apply_world_change(data: WorldBuildRequest):
         initiator_type=data.entity_type,
         action=data.action,
         location=data.location,
-        details=data.details
+        details={**data.details, "work_order_id": data.work_order_id, "verification_id": data.verification_id}
     )
     
     await db.world_changes.insert_one(change.dict())

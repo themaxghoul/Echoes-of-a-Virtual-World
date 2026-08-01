@@ -7,11 +7,12 @@ import { Progress } from '@/components/ui/progress';
 import { 
   Gamepad2, MessageSquare, User, Sparkles, Crown,
   ArrowRight, Settings, LogOut, Hammer, ArrowLeftRight,
-  Heart, Zap, Shield, Swords, DollarSign, TrendingUp, Briefcase
+  Heart, Zap, Shield, Swords, DollarSign, TrendingUp, Briefcase, ScanEye, Glasses
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
 import { pushNavHistory } from '@/components/GameNavigation';
+import BuildWatermark from '@/components/BuildWatermark';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -38,6 +39,13 @@ const ModeSelection = () => {
 
     if (!charId) {
       navigate('/create-character');
+      return;
+    }
+
+    if (window.eovDesktop) {
+      setCharacter({ id: charId, name: localStorage.getItem('characterName') || 'sirix_1', traits: ['Witness', 'Builder'], health: 100, max_health: 100, stamina: 100, max_stamina: 100, strength: 10, endurance: 10, agility: 10, intelligence: 10 });
+      setUserProfile({ id: userId, username: localStorage.getItem('username'), display_name: localStorage.getItem('displayName') || 'Sirix-1', is_transcendent: localStorage.getItem('isTranscendent') === 'true' });
+      setLoading(false);
       return;
     }
 
@@ -69,6 +77,7 @@ const ModeSelection = () => {
 
   const selectMode = (mode, path) => {
     localStorage.setItem('gameMode', mode);
+    localStorage.setItem('eovLastRoute', path);
     pushNavHistory(path);
     navigate(path);
   };
@@ -81,6 +90,7 @@ const ModeSelection = () => {
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-gold border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="font-cinzel text-gold">Loading your journey...</p>
+          <BuildWatermark />
         </div>
       </div>
     );
@@ -132,8 +142,8 @@ const ModeSelection = () => {
             variant="ghost"
             size="icon"
             onClick={() => {
-              pushNavHistory('/profile');
-              navigate('/profile');
+              pushNavHistory('/settings');
+              navigate('/settings');
             }}
             className="rounded-sm"
             data-testid="profile-btn"
@@ -204,7 +214,7 @@ const ModeSelection = () => {
                         className="h-1.5 flex-1" 
                       />
                       <span className="text-xs text-muted-foreground w-12 text-right">
-                        {isTranscendent ? '∞' : `${character.health}/${character.max_health}`}
+                        {isTranscendent ? 'âˆž' : `${character.health}/${character.max_health}`}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -214,7 +224,7 @@ const ModeSelection = () => {
                         className="h-1.5 flex-1" 
                       />
                       <span className="text-xs text-muted-foreground w-12 text-right">
-                        {isTranscendent ? '∞' : `${Math.round(character.stamina)}/${character.max_stamina}`}
+                        {isTranscendent ? 'âˆž' : `${Math.round(character.stamina)}/${character.max_stamina}`}
                       </span>
                     </div>
                   </div>
@@ -226,22 +236,22 @@ const ModeSelection = () => {
                 <div className="text-center">
                   <Swords className="w-4 h-4 mx-auto text-red-400 mb-1" />
                   <span className="text-xs text-muted-foreground">STR</span>
-                  <p className="font-mono text-sm text-foreground">{isTranscendent ? '∞' : character.strength}</p>
+                  <p className="font-mono text-sm text-foreground">{isTranscendent ? 'âˆž' : character.strength}</p>
                 </div>
                 <div className="text-center">
                   <Shield className="w-4 h-4 mx-auto text-blue-400 mb-1" />
                   <span className="text-xs text-muted-foreground">DEF</span>
-                  <p className="font-mono text-sm text-foreground">{isTranscendent ? '∞' : character.endurance}</p>
+                  <p className="font-mono text-sm text-foreground">{isTranscendent ? 'âˆž' : character.endurance}</p>
                 </div>
                 <div className="text-center">
                   <Zap className="w-4 h-4 mx-auto text-yellow-400 mb-1" />
                   <span className="text-xs text-muted-foreground">AGI</span>
-                  <p className="font-mono text-sm text-foreground">{isTranscendent ? '∞' : character.agility}</p>
+                  <p className="font-mono text-sm text-foreground">{isTranscendent ? 'âˆž' : character.agility}</p>
                 </div>
                 <div className="text-center">
                   <Sparkles className="w-4 h-4 mx-auto text-purple-400 mb-1" />
                   <span className="text-xs text-muted-foreground">INT</span>
-                  <p className="font-mono text-sm text-foreground">{isTranscendent ? '∞' : character.intelligence}</p>
+                  <p className="font-mono text-sm text-foreground">{isTranscendent ? 'âˆž' : character.intelligence}</p>
                 </div>
               </div>
             </CardContent>
@@ -249,7 +259,7 @@ const ModeSelection = () => {
         )}
 
         {/* Mode Selection */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 max-w-5xl w-full">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 sm:gap-5 max-w-7xl w-full">
           {/* 2D Story Mode - Text Adventure with Building */}
           <Card 
             className="bg-surface/80 border-border/50 rounded-sm hover:border-gold/50 transition-all duration-300 cursor-pointer group"
@@ -266,7 +276,7 @@ const ModeSelection = () => {
               </p>
               <div className="flex flex-wrap gap-2 justify-center mb-4">
                 <Badge className="bg-gold/10 text-gold text-xs rounded-sm">AI Narrator</Badge>
-                <Badge className="bg-gold/10 text-gold text-xs rounded-sm">All Maps Open</Badge>
+                <Badge className="bg-gold/10 text-gold text-xs rounded-sm">Testimony Discovery</Badge>
               </div>
               <Button 
                 data-testid="select-storymode-btn"
@@ -279,7 +289,7 @@ const ModeSelection = () => {
             </CardContent>
           </Card>
 
-          {/* 3D First Person Mode (Web) */}
+          {/* Primary 2.5D Isometric Mode */}
           <Card 
             className="bg-surface/80 border-border/50 rounded-sm hover:border-slate-blue/50 transition-all duration-300 cursor-pointer group"
             onClick={() => selectMode('firstperson', '/play')}
@@ -289,22 +299,33 @@ const ModeSelection = () => {
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-blue/20 border border-slate-blue/30 flex items-center justify-center group-hover:scale-110 transition-transform">
                 <Gamepad2 className="w-8 h-8 text-slate-blue" />
               </div>
-              <h3 className="font-cinzel text-lg text-foreground mb-2">First Person 3D</h3>
+              <h3 className="font-cinzel text-lg text-foreground mb-2">Isometric Settlement</h3>
               <p className="font-manrope text-sm text-muted-foreground mb-4">
-                Immersive 3D in browser. Walk through the village, interact with NPCs.
+                Build the persistent settlement in a readable 2.5D isometric world.
               </p>
               <div className="flex flex-wrap gap-2 justify-center mb-4">
-                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">Web 3D</Badge>
-                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">D-Pad</Badge>
+                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">2.5D Alpha</Badge>
+                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">Spatial Discovery</Badge>
               </div>
               <Button 
                 data-testid="select-firstperson-btn"
                 className="w-full bg-slate-blue text-white hover:bg-slate-blue-light font-cinzel rounded-sm"
               >
                 <Gamepad2 className="w-5 h-5 mr-2" />
-                Enter 3D Web
+                Enter Settlement
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* Embodied first-person discovery */}
+          <Card className="bg-surface/80 border-border/50 rounded-sm hover:border-cyan-400/50 transition-all duration-300 cursor-pointer group" onClick={() => selectMode('firstperson', '/play-3d')}>
+            <CardContent className="p-6 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-cyan-500/15 border border-cyan-400/30 flex items-center justify-center group-hover:scale-110 transition-transform"><ScanEye className="w-8 h-8 text-cyan-300" /></div>
+              <h3 className="font-cinzel text-lg text-foreground mb-2">First-Person Discovery</h3>
+              <p className="font-manrope text-sm text-muted-foreground mb-4">Inspect line of sight, sound, surfaces, nearby tools, and occluded evidence.</p>
+              <div className="flex flex-wrap gap-2 justify-center mb-4"><Badge className="bg-cyan-500/10 text-cyan-300 text-xs rounded-sm">Embodied Local</Badge></div>
+              <Button className="w-full bg-cyan-700 text-white hover:bg-cyan-600 font-cinzel rounded-sm"><ScanEye className="w-5 h-5 mr-2" />Enter First Person</Button>
             </CardContent>
           </Card>
 
@@ -334,6 +355,16 @@ const ModeSelection = () => {
                 Unity Offload
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* VR backlog keeps the same authoritative world and adds embodied sensing later. */}
+          <Card className="bg-surface/50 border-dashed border-border/50 rounded-sm opacity-75">
+            <CardContent className="p-6 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-purple-500/10 border border-purple-400/20 flex items-center justify-center"><Glasses className="w-8 h-8 text-purple-300" /></div>
+              <h3 className="font-cinzel text-lg text-foreground mb-2">VR Embodiment</h3>
+              <p className="font-manrope text-sm text-muted-foreground mb-4">Future stereo depth, gesture, dexterity, body position, and tool handling.</p>
+              <Button disabled className="w-full font-cinzel rounded-sm">Backlog Â· Input research</Button>
             </CardContent>
           </Card>
         </div>
@@ -432,7 +463,7 @@ const ModeSelection = () => {
       {/* Footer */}
       <footer className="relative z-10 p-4 text-center border-t border-border/30">
         <p className="font-mono text-xs text-muted-foreground/50">
-          Story Mode = 2D Chat + Building | First Person = 3D Models
+          Primary Client = 2.5D Isometric | Legacy views remain available during integration
         </p>
       </footer>
     </div>

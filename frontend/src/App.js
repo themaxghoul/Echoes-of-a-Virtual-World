@@ -1,5 +1,6 @@
 import "@/App.css";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { useEffect } from "react";
+import { BrowserRouter, HashRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import LandingPage from "@/pages/LandingPage";
 import AuthPage from "@/pages/AuthPage";
@@ -23,11 +24,24 @@ import UnityOffload from "@/pages/UnityOffload";
 import ChatHistory from "@/pages/ChatHistory";
 import SkillsPage from "@/pages/SkillsPage";
 import CharacterCustomization from "@/pages/CharacterCustomization";
+import IsometricSettlement from "@/pages/IsometricSettlement";
+import GameSettings from "@/pages/GameSettings";
 
 function App() {
+  const Router = window.eovDesktop ? HashRouter : BrowserRouter;
+  useEffect(() => {
+    try {
+      const settings = JSON.parse(localStorage.getItem('eov-game-settings'));
+      if (settings?.textScale) document.documentElement.style.fontSize = `${settings.textScale}%`;
+      document.documentElement.classList.toggle('eov-reduce-motion', Boolean(settings?.reduceMotion));
+      document.documentElement.classList.toggle('eov-high-contrast', Boolean(settings?.highContrast));
+    } catch {
+      // Invalid preferences fall back to the stylesheet defaults.
+    }
+  }, []);
   return (
     <div className="App min-h-screen bg-obsidian text-foreground">
-      <BrowserRouter>
+      <Router>
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/terms" element={<TermsOfService />} />
@@ -36,12 +50,14 @@ function App() {
           <Route path="/create-character" element={<CharacterCreation />} />
           <Route path="/select-mode" element={<ModeSelection />} />
           <Route path="/village" element={<VillageExplorer />} />
-          <Route path="/play" element={<FirstPersonView3D />} />
+          <Route path="/play" element={<IsometricSettlement />} />
+          <Route path="/play-3d" element={<FirstPersonView3D />} />
           <Route path="/play-classic" element={<FirstPersonView />} />
           <Route path="/unity" element={<UnityOffload />} />
           <Route path="/chat-history" element={<ChatHistory />} />
           <Route path="/skills" element={<SkillsPage />} />
           <Route path="/customize-character" element={<CharacterCustomization />} />
+          <Route path="/settings" element={<GameSettings />} />
           <Route path="/dataspace" element={<DataspaceView />} />
           <Route path="/quests" element={<QuestBoard />} />
           <Route path="/profile" element={<UserProfilePage />} />
@@ -52,7 +68,7 @@ function App() {
           <Route path="/earnings" element={<EarningsHub />} />
           <Route path="/jobs" element={<JobsHub />} />
         </Routes>
-      </BrowserRouter>
+      </Router>
       <Toaster 
         position="bottom-right"
         toastOptions={{

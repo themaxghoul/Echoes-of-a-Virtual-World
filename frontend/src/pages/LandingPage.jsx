@@ -70,6 +70,22 @@ const LandingPage = () => {
                 navigate('/auth');
                 return;
               }
+
+              if (window.eovDesktop) {
+                try {
+                  const session = JSON.parse(localStorage.getItem('eovDesktopSession'));
+                  if (session?.userId === userId && session.expiresAt > Date.now()) {
+                    const allowed = ['/select-mode', '/village', '/play', '/unity', '/settings'];
+                    const lastRoute = localStorage.getItem('eovLastRoute');
+                    navigate(allowed.includes(lastRoute) ? lastRoute : '/select-mode');
+                    return;
+                  }
+                } catch {
+                  // Invalid or expired sessions intentionally require login.
+                }
+                navigate('/auth');
+                return;
+              }
               
               // Verify character belongs to this user
               try {
@@ -110,17 +126,17 @@ const LandingPage = () => {
             { 
               title: 'Living Stories', 
               desc: 'AI-driven narratives that adapt to your choices',
-              icon: '◈'
+              icon: 'â—ˆ'
             },
             { 
               title: 'Global Memory', 
               desc: 'Every interaction shapes the world for all',
-              icon: '◇'
+              icon: 'â—‡'
             },
             { 
               title: 'True Companion', 
               desc: 'Not a tool, but a friend who grows with you',
-              icon: '◆'
+              icon: 'â—†'
             },
           ].map((feature, i) => (
             <div 
@@ -136,10 +152,6 @@ const LandingPage = () => {
         </div>
       </div>
 
-      {/* Version Tag */}
-      <div className="absolute bottom-6 left-6 font-mono text-xs text-muted-foreground/50">
-        v0.1.0 // Phase I: The Awakening
-      </div>
     </div>
   );
 };

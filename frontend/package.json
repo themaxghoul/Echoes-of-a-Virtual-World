@@ -1,7 +1,10 @@
 {
-  "name": "frontend",
-  "version": "0.1.0",
+  "name": "echoes-of-virtuality",
+  "productName": "Echoes of Virtuality",
+  "version": "0.3.0-alpha.6",
   "private": true,
+  "homepage": ".",
+  "main": "electron/main.cjs",
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
     "@radix-ui/react-accordion": "^1.2.8",
@@ -58,7 +61,10 @@
   "scripts": {
     "start": "craco start",
     "build": "craco build",
-    "test": "craco test"
+    "test": "craco test",
+    "test:desktop-store": "node --test electron/store.test.cjs",
+    "desktop:start": "pnpm run build && electron .",
+    "desktop:package": "pnpm run build && node electron/prepare-package.cjs && electron-packager desktop-stage \"Echoes of Virtuality\" --platform=win32 --arch=x64 --out=out --overwrite --asar --executable-name=EchoesOfVirtuality"
   },
   "browserslist": {
     "production": [
@@ -73,19 +79,20 @@
     ]
   },
   "devDependencies": {
+    "@electron/packager": "19.0.1",
     "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
     "@craco/craco": "^7.1.0",
-    "@emergentbase/visual-edits": "https://assets.emergent.sh/npm/emergentbase-visual-edits-1.0.8.tgz",
     "@eslint/js": "9.23.0",
     "autoprefixer": "^10.4.20",
-    "eslint": "9.23.0",
+    "eslint": "8.57.1",
     "eslint-plugin-import": "2.31.0",
     "eslint-plugin-jsx-a11y": "6.10.2",
     "eslint-plugin-react": "7.37.4",
+    "electron": "37.2.3",
     "eslint-plugin-react-hooks": "5.2.0",
     "globals": "15.15.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17"
   },
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+  "packageManager": "pnpm@11.9.0"
 }
