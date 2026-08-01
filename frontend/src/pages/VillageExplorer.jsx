@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import axios from 'axios';
 import { pushNavHistory } from '@/components/GameNavigation';
 import BuildWatermark from '@/components/BuildWatermark';
+import { createChatterEvent, loadChatter } from '@/lib/autonomousChatter';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -212,7 +213,7 @@ const VillageExplorer = () => {
           setCharacter(offlineCharacter);
           setLocations(OFFLINE_LOCATIONS);
           setCurrentLocation(startLoc);
-          setMessages([{ role: 'narrator', content: `You enter ${startLoc.name}. ${startLoc.description}\n\n${startLoc.atmosphere}\n\nStory Mode is offline-capable. Speech and observation create testimony, not material consequences; verified actions and work orders change the persistent world.` }]);
+          setMessages([{ role: 'narrator', content: `You enter ${startLoc.name}. ${startLoc.description}\n\n${startLoc.atmosphere}\n\nStory Mode is offline-capable. Words can accumulate social influence, change beliefs, and motivate later choices. Geography changes only when an entity physically interferes with it.` }]);
           toast.info('Story Mode opened with the offline world snapshot');
         } else {
           toast.error('Failed to connect to The Echoes');
@@ -222,6 +223,31 @@ const VillageExplorer = () => {
 
     loadData();
   }, [navigate]);
+
+  // Autonomous NPC speech continues without a player prompt and is retained locally.
+  useEffect(() => {
+    if (!currentLocation || locations.length === 0) return undefined;
+    const recentLocal = loadChatter().filter((event) => event.locationId === currentLocation.id).slice(-4);
+    if (recentLocal.length) {
+      setMessages((current) => [...current, ...recentLocal.map((event) => ({ role: 'ambient', speaker: event.speaker, content: event.content, eventId: event.id }))]);
+    }
+    let cancelled = false;
+    let timer;
+    const schedule = () => {
+      timer = window.setTimeout(() => {
+        if (cancelled) return;
+        const event = createChatterEvent(locations);
+        if (event?.locationId === currentLocation.id) {
+          setMessages((current) => [...current, { role: 'ambient', speaker: event.speaker, content: event.content, eventId: event.id }]);
+        } else if (event && Math.random() < 0.4) {
+          setMessages((current) => [...current, { role: 'distant', content: `Indistinct chatter carries from ${event.locationName}; the words are too far away to resolve.` }]);
+        }
+        schedule();
+      }, 8000 + Math.floor(Math.random() * 7000));
+    };
+    schedule();
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [currentLocation, locations]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -329,7 +355,7 @@ const VillageExplorer = () => {
         }
       }
       
-      // Conversation is testimony, not automatically productive world action.
+      // Conversation accumulates social influence but cannot directly mutate geography.
       const newConvCount = conversationCount + 1;
       setConversationCount(newConvCount);
       saveProgression(playerXP, newConvCount, visitedLocations);
@@ -337,7 +363,7 @@ const VillageExplorer = () => {
       console.error('Chat error:', error);
       if (window.eovDesktop) {
         const witness = currentLocation.npcs?.[0] || 'The settlement';
-        setMessages(prev => [...prev, { role: 'assistant', content: `${witness} acknowledges your words. They are retained as testimony, but the world state will not change until an action is performed and verified.` }]);
+        setMessages(prev => [...prev, { role: 'assistant', content: `${witness} responds on their own terms. The exchange may affect memory, trust, rumor, or a later decision, but speech alone cannot directly alter the physical terrain.` }]);
         const newConvCount = conversationCount + 1;
         setConversationCount(newConvCount);
         saveProgression(playerXP, newConvCount, visitedLocations);
@@ -363,36 +389,7 @@ const VillageExplorer = () => {
     return (
       <div className="min-h-screen bg-obsidian flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="w-8 h-8 text-gold animate-spin mx-auto mb-4" />
-          <p className="font-manrope text-muted-foreground">Entering The Echoes...</p>
-          <BuildWatermark />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="h-screen bg-obsidian flex overflow-hidden">
-      {/* Sidebar Backdrop */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-      
-      {/* Sidebar */}
-      <aside 
-        className={`fixed lg:relative z-40 h-full bg-surface/95 backdrop-blur-xl border-r border-border/30 transition-all duration-300 overflow-hidden ${
-          sidebarOpen ? 'w-80' : 'w-0'
-        }`}
-      >
-        {sidebarOpen && (
-          <div className="h-full flex flex-col w-80">
-            {/* Character Info */}
-            <div className="p-6 border-b border-border/30">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-sm bg-gold/20 border border-gold/30 flex items-center justify-center overflow-hidden">
+          <Loader2 className="w-8 h-8 text-gold animate-spin mx-au…269 tokens truncated…nter overflow-hidden">
                   {character?.appearance ? (
                     <div className="w-full h-full bg-gradient-to-br from-gold/30 to-slate-blue/30 flex items-center justify-center">
                       <User className="w-6 h-6 text-gold" />
@@ -682,7 +679,7 @@ const VillageExplorer = () => {
         <ScrollArea className="flex-1 p-6 chat-scroll">
           <div className="max-w-3xl mx-auto space-y-6">
             <div className="border-l-2 border-gold/60 bg-gold/5 p-3 text-xs text-muted-foreground">
-              Speech, chat, and spectating create records and relationshipsâ€”not resources, construction, or CU. Persistent impact requires witnessed action or a verified work order. Dead characters cannot create new testimony.
+              Words accumulate social influence: beliefs, relationships, rumors, coordination, and later choices may change. Geography changes only through physical interference. Dead characters cannot add new speech; their surviving records remain.
             </div>
             {messages.map((msg, i) => (
               <div 
@@ -698,6 +695,13 @@ const VillageExplorer = () => {
                       {msg.content}
                     </p>
                   </Card>
+                ) : msg.role === 'ambient' ? (
+                  <Card className="border-cyan-500/20 bg-cyan-500/5 rounded-sm p-3">
+                    <p className="font-manrope text-sm text-foreground/80"><span className="mr-2 font-cinzel text-cyan-300">{msg.speaker}:</span>{msg.content}</p>
+                    <small className="mt-1 block font-mono text-[9px] text-muted-foreground">AUDIBLE Â· autonomous local chatter</small>
+                  </Card>
+                ) : msg.role === 'distant' ? (
+                  <p className="px-3 font-manrope text-xs italic text-muted-foreground/60">{msg.content}</p>
                 ) : msg.role === 'user' ? (
                   <div className="max-w-[80%]">
                     <Card className="bg-gold/10 border-gold/30 rounded-sm p-4">
