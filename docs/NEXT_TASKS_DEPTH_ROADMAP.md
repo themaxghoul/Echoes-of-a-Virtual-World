@@ -90,9 +90,11 @@ Player gestures, keyboard/mouse actions, first-person controls, isometric comman
 
 This keeps different perspectives fair. A first-person player may swing the hammer directly, while an isometric player issues and supervises a work order, but neither bypasses the same material and physical requirements.
 
+Authoritative lifecycle states, access gates and prototype acceptance criteria are defined in `docs/DEPTH_IMPLEMENTATION_DECISIONS.md`.
+
 ## 5. Two-week economy bootstrap
 
-The first persistent seed should have at least fourteen real days before any evaluation of a mature economy. During this period, CU remains accounting infrastructure rather than a withdrawable or guaranteed external currency.
+The first persistent seed should have at least fourteen calendar days before any evaluation of a mature economy. World simulation advances through deterministic ticks and retains pause history; downtime does not fabricate productive history. During this period, CU remains accounting infrastructure rather than a withdrawable or guaranteed external currency.
 
 ### Days 1â€“2: survive and observe
 
