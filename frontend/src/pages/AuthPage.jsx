@@ -58,6 +58,8 @@ const AuthPage = () => {
         localStorage.setItem('permissionLevel', user.permission_level);
         localStorage.setItem('currentCharacterId', character.id);
         localStorage.setItem('characterName', character.name);
+        localStorage.setItem('eovDesktopSession', JSON.stringify({ userId: user.id, expiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 }));
+        localStorage.setItem('eovLastRoute', '/select-mode');
         toast.success(`Welcome back, ${user.display_name}!`);
         navigate('/select-mode');
         return;
@@ -395,10 +397,6 @@ const AuthPage = () => {
           </Tabs>
         </Card>
 
-        {/* Footer */}
-        <p className="text-center mt-6 font-mono text-xs text-muted-foreground/50">
-          v0.3.0 // Pre-Release for itch.io
-        </p>
       </div>
     </div>
   );
