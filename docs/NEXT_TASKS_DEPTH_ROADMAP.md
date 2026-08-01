@@ -135,15 +135,16 @@ The first persistent seed should have at least fourteen calendar days before any
 1. Create the shared authoritative action schema.
 2. Add tool, material, station, energy, wear and maintenance models.
 3. Implement hand-tool accessibility progression.
-4. Prototype smithing as the first fully embodied production workflow.
-5. Prototype cooking as the first heat/time/safety workflow.
-6. Implement teaching, apprenticeship and procedure reproduction against real tasks.
-7. Add AI conceptual-design proposals and virtual test reports.
-8. Add office task queues, schedules, on-call status and communication boundaries.
-9. Connect needs and shortages to negotiated work orders.
-10. Add deterministic fourteen-day seed telemetry and replay.
-11. Stress-test mixed human/AI settlements and economic bottlenecks.
-12. Revisit VR only after shared actions and first-person embodiment are stable.
+4. Implement measurement and scientific competency as the common introductory workflow.
+5. Implement teaching, apprenticeship and procedure reproduction against real tasks.
+6. Prototype cooking or repair as the first needs-driven heat/maintenance workflow.
+7. Prototype smithing after materials science, heat and measurement foundations exist.
+8. Add AI conceptual-design proposals and virtual test reports.
+9. Add office task queues, schedules, on-call status and communication boundaries.
+10. Connect needs and shortages to negotiated work orders.
+11. Add deterministic fourteen-day seed telemetry and replay.
+12. Stress-test mixed human/AI settlements and economic bottlenecks.
+13. Revisit VR only after shared actions and first-person embodiment are stable.
 
 ## 7. Forwarded reliability work
 
