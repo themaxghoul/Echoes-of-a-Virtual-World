@@ -14,6 +14,7 @@ import {
 import { toast } from 'sonner';
 import axios from 'axios';
 import { pushNavHistory } from '@/components/GameNavigation';
+import BuildWatermark from '@/components/BuildWatermark';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -55,6 +56,17 @@ const MILESTONES = [
 // All locations are always open in Story/Chat mode
 const ALL_LOCATIONS_OPEN = true;
 
+const OFFLINE_LOCATIONS = [
+  { id: 'village_square', name: 'Village Square', description: 'The civic heart of the settlement.', atmosphere: 'Footsteps, tools, and low conversation cross the square.', npcs: ['Elder Morvain', 'Lyra the Wanderer'], available_actions: ['Observe the square', 'Inspect the notice board', 'Ask who needs help'] },
+  { id: 'oracle_sanctum', name: 'Oracle Sanctum', description: 'A quiet chamber built for difficult questions.', atmosphere: 'Reflected light shifts across old instruments.', npcs: ['Oracle Veythra'], available_actions: ['Inspect the instruments', 'Record an observation', 'Ask about a hypothesis'] },
+  { id: 'the_forge', name: 'The Forge', description: 'Heat and repeated work give raw material a useful form.', atmosphere: 'Measured hammer blows answer the furnace.', npcs: ['Kael Ironbrand'], available_actions: ['Inspect the work order', 'Check the material stock', 'Offer verified labor'] },
+  { id: 'ancient_library', name: 'Ancient Library', description: 'Research and testimony are kept for later verification.', atmosphere: 'Paper, dust, and cooling machinery mute the room.', npcs: ['Archivist Nyx'], available_actions: ['Review a record', 'Compare two sources', 'Submit a finding'] },
+  { id: 'wanderers_rest', name: "Wanderer's Rest", description: 'Travelers exchange news without guaranteeing its truth.', atmosphere: 'Conversation rises and fades around the common tables.', npcs: ['Innkeeper Mara'], available_actions: ['Listen', 'Ask for local work', 'Check the public ledger'] },
+  { id: 'shadow_grove', name: 'Shadow Grove', description: 'An unmanaged edge where observation matters more than rumor.', atmosphere: 'Branches move above tracks pressed into damp earth.', npcs: ['The Grove Keeper'], available_actions: ['Study the tracks', 'Collect a sample', 'Return without disturbing it'] },
+  { id: 'watchtower', name: 'Watchtower', description: 'Guards record what can be witnessed from the settlement boundary.', atmosphere: 'Wind crosses stone and the distant road remains visible.', npcs: ['Sentinel Vex'], available_actions: ['Survey the road', 'Read the guard log', 'Report an incident'] },
+  { id: 'outer_realms', name: 'Outer Realms', description: 'Unsettled territory beyond reliable civic coverage.', atmosphere: 'No report from here is trusted without a surviving witness or record.', npcs: ['The Hooded Stranger'], available_actions: ['Observe from cover', 'Mark a route', 'Turn back'] },
+];
+
 const VillageExplorer = () => {
   const navigate = useNavigate();
   const messagesEndRef = useRef(null);
@@ -83,6 +95,7 @@ const VillageExplorer = () => {
   useEffect(() => {
     pushNavHistory('/village');
     localStorage.setItem('gameMode', 'story');
+    localStorage.setItem('eovLastRoute', '/village');
     
     // Check for resume conversation
     const resumeData = localStorage.getItem('resumeConversation');
@@ -193,7 +206,17 @@ const VillageExplorer = () => {
         }]);
       } catch (error) {
         console.error('Failed to load data:', error);
-        toast.error('Failed to connect to The Echoes');
+        if (window.eovDesktop) {
+          const offlineCharacter = { id: charId, name: localStorage.getItem('characterName') || 'sirix_1', current_location: 'village_square', health: 100, max_health: 100, traits: ['Witness', 'Builder'] };
+          const startLoc = OFFLINE_LOCATIONS[0];
+          setCharacter(offlineCharacter);
+          setLocations(OFFLINE_LOCATIONS);
+          setCurrentLocation(startLoc);
+          setMessages([{ role: 'narrator', content: `You enter ${startLoc.name}. ${startLoc.description}\n\n${startLoc.atmosphere}\n\nStory Mode is offline-capable. Speech and observation create testimony, not material consequences; verified actions and work orders change the persistent world.` }]);
+          toast.info('Story Mode opened with the offline world snapshot');
+        } else {
+          toast.error('Failed to connect to The Echoes');
+        }
       }
     };
 
@@ -224,8 +247,7 @@ const VillageExplorer = () => {
     if (!visitedLocations.has(location.id)) {
       const newVisited = new Set([...visitedLocations, location.id]);
       setVisitedLocations(newVisited);
-      awardXP(20, 'New location discovered');
-      saveProgression(playerXP + 20, conversationCount, newVisited);
+      saveProgression(playerXP, conversationCount, newVisited);
     }
     
     // Update character location
@@ -248,6 +270,10 @@ const VillageExplorer = () => {
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading || !character || !currentLocation) return;
+    if (Number(character.health) <= 0) {
+      toast.error('Dead men tell no tales. This point of view is archived.');
+      return;
+    }
 
     const userMsg = inputMessage.trim();
     setInputMessage('');
@@ -303,18 +329,22 @@ const VillageExplorer = () => {
         }
       }
       
-      // Award XP for conversation
+      // Conversation is testimony, not automatically productive world action.
       const newConvCount = conversationCount + 1;
       setConversationCount(newConvCount);
-      awardXP(10, 'Conversation');
-      saveProgression(playerXP + 10, newConvCount, visitedLocations);
+      saveProgression(playerXP, newConvCount, visitedLocations);
     } catch (error) {
       console.error('Chat error:', error);
-      toast.error('The mists interfere with your words...');
-      setMessages(prev => [...prev, { 
-        role: 'narrator', 
-        content: '*The air shimmers, your words lost in the ethereal void. Try speaking again.*' 
-      }]);
+      if (window.eovDesktop) {
+        const witness = currentLocation.npcs?.[0] || 'The settlement';
+        setMessages(prev => [...prev, { role: 'assistant', content: `${witness} acknowledges your words. They are retained as testimony, but the world state will not change until an action is performed and verified.` }]);
+        const newConvCount = conversationCount + 1;
+        setConversationCount(newConvCount);
+        saveProgression(playerXP, newConvCount, visitedLocations);
+      } else {
+        toast.error('The mists interfere with your words...');
+        setMessages(prev => [...prev, { role: 'narrator', content: '*The connection falters. Your attempted message has no world effect.*' }]);
+      }
     } finally {
       setIsThinking(false);
       setIsLoading(false);
@@ -335,6 +365,7 @@ const VillageExplorer = () => {
         <div className="text-center">
           <Loader2 className="w-8 h-8 text-gold animate-spin mx-auto mb-4" />
           <p className="font-manrope text-muted-foreground">Entering The Echoes...</p>
+          <BuildWatermark />
         </div>
       </div>
     );
@@ -373,7 +404,7 @@ const VillageExplorer = () => {
                 <div className="flex-1">
                   <h2 className="font-cinzel text-lg text-foreground">{character?.name}</h2>
                   <p className="font-mono text-xs text-muted-foreground">
-                    {character?.traits?.slice(0, 2).join(' • ')}
+                    {character?.traits?.slice(0, 2).join(' â€¢ ')}
                   </p>
                 </div>
                 <button
@@ -650,6 +681,9 @@ const VillageExplorer = () => {
         {/* Chat Area */}
         <ScrollArea className="flex-1 p-6 chat-scroll">
           <div className="max-w-3xl mx-auto space-y-6">
+            <div className="border-l-2 border-gold/60 bg-gold/5 p-3 text-xs text-muted-foreground">
+              Speech, chat, and spectating create records and relationshipsâ€”not resources, construction, or CU. Persistent impact requires witnessed action or a verified work order. Dead characters cannot create new testimony.
+            </div>
             {messages.map((msg, i) => (
               <div 
                 key={i} 
