@@ -1,4 +1,5 @@
 import "@/App.css";
+import { useEffect } from "react";
 import { BrowserRouter, HashRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "@/components/ui/sonner";
 import LandingPage from "@/pages/LandingPage";
@@ -24,9 +25,20 @@ import ChatHistory from "@/pages/ChatHistory";
 import SkillsPage from "@/pages/SkillsPage";
 import CharacterCustomization from "@/pages/CharacterCustomization";
 import IsometricSettlement from "@/pages/IsometricSettlement";
+import GameSettings from "@/pages/GameSettings";
 
 function App() {
   const Router = window.eovDesktop ? HashRouter : BrowserRouter;
+  useEffect(() => {
+    try {
+      const settings = JSON.parse(localStorage.getItem('eov-game-settings'));
+      if (settings?.textScale) document.documentElement.style.fontSize = `${settings.textScale}%`;
+      document.documentElement.classList.toggle('eov-reduce-motion', Boolean(settings?.reduceMotion));
+      document.documentElement.classList.toggle('eov-high-contrast', Boolean(settings?.highContrast));
+    } catch {
+      // Invalid preferences fall back to the stylesheet defaults.
+    }
+  }, []);
   return (
     <div className="App min-h-screen bg-obsidian text-foreground">
       <Router>
@@ -45,6 +57,7 @@ function App() {
           <Route path="/chat-history" element={<ChatHistory />} />
           <Route path="/skills" element={<SkillsPage />} />
           <Route path="/customize-character" element={<CharacterCustomization />} />
+          <Route path="/settings" element={<GameSettings />} />
           <Route path="/dataspace" element={<DataspaceView />} />
           <Route path="/quests" element={<QuestBoard />} />
           <Route path="/profile" element={<UserProfilePage />} />
