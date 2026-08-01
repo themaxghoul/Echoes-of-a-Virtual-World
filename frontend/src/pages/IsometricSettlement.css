@@ -50,6 +50,13 @@
 .desktop-diagnostics div span { margin-left: auto; }
 .desktop-diagnostics p { margin-top: 6px; }
 .desktop-diagnostics small { display: block; margin-top: 6px; color: #f0d985; }
+.causal-ledger-panel { padding: 12px; border: 1px solid #3b3630; background: #0b1214; }
+.causal-ledger-panel h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; color: #d4af37; font: 10px 'JetBrains Mono', monospace; }
+.causal-ledger-panel p { color: #657976; font-size: 10px; }
+.causal-ledger-panel article { display: grid; grid-template-columns: auto 1fr; gap: 4px 7px; padding: 7px 0; border-top: 1px solid #1d2b2f; font-size: 9px; }
+.causal-ledger-panel article strong { color: #8fe8ef; text-transform: uppercase; }
+.causal-ledger-panel article span { color: #b7c1bf; }
+.causal-ledger-panel article small { grid-column: 1 / -1; color: #657976; }
 @media (max-width: 900px) {
   .iso-main { grid-template-columns: 1fr; height: auto; }
   .iso-viewport { height: 68vh; }
