@@ -4,6 +4,8 @@ import { ArrowLeft, Building2, Hammer, RotateCcw, Save, Users, Zap } from 'lucid
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import JarvisPanel from '@/components/JarvisPanel';
+import DesktopDiagnostics from '@/components/DesktopDiagnostics';
+import { readDurable, writeDurable } from '@/lib/desktopStorage';
 import './IsometricSettlement.css';
 
 const MAP_SIZE = 18;
@@ -34,15 +36,6 @@ const BUILDINGS = {
 };
 
 const clamp = (value) => Math.max(0, Math.min(MAP_SIZE - 1, value));
-
-function loadWorld() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    return saved && saved.player && Array.isArray(saved.blueprints) ? saved : INITIAL_WORLD;
-  } catch {
-    return INITIAL_WORLD;
-  }
-}
 
 function worldToScreen(x, y, originX, originY) {
   return {
@@ -100,7 +93,7 @@ const IsometricSettlement = () => {
   const navigate = useNavigate();
   const canvasRef = useRef(null);
   const frameRef = useRef(null);
-  const [world, setWorld] = useState(loadWorld);
+  const [world, setWorld] = useState(INITIAL_WORLD);
   const [buildMode, setBuildMode] = useState(false);
   const [selectedType, setSelectedType] = useState('workshop');
   const [hoverTile, setHoverTile] = useState(null);
@@ -113,9 +106,17 @@ const IsometricSettlement = () => {
     activeProjects: world.blueprints.filter((item) => item.stage < 4).length,
   }), [world.blueprints]);
 
-  const saveWorld = useCallback((nextWorld = world) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(nextWorld));
-    setSavedAt(new Date());
+  useEffect(() => {
+    let active = true;
+    readDurable('world', STORAGE_KEY, INITIAL_WORLD).then((saved) => {
+      if (active && saved?.player && Array.isArray(saved.blueprints)) setWorld(saved);
+    });
+    return () => { active = false; };
+  }, []);
+
+  const saveWorld = useCallback(async (nextWorld = world) => {
+    const envelope = await writeDurable('world', STORAGE_KEY, nextWorld);
+    setSavedAt(new Date(envelope.savedAt));
   }, [world]);
 
   const render = useCallback(() => {
@@ -275,10 +276,9 @@ const IsometricSettlement = () => {
   };
 
   const resetSettlement = () => {
-    localStorage.removeItem(STORAGE_KEY);
     setWorld(INITIAL_WORLD);
     setSelected(null);
-    setSavedAt(null);
+    saveWorld(INITIAL_WORLD);
   };
 
   return (
@@ -346,11 +346,12 @@ const IsometricSettlement = () => {
           </div>
 
           <div className="iso-note">
-            <strong>Pre-alpha persistence</strong>
-            <p>Blueprints and construction stages save locally for this test build. Server-authoritative work orders and CU escrow follow in alpha.2.</p>
+            <strong>Desktop persistence</strong>
+            <p>The desktop build stores checksummed revisions with a known-good backup. Server-authoritative work orders and CU escrow remain a later milestone.</p>
             {savedAt && <small>Saved {savedAt.toLocaleTimeString()}</small>}
           </div>
           <JarvisPanel activity={buildMode ? 'Observing blueprint placement' : selected ? `Reviewing ${selected.name}` : 'Monitoring settlement activity'} />
+          <DesktopDiagnostics />
         </aside>
       </main>
     </div>
