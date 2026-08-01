@@ -107,6 +107,7 @@ const IsometricSettlement = () => {
   }), [world.blueprints]);
 
   useEffect(() => {
+    localStorage.setItem('eovLastRoute', '/play');
     let active = true;
     readDurable('world', STORAGE_KEY, INITIAL_WORLD).then((saved) => {
       if (active && saved?.player && Array.isArray(saved.blueprints)) setWorld(saved);
