@@ -1,7 +1,7 @@
 {
   "name": "echoes-of-virtuality",
   "productName": "Echoes of Virtuality",
-  "version": "0.3.0-alpha.4",
+  "version": "0.3.0-alpha.5",
   "private": true,
   "homepage": ".",
   "main": "electron/main.cjs",
