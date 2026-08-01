@@ -12,6 +12,7 @@ import {
 import { toast } from 'sonner';
 import axios from 'axios';
 import { pushNavHistory } from '@/components/GameNavigation';
+import BuildWatermark from '@/components/BuildWatermark';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -38,6 +39,13 @@ const ModeSelection = () => {
 
     if (!charId) {
       navigate('/create-character');
+      return;
+    }
+
+    if (window.eovDesktop) {
+      setCharacter({ id: charId, name: localStorage.getItem('characterName') || 'sirix_1', traits: ['Witness', 'Builder'], health: 100, max_health: 100, stamina: 100, max_stamina: 100, strength: 10, endurance: 10, agility: 10, intelligence: 10 });
+      setUserProfile({ id: userId, username: localStorage.getItem('username'), display_name: localStorage.getItem('displayName') || 'Sirix-1', is_transcendent: localStorage.getItem('isTranscendent') === 'true' });
+      setLoading(false);
       return;
     }
 
@@ -69,6 +77,7 @@ const ModeSelection = () => {
 
   const selectMode = (mode, path) => {
     localStorage.setItem('gameMode', mode);
+    localStorage.setItem('eovLastRoute', path);
     pushNavHistory(path);
     navigate(path);
   };
@@ -81,6 +90,7 @@ const ModeSelection = () => {
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-gold border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="font-cinzel text-gold">Loading your journey...</p>
+          <BuildWatermark />
         </div>
       </div>
     );
@@ -132,8 +142,8 @@ const ModeSelection = () => {
             variant="ghost"
             size="icon"
             onClick={() => {
-              pushNavHistory('/profile');
-              navigate('/profile');
+              pushNavHistory('/settings');
+              navigate('/settings');
             }}
             className="rounded-sm"
             data-testid="profile-btn"
