@@ -3,9 +3,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from economy import ComputeSponsorshipStore, SettlementError
+from economy import ComputeSponsorshipStore, SettlementError, SettlementIdempotencyConflict
 from economy.public_ledger import project_public_cu_ledger
 from economy.settlement_service import SettlementService
+from economy.provider_adapters import ProviderCapabilities, ProviderCapabilityError
 from persistent_world import PersistentWorldStore
 
 
@@ -115,6 +116,119 @@ class SettlementServiceTests(unittest.TestCase):
             "cancel-lifecycle", allocation["allocation_id"], "provider unavailable", 2_400,
         )
         self.assertEqual("cancelled", cancelled["state"])
+
+    def test_provider_lifecycle_replays_an_ambiguous_timeout_and_reconciles_below_hold(self):
+        provider = _FakeCapableProvider(timeout_once=True)
+        self.service.provider_registry = {"test-provider": provider}
+        self._activate_settlement_policy()
+        allocation = self.service.propose_allocation("provider-quote", self.world_id, self.policy_id, [self.claim_id], 2_100)
+        self.service.hold_allocation("provider-hold", allocation["allocation_id"], 2_200)
+        self.service.approve_allocation("provider-approval", allocation["allocation_id"], "sha256:" + ("d" * 64), 9_000, 2_300)
+        with self.assertRaises(TimeoutError):
+            self.service.submit_allocation("provider-submit-1", allocation["allocation_id"], "test-provider", 2_400)
+        pending = self.store.get_allocation(allocation["allocation_id"])
+        self.assertEqual("provider_pending", pending["state"])
+        submitted = self.service.submit_allocation("provider-submit-2", allocation["allocation_id"], "test-provider", 2_401)
+        self.assertEqual("provider_pending", submitted["state"])
+        self.assertEqual(1, len(set(provider.operation_ids)))
+        confirmed = self.service.record_provider_receipt("provider-receipt", allocation["allocation_id"], {
+            "provider": "test-provider", "receipt_id": "receipt-1", "provider_transaction_id": "txn-1",
+            "amount_minor": 4, "currency": "usd", "completed_at_ms": 2_402,
+            "evidence_hash": "sha256:" + ("e" * 64), "human_completed": True,
+        }, 2_403)
+        self.assertEqual("provider_confirmed", confirmed["state"])
+        with self.assertRaises(SettlementIdempotencyConflict):
+            self.service.record_provider_receipt("provider-receipt-conflict", allocation["allocation_id"], {
+                "provider": "test-provider", "receipt_id": "receipt-1", "provider_transaction_id": "txn-1",
+                "amount_minor": 4, "currency": "usd", "completed_at_ms": 2_402,
+                "evidence_hash": "sha256:" + ("f" * 64), "human_completed": True,
+            }, 2_403)
+        reconciled = self.service.reconcile_allocation("provider-reconcile", allocation["allocation_id"], {
+            "data": [{"object": "organization.costs.result", "amount": {"value": "0.02", "currency": "usd"},
+                      "start_time": 3, "end_time": 3,
+                      "metadata": {"eov_provider_operation_id": submitted["provider_operation_id"]}}]
+        }, 3_500)
+        self.assertEqual("reconciled", reconciled["state"])
+        self.assertEqual(2, self.store.funding_balance("expense:provider:test-provider"))
+        self.assertEqual(998, self.store.funding_balance("reserve:available"))
+        self.assertEqual(0, self.store.funding_balance(f"reserve:held:{allocation['allocation_id']}"))
+        self.assertEqual(reconciled, self.service.reconcile_allocation("provider-reconcile", allocation["allocation_id"], {
+            "data": [{"object": "organization.costs.result", "amount": {"value": "0.02", "currency": "usd"},
+                      "start_time": 3, "end_time": 3,
+                      "metadata": {"eov_provider_operation_id": submitted["provider_operation_id"]}}]
+        }, 3_500))
+
+    def test_provider_submission_rejects_expired_approval_and_above_hold_cost_is_reviewable(self):
+        provider = _FakeCapableProvider()
+        self.service.provider_registry = {"test-provider": provider}
+        self._activate_settlement_policy()
+        allocation = self.service.propose_allocation("cap-quote", self.world_id, self.policy_id, [self.claim_id], 2_100)
+        self.service.hold_allocation("cap-hold", allocation["allocation_id"], 2_200)
+        self.service.approve_allocation("cap-approval", allocation["allocation_id"], "sha256:" + ("f" * 64), 2_401, 2_300)
+        with self.assertRaisesRegex(Exception, "expired"):
+            self.service.submit_allocation("cap-expired", allocation["allocation_id"], "test-provider", 2_401)
+        self.service.expire_due("cap-expire", 2_401)
+
+        allocation = self.service.propose_allocation("above-quote", self.world_id, self.policy_id, [self.claim_id], 2_410)
+        self.service.hold_allocation("above-hold", allocation["allocation_id"], 2_420)
+        self.service.approve_allocation("above-approval", allocation["allocation_id"], "sha256:" + ("1" * 64), 9_000, 2_430)
+        submitted = self.service.submit_allocation("above-submit", allocation["allocation_id"], "test-provider", 2_440)
+        self.service.record_provider_receipt("above-receipt", allocation["allocation_id"], {
+            "provider": "test-provider", "receipt_id": "receipt-above", "provider_transaction_id": "txn-above",
+            "amount_minor": 4, "currency": "usd", "completed_at_ms": 2_441,
+            "evidence_hash": "sha256:" + ("2" * 64), "human_completed": True,
+        }, 2_442)
+        exception = self.service.reconcile_allocation("above-reconcile", allocation["allocation_id"], {
+            "data": [{"object": "organization.costs.result", "amount": {"value": "10.00", "currency": "usd"},
+                      "start_time": 3, "end_time": 3,
+                      "metadata": {"eov_provider_operation_id": submitted["provider_operation_id"]}}]
+        }, 3_500)
+        self.assertEqual("reconciliation_exception", exception["state"])
+        self.assertEqual(4, self.store.funding_balance(f"reserve:held:{allocation['allocation_id']}"))
+        self.assertEqual(0, self.store.funding_balance("expense:provider:test-provider"))
+
+    def test_reconciliation_at_the_approved_hold_captures_without_a_release(self):
+        self.service.provider_registry = {"test-provider": _FakeCapableProvider()}
+        self._activate_settlement_policy()
+        allocation = self.service.propose_allocation("exact-quote", self.world_id, self.policy_id, [self.claim_id], 2_100)
+        self.service.hold_allocation("exact-hold", allocation["allocation_id"], 2_200)
+        self.service.approve_allocation("exact-approval", allocation["allocation_id"], "sha256:" + ("3" * 64), 9_000, 2_300)
+        submitted = self.service.submit_allocation("exact-submit", allocation["allocation_id"], "test-provider", 2_400)
+        self.service.record_provider_receipt("exact-receipt", allocation["allocation_id"], {
+            "provider": "test-provider", "receipt_id": "receipt-exact", "provider_transaction_id": "txn-exact",
+            "amount_minor": 4, "currency": "usd", "completed_at_ms": 2_401,
+            "evidence_hash": "sha256:" + ("4" * 64), "human_completed": True,
+        }, 2_402)
+        reconciled = self.service.reconcile_allocation("exact-reconcile", allocation["allocation_id"], {
+            "data": [{"object": "organization.costs.result", "amount": {"value": "0.04", "currency": "usd"},
+                      "start_time": 3, "end_time": 3,
+                      "metadata": {"eov_provider_operation_id": submitted["provider_operation_id"]}}]
+        }, 3_500)
+        self.assertEqual("reconciled", reconciled["state"])
+        self.assertEqual(996, self.store.funding_balance("reserve:available"))
+        self.assertEqual(4, self.store.funding_balance("expense:provider:test-provider"))
+        self.assertEqual(0, self.store.funding_balance(f"reserve:held:{allocation['allocation_id']}"))
+
+    def _activate_settlement_policy(self):
+        self.store.activate_policy("activate-settlement", "owner-uuid", self.policy_id, "settlement_active", {
+            "provider_capability_hash": "sha256:" + ("a" * 64),
+        }, 2_050)
+
+
+class _FakeCapableProvider:
+    def __init__(self, timeout_once=False):
+        self.timeout_once = timeout_once
+        self.operation_ids = []
+
+    def capabilities(self):
+        return ProviderCapabilities("test-provider", purchase=True, credit_transfer=False, usage_read=True, cost_read=True)
+
+    def submit(self, allocation, provider_operation_id):
+        self.operation_ids.append(provider_operation_id)
+        if self.timeout_once:
+            self.timeout_once = False
+            raise TimeoutError("provider response is ambiguous")
+        return {"status": "pending", "provider_operation_id": provider_operation_id}
 
 
 if __name__ == "__main__":

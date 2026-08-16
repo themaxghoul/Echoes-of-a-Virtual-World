@@ -47,6 +47,11 @@ _ALLOCATION_TRANSITIONS = {
         "owner_approved": "cancelled",
     },
     "expire": {"owner_approved": "expired"},
+    "provider_submit": {"owner_approved": "provider_pending", "provider_pending": "provider_pending"},
+    "provider_confirm": {"provider_pending": "provider_confirmed"},
+    "reconcile_start": {"provider_confirmed": "reconciling"},
+    "reconcile_complete": {"reconciling": "reconciled"},
+    "reconcile_exception": {"reconciling": "reconciliation_exception"},
 }
 
 
@@ -142,10 +147,16 @@ class ComputeSponsorshipStore:
                     expires_at_ms INTEGER,
                     cancelled_at_ms INTEGER,
                     expired_at_ms INTEGER,
+                    provider TEXT,
+                    provider_operation_id TEXT,
+                    provider_pending_at_ms INTEGER,
+                    provider_confirmed_at_ms INTEGER,
+                    reconciled_at_ms INTEGER,
+                    actual_cost_minor INTEGER,
                     FOREIGN KEY(operation_id) REFERENCES settlement_operations(operation_id),
                     FOREIGN KEY(policy_id) REFERENCES settlement_policies(policy_id),
                     CHECK(beneficiary_class = 'eov_owner_development'),
-                    CHECK(state IN ('proposed', 'funding_held', 'owner_approved', 'cancelled', 'expired')),
+                    CHECK(state IN ('proposed', 'funding_held', 'owner_approved', 'provider_pending', 'provider_confirmed', 'reconciling', 'reconciled', 'reconciliation_exception', 'cancelled', 'expired')),
                     CHECK(typeof(policy_version) = 'integer' AND policy_version > 0),
                     CHECK(typeof(eligible_cu_milli) = 'integer' AND eligible_cu_milli > 0),
                     CHECK(typeof(quoted_funding_minor) = 'integer' AND quoted_funding_minor > 0),
@@ -187,7 +198,7 @@ class ComputeSponsorshipStore:
                     occurred_at_ms INTEGER NOT NULL,
                     FOREIGN KEY(operation_id) REFERENCES settlement_operations(operation_id),
                     FOREIGN KEY(allocation_id) REFERENCES settlement_allocations(allocation_id),
-                    CHECK(event_type IN ('allocation_held', 'owner_approved', 'allocation_cancelled', 'allocation_expired')),
+                    CHECK(event_type IN ('allocation_held', 'owner_approved', 'provider_submitted', 'provider_confirmed', 'reconciliation_started', 'allocation_reconciled', 'reconciliation_exception', 'allocation_cancelled', 'allocation_expired')),
                     CHECK(typeof(occurred_at_ms) = 'integer' AND occurred_at_ms >= 0)
                 );
                 CREATE INDEX IF NOT EXISTS idx_settlement_postings_operation
@@ -204,6 +215,26 @@ class ComputeSponsorshipStore:
                     ON settlement_policy_activation_events(policy_id, sequence);
                 CREATE INDEX IF NOT EXISTS idx_settlement_events_allocation
                     ON settlement_events(allocation_id, sequence);
+                CREATE TABLE IF NOT EXISTS settlement_provider_receipts (
+                    provider TEXT NOT NULL,
+                    receipt_id TEXT NOT NULL,
+                    allocation_id TEXT NOT NULL,
+                    receipt_json TEXT NOT NULL,
+                    receipt_hash TEXT NOT NULL,
+                    recorded_at_ms INTEGER NOT NULL,
+                    PRIMARY KEY(provider, receipt_id),
+                    FOREIGN KEY(allocation_id) REFERENCES settlement_allocations(allocation_id),
+                    CHECK(typeof(recorded_at_ms) = 'integer' AND recorded_at_ms >= 0)
+                );
+                CREATE TABLE IF NOT EXISTS settlement_provider_costs (
+                    allocation_id TEXT NOT NULL,
+                    cost_hash TEXT NOT NULL,
+                    cost_json TEXT NOT NULL,
+                    recorded_at_ms INTEGER NOT NULL,
+                    PRIMARY KEY(allocation_id, cost_hash),
+                    FOREIGN KEY(allocation_id) REFERENCES settlement_allocations(allocation_id),
+                    CHECK(typeof(recorded_at_ms) = 'integer' AND recorded_at_ms >= 0)
+                );
                 """
             )
             posting_columns = {
@@ -231,17 +262,18 @@ class ComputeSponsorshipStore:
                 )
             for column in (
                 "held_at_ms", "approval_hash", "approved_at_ms", "expires_at_ms",
-                "cancelled_at_ms", "expired_at_ms",
+                "cancelled_at_ms", "expired_at_ms", "provider", "provider_operation_id",
+                "provider_pending_at_ms", "provider_confirmed_at_ms", "reconciled_at_ms", "actual_cost_minor",
             ):
                 if column not in allocation_columns:
                     connection.execute(f"ALTER TABLE settlement_allocations ADD COLUMN {column}")
             allocation_sql = connection.execute(
                 "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'settlement_allocations'"
             ).fetchone()["sql"]
-            if "CHECK(state = 'proposed')" in allocation_sql:
+            if "provider_pending" not in allocation_sql:
                 connection.execute("PRAGMA foreign_keys=OFF")
                 connection.execute(
-                    """CREATE TABLE settlement_allocations_v3 AS
+                    """CREATE TABLE settlement_allocations_v4 AS
                     SELECT * FROM settlement_allocations"""
                 )
                 connection.execute("DROP TABLE settlement_allocations")
@@ -255,10 +287,12 @@ class ComputeSponsorshipStore:
                         state TEXT NOT NULL, created_at_ms INTEGER NOT NULL, held_at_ms INTEGER,
                         approval_hash TEXT, approved_at_ms INTEGER, expires_at_ms INTEGER,
                         cancelled_at_ms INTEGER, expired_at_ms INTEGER,
+                        provider TEXT, provider_operation_id TEXT, provider_pending_at_ms INTEGER,
+                        provider_confirmed_at_ms INTEGER, reconciled_at_ms INTEGER, actual_cost_minor INTEGER,
                         FOREIGN KEY(operation_id) REFERENCES settlement_operations(operation_id),
                         FOREIGN KEY(policy_id) REFERENCES settlement_policies(policy_id),
                         CHECK(beneficiary_class = 'eov_owner_development'),
-                        CHECK(state IN ('proposed', 'funding_held', 'owner_approved', 'cancelled', 'expired')),
+                        CHECK(state IN ('proposed', 'funding_held', 'owner_approved', 'provider_pending', 'provider_confirmed', 'reconciling', 'reconciled', 'reconciliation_exception', 'cancelled', 'expired')),
                         CHECK(typeof(policy_version) = 'integer' AND policy_version > 0),
                         CHECK(typeof(eligible_cu_milli) = 'integer' AND eligible_cu_milli > 0),
                         CHECK(typeof(quoted_funding_minor) = 'integer' AND quoted_funding_minor > 0),
@@ -266,8 +300,35 @@ class ComputeSponsorshipStore:
                         CHECK(typeof(created_at_ms) = 'integer' AND created_at_ms >= 0)
                     )"""
                 )
-                connection.execute("INSERT INTO settlement_allocations SELECT * FROM settlement_allocations_v3")
-                connection.execute("DROP TABLE settlement_allocations_v3")
+                connection.execute("INSERT INTO settlement_allocations SELECT * FROM settlement_allocations_v4")
+                connection.execute("DROP TABLE settlement_allocations_v4")
+                connection.execute("PRAGMA foreign_keys=ON")
+            connection.execute(
+                """CREATE UNIQUE INDEX IF NOT EXISTS idx_allocation_provider_operation
+                ON settlement_allocations(provider, provider_operation_id)
+                WHERE provider_operation_id IS NOT NULL"""
+            )
+            events_sql = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'settlement_events'"
+            ).fetchone()["sql"]
+            if "provider_submitted" not in events_sql:
+                connection.execute("PRAGMA foreign_keys=OFF")
+                connection.execute("CREATE TABLE settlement_events_v4 AS SELECT * FROM settlement_events")
+                connection.execute("DROP TABLE settlement_events")
+                connection.execute(
+                    """CREATE TABLE settlement_events (
+                        sequence INTEGER PRIMARY KEY AUTOINCREMENT, operation_id TEXT NOT NULL,
+                        allocation_id TEXT NOT NULL, event_type TEXT NOT NULL, from_state TEXT NOT NULL,
+                        target_state TEXT NOT NULL, evidence_json TEXT NOT NULL, occurred_at_ms INTEGER NOT NULL,
+                        FOREIGN KEY(operation_id) REFERENCES settlement_operations(operation_id),
+                        FOREIGN KEY(allocation_id) REFERENCES settlement_allocations(allocation_id),
+                        CHECK(event_type IN ('allocation_held', 'owner_approved', 'provider_submitted', 'provider_confirmed', 'reconciliation_started', 'allocation_reconciled', 'reconciliation_exception', 'allocation_cancelled', 'allocation_expired')),
+                        CHECK(typeof(occurred_at_ms) = 'integer' AND occurred_at_ms >= 0)
+                    )"""
+                )
+                connection.execute("INSERT INTO settlement_events SELECT * FROM settlement_events_v4")
+                connection.execute("DROP TABLE settlement_events_v4")
+                connection.execute("CREATE INDEX IF NOT EXISTS idx_settlement_events_allocation ON settlement_events(allocation_id, sequence)")
                 connection.execute("PRAGMA foreign_keys=ON")
         finally:
             self._release(connection)
@@ -918,6 +979,12 @@ class ComputeSponsorshipStore:
                 "expires_at_ms": int(row["expires_at_ms"]) if row["expires_at_ms"] is not None else None,
                 "cancelled_at_ms": int(row["cancelled_at_ms"]) if row["cancelled_at_ms"] is not None else None,
                 "expired_at_ms": int(row["expired_at_ms"]) if row["expired_at_ms"] is not None else None,
+                "provider": row["provider"],
+                "provider_operation_id": row["provider_operation_id"],
+                "provider_pending_at_ms": int(row["provider_pending_at_ms"]) if row["provider_pending_at_ms"] is not None else None,
+                "provider_confirmed_at_ms": int(row["provider_confirmed_at_ms"]) if row["provider_confirmed_at_ms"] is not None else None,
+                "reconciled_at_ms": int(row["reconciled_at_ms"]) if row["reconciled_at_ms"] is not None else None,
+                "actual_cost_minor": int(row["actual_cost_minor"]) if row["actual_cost_minor"] is not None else None,
             }
             events = connection.execute(
                 """SELECT sequence, operation_id, event_type, from_state, target_state, evidence_json, occurred_at_ms
@@ -1323,6 +1390,172 @@ class ComputeSponsorshipStore:
             )
             connection.execute("COMMIT")
             return results
+        except Exception:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise
+        finally:
+            self._release(connection)
+
+    def begin_provider_submission(
+        self, operation_id: str, allocation_id: str, owner_subject: str,
+        provider: str, capability_hash: str, now_ms: int,
+    ) -> Dict[str, Any]:
+        """Persist one provider operation before an adapter can be contacted."""
+        values = {
+            "operation_id": self._require_text(operation_id, "operation_id"),
+            "allocation_id": self._require_text(allocation_id, "allocation_id"),
+            "owner_subject": self._require_text(owner_subject, "owner_subject"),
+            "provider": self._require_text(provider, "provider"),
+            "capability_hash": self._require_evidence_hash(capability_hash, "capability_hash"),
+            "now_ms": self._require_non_negative_integer(now_ms, "now_ms"),
+        }
+        request_hash = self._hash_request(values)
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            prior = connection.execute("SELECT request_hash, result_json FROM settlement_operations WHERE operation_id = ?", (values["operation_id"],)).fetchone()
+            if prior:
+                if prior["request_hash"] != request_hash:
+                    raise SettlementIdempotencyConflict("operation_id was already used for different settlement intent")
+                connection.execute("COMMIT")
+                return json.loads(prior["result_json"])
+            row = connection.execute("SELECT * FROM settlement_allocations WHERE allocation_id = ?", (values["allocation_id"],)).fetchone()
+            if not row:
+                raise SettlementError("allocation does not exist")
+            self._require_allocation_owner(row, values["owner_subject"])
+            policy = connection.execute("SELECT state FROM settlement_policies WHERE policy_id = ?", (row["policy_id"],)).fetchone()
+            if not policy or policy["state"] != "settlement_active":
+                raise SettlementTransitionError("settlement_active policy is required before provider submission")
+            if row["state"] == "owner_approved":
+                if values["now_ms"] >= int(row["expires_at_ms"]):
+                    raise SettlementTransitionError("owner approval has expired")
+                if values["now_ms"] < int(row["approved_at_ms"]):
+                    raise SettlementTransitionError("provider submission chronology is invalid")
+                provider_operation_id = "eov:" + row["allocation_id"]
+                result = self._allocation_lifecycle_result(row, values["operation_id"], "provider_pending", values["now_ms"], provider=values["provider"], provider_operation_id=provider_operation_id)
+                connection.execute("INSERT INTO settlement_operations(operation_id, request_hash, result_json) VALUES (?, ?, ?)", (values["operation_id"], request_hash, self._canonical_json(result)))
+                connection.execute("UPDATE settlement_allocations SET state = 'provider_pending', provider = ?, provider_operation_id = ?, provider_pending_at_ms = ? WHERE allocation_id = ?", (values["provider"], provider_operation_id, values["now_ms"], row["allocation_id"]))
+                self._append_lifecycle_event(connection, values["operation_id"], row["allocation_id"], "provider_submitted", "owner_approved", "provider_pending", {"provider": values["provider"], "provider_operation_id": provider_operation_id, "capability_hash": values["capability_hash"]}, values["now_ms"])
+                connection.execute("COMMIT")
+                return result
+            if row["state"] == "provider_pending" and row["provider"] == values["provider"]:
+                result = self._allocation_lifecycle_result(row, values["operation_id"], "provider_pending", values["now_ms"], provider=row["provider"], provider_operation_id=row["provider_operation_id"])
+                connection.execute("INSERT INTO settlement_operations(operation_id, request_hash, result_json) VALUES (?, ?, ?)", (values["operation_id"], request_hash, self._canonical_json(result)))
+                connection.execute("COMMIT")
+                return result
+            raise SettlementTransitionError("allocation transition to provider_pending is invalid")
+        except Exception:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise
+        finally:
+            self._release(connection)
+
+    def confirm_provider_receipt(self, operation_id: str, allocation_id: str, owner_subject: str, receipt: dict, now_ms: int) -> Dict[str, Any]:
+        """Attach canonical, completed billing evidence to exactly one pending allocation."""
+        values = {"operation_id": self._require_text(operation_id, "operation_id"), "allocation_id": self._require_text(allocation_id, "allocation_id"), "owner_subject": self._require_text(owner_subject, "owner_subject"), "receipt": receipt, "now_ms": self._require_non_negative_integer(now_ms, "now_ms")}
+        if not isinstance(receipt, dict):
+            raise ValueError("receipt must be an object")
+        request_hash = self._hash_request(values)
+        receipt_json = self._canonical_json(receipt)
+        receipt_hash = "sha256:" + hashlib.sha256(receipt_json.encode("utf-8")).hexdigest()
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            prior = connection.execute("SELECT request_hash, result_json FROM settlement_operations WHERE operation_id = ?", (values["operation_id"],)).fetchone()
+            if prior:
+                if prior["request_hash"] != request_hash:
+                    raise SettlementIdempotencyConflict("operation_id was already used for different settlement intent")
+                connection.execute("COMMIT")
+                return json.loads(prior["result_json"])
+            row = connection.execute("SELECT * FROM settlement_allocations WHERE allocation_id = ?", (values["allocation_id"],)).fetchone()
+            if not row:
+                raise SettlementError("allocation does not exist")
+            self._require_allocation_owner(row, values["owner_subject"])
+            existing = connection.execute("SELECT allocation_id, receipt_hash FROM settlement_provider_receipts WHERE provider = ? AND receipt_id = ?", (receipt["provider"], receipt["receipt_id"])).fetchone()
+            if existing:
+                if existing["allocation_id"] != row["allocation_id"] or existing["receipt_hash"] != receipt_hash:
+                    raise SettlementIdempotencyConflict("provider receipt is already bound to another allocation or payload")
+                result = self._allocation_lifecycle_result(row, values["operation_id"], row["state"], values["now_ms"], provider=row["provider"], provider_operation_id=row["provider_operation_id"], receipt_hash=receipt_hash)
+                connection.execute("INSERT INTO settlement_operations(operation_id, request_hash, result_json) VALUES (?, ?, ?)", (values["operation_id"], request_hash, self._canonical_json(result)))
+                connection.execute("COMMIT")
+                return result
+            self._require_lifecycle_transition(row["state"], "provider_confirm")
+            if receipt["provider"] != row["provider"] or receipt["currency"] != self._allocation_currency(row):
+                raise SettlementTransitionError("provider receipt does not match allocation provider or currency")
+            if receipt["completed_at_ms"] < int(row["provider_pending_at_ms"]) or receipt["completed_at_ms"] > values["now_ms"]:
+                raise SettlementTransitionError("provider receipt chronology is invalid")
+            result = self._allocation_lifecycle_result(row, values["operation_id"], "provider_confirmed", values["now_ms"], provider=row["provider"], provider_operation_id=row["provider_operation_id"], receipt_hash=receipt_hash)
+            connection.execute("INSERT INTO settlement_operations(operation_id, request_hash, result_json) VALUES (?, ?, ?)", (values["operation_id"], request_hash, self._canonical_json(result)))
+            connection.execute("INSERT INTO settlement_provider_receipts(provider, receipt_id, allocation_id, receipt_json, receipt_hash, recorded_at_ms) VALUES (?, ?, ?, ?, ?, ?)", (receipt["provider"], receipt["receipt_id"], row["allocation_id"], receipt_json, receipt_hash, values["now_ms"]))
+            connection.execute("UPDATE settlement_allocations SET state = 'provider_confirmed', provider_confirmed_at_ms = ? WHERE allocation_id = ?", (values["now_ms"], row["allocation_id"]))
+            self._append_lifecycle_event(connection, values["operation_id"], row["allocation_id"], "provider_confirmed", "provider_pending", "provider_confirmed", {"receipt_hash": receipt_hash, "provider": row["provider"]}, values["now_ms"])
+            connection.execute("COMMIT")
+            return result
+        except Exception:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise
+        finally:
+            self._release(connection)
+
+    def reconcile_provider_cost(self, operation_id: str, allocation_id: str, owner_subject: str, costs: list[dict], now_ms: int) -> Dict[str, Any]:
+        """Atomically capture actual cost or record a no-overdraft exception."""
+        values = {"operation_id": self._require_text(operation_id, "operation_id"), "allocation_id": self._require_text(allocation_id, "allocation_id"), "owner_subject": self._require_text(owner_subject, "owner_subject"), "costs": costs, "now_ms": self._require_non_negative_integer(now_ms, "now_ms")}
+        if not isinstance(costs, list) or not costs:
+            raise ValueError("at least one normalized provider cost is required")
+        request_hash = self._hash_request(values)
+        cost_json = self._canonical_json(costs)
+        cost_hash = "sha256:" + hashlib.sha256(cost_json.encode("utf-8")).hexdigest()
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            prior = connection.execute("SELECT request_hash, result_json FROM settlement_operations WHERE operation_id = ?", (values["operation_id"],)).fetchone()
+            if prior:
+                if prior["request_hash"] != request_hash:
+                    raise SettlementIdempotencyConflict("operation_id was already used for different settlement intent")
+                connection.execute("COMMIT")
+                return json.loads(prior["result_json"])
+            row = connection.execute("SELECT * FROM settlement_allocations WHERE allocation_id = ?", (values["allocation_id"],)).fetchone()
+            if not row:
+                raise SettlementError("allocation does not exist")
+            self._require_allocation_owner(row, values["owner_subject"])
+            self._require_lifecycle_transition(row["state"], "reconcile_start")
+            currency = self._allocation_currency(row)
+            total = 0
+            for cost in costs:
+                if not isinstance(cost, dict) or cost.get("provider_operation_id") != row["provider_operation_id"] or cost.get("currency") != currency:
+                    raise SettlementTransitionError("provider cost cannot be attributed to this allocation")
+                amount = cost.get("amount_minor")
+                if isinstance(amount, bool) or not isinstance(amount, int) or amount < 0:
+                    raise ValueError("provider cost amount_minor must be a non-negative integer")
+                if cost.get("start_time_ms") < int(row["provider_pending_at_ms"]) or cost.get("end_time_ms") < cost.get("start_time_ms") or cost.get("end_time_ms") > values["now_ms"]:
+                    raise SettlementTransitionError("provider cost chronology is invalid")
+                total += amount
+            connection.execute("INSERT INTO settlement_operations(operation_id, request_hash, result_json) VALUES (?, ?, ?)", (values["operation_id"], request_hash, "{}"))
+            connection.execute("INSERT INTO settlement_provider_costs(allocation_id, cost_hash, cost_json, recorded_at_ms) VALUES (?, ?, ?, ?)", (row["allocation_id"], cost_hash, cost_json, values["now_ms"]))
+            self._append_lifecycle_event(connection, values["operation_id"], row["allocation_id"], "reconciliation_started", "provider_confirmed", "reconciling", {"cost_hash": cost_hash}, values["now_ms"])
+            held = int(row["quoted_funding_minor"])
+            if total > held:
+                result = self._allocation_lifecycle_result(row, values["operation_id"], "reconciliation_exception", values["now_ms"], provider=row["provider"], actual_cost_minor=total, cost_hash=cost_hash)
+                connection.execute("UPDATE settlement_allocations SET state = 'reconciliation_exception', actual_cost_minor = ? WHERE allocation_id = ?", (total, row["allocation_id"]))
+                self._append_lifecycle_event(connection, values["operation_id"], row["allocation_id"], "reconciliation_exception", "reconciling", "reconciliation_exception", {"cost_hash": cost_hash, "actual_cost_minor": total}, values["now_ms"])
+            else:
+                held_account = self._account_id(f"reserve:held:{row['allocation_id']}", currency)
+                expense = self._account_id(f"expense:provider:{row['provider']}", currency)
+                available = self._account_id("reserve:available", currency)
+                evidence_hash = cost_hash
+                if total:
+                    self._move_reserve(connection, values["operation_id"], held_account, expense, currency, total, evidence_hash, values["now_ms"])
+                if held - total:
+                    self._move_reserve(connection, values["operation_id"], held_account, available, currency, held - total, evidence_hash, values["now_ms"])
+                result = self._allocation_lifecycle_result(row, values["operation_id"], "reconciled", values["now_ms"], provider=row["provider"], actual_cost_minor=total, cost_hash=cost_hash)
+                connection.execute("UPDATE settlement_allocations SET state = 'reconciled', actual_cost_minor = ?, reconciled_at_ms = ? WHERE allocation_id = ?", (total, values["now_ms"], row["allocation_id"]))
+                self._append_lifecycle_event(connection, values["operation_id"], row["allocation_id"], "allocation_reconciled", "reconciling", "reconciled", {"cost_hash": cost_hash, "actual_cost_minor": total}, values["now_ms"])
+            connection.execute("UPDATE settlement_operations SET result_json = ? WHERE operation_id = ?", (self._canonical_json(result), values["operation_id"]))
+            connection.execute("COMMIT")
+            return result
         except Exception:
             if connection.in_transaction:
                 connection.execute("ROLLBACK")

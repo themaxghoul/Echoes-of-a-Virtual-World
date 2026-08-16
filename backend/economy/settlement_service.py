@@ -5,6 +5,11 @@ from __future__ import annotations
 from typing import Any
 
 from .compute_sponsorship import ComputeSponsorshipStore, SettlementError
+from .provider_adapters import (
+    OpenAICostsNormalizer,
+    ProviderCapabilityError,
+    RecordedOfficialBillingAdapter,
+)
 from .public_ledger import project_public_cu_ledger, verify_public_chain
 
 
@@ -92,3 +97,55 @@ class SettlementService:
     def expire_due(self, operation_id: str, now_ms: int) -> list[dict]:
         """Expire due approvals; this has no caller-controlled identity."""
         return self.store.expire_due(operation_id, now_ms)
+
+    def _provider(self, provider: str):
+        if not isinstance(provider, str) or not provider.strip():
+            raise ProviderCapabilityError("provider is required")
+        if not isinstance(self.provider_registry, dict):
+            raise ProviderCapabilityError("trusted provider registry is unavailable")
+        adapter = self.provider_registry.get(provider.strip())
+        if adapter is None or not callable(getattr(adapter, "capabilities", None)):
+            raise ProviderCapabilityError("provider is not available from the trusted registry")
+        capabilities = adapter.capabilities()
+        if capabilities.provider != provider.strip():
+            raise ProviderCapabilityError("provider registry capability identity is invalid")
+        return adapter, capabilities
+
+    def submit_allocation(self, operation_id: str, allocation_id: str, provider: str, now_ms: int) -> dict:
+        """Persist one idempotent provider submission, then delegate without retry fan-out."""
+        adapter, capabilities = self._provider(provider)
+        if not capabilities.purchase:
+            raise ProviderCapabilityError("provider does not support approved purchase submission")
+        pending = self.store.begin_provider_submission(
+            operation_id, allocation_id, self.owner_subject, capabilities.provider,
+            capabilities.evidence_hash(), now_ms,
+        )
+        # A timeout intentionally propagates after provider_pending is durable.
+        # The next call resolves and reuses this exact idempotency key.
+        adapter.submit({
+            "allocation_id": pending["allocation_id"],
+            "beneficiary_class": "eov_owner_development",
+            "quoted_funding_minor": pending["quoted_funding_minor"],
+            "currency": self.store.get_allocation(allocation_id)["policy_snapshot"]["funding_currency"],
+        }, pending["provider_operation_id"])
+        return pending
+
+    def record_provider_receipt(self, operation_id: str, allocation_id: str, payload: dict, now_ms: int) -> dict:
+        """Record human-completed official billing evidence; this never spends funds."""
+        receipt = RecordedOfficialBillingAdapter().normalize_receipt(payload)
+        # The provider identity comes from persisted pending state.  The payload
+        # may provide evidence but cannot select an enabled capability.
+        allocation = self.store.get_allocation(allocation_id)
+        if receipt["provider"] != allocation.get("provider"):
+            raise SettlementError("provider receipt does not match the pending allocation")
+        return self.store.confirm_provider_receipt(operation_id, allocation_id, self.owner_subject, receipt, now_ms)
+
+    def reconcile_allocation(self, operation_id: str, allocation_id: str, payload: dict, now_ms: int) -> dict:
+        """Normalize official costs and atomically capture only the attributable cost."""
+        allocation = self.store.get_allocation(allocation_id)
+        provider = allocation.get("provider")
+        _, capabilities = self._provider(provider)
+        if not capabilities.cost_read:
+            raise ProviderCapabilityError("provider does not support official cost reconciliation")
+        costs = OpenAICostsNormalizer.normalize(payload)
+        return self.store.reconcile_provider_cost(operation_id, allocation_id, self.owner_subject, costs, now_ms)
