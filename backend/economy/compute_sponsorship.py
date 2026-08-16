@@ -11,7 +11,6 @@ import hashlib
 import json
 import re
 import sqlite3
-from contextlib import closing
 from pathlib import Path
 from typing import Any, Dict
 
@@ -33,6 +32,7 @@ class SettlementTransitionError(SettlementError):
 
 
 _CU_SOURCE = re.compile(r"(?:^|[^a-z0-9])cu(?:$|[^a-z0-9])")
+_EVIDENCE_HASH = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 class ComputeSponsorshipStore:
@@ -45,9 +45,12 @@ class ComputeSponsorshipStore:
 
     def __init__(self, database_path: Path | str):
         self.database_path = str(database_path)
+        self._memory_connection: sqlite3.Connection | None = None
+        self._closed = False
         if self.database_path != ":memory:":
             Path(self.database_path).parent.mkdir(parents=True, exist_ok=True)
-        with closing(self._connect()) as connection:
+        connection = self._connect()
+        try:
             connection.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS settlement_operations (
@@ -91,14 +94,33 @@ class ComputeSponsorshipStore:
                     ON settlement_postings(account_id);
                 """
             )
+        finally:
+            self._release(connection)
 
     def _connect(self) -> sqlite3.Connection:
+        if self._closed:
+            raise SettlementTransitionError("settlement store is closed")
+        if self.database_path == ":memory:" and self._memory_connection is not None:
+            return self._memory_connection
         connection = sqlite3.connect(self.database_path, timeout=30, isolation_level=None)
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA journal_mode=WAL")
         connection.execute("PRAGMA synchronous=FULL")
         connection.execute("PRAGMA foreign_keys=ON")
+        if self.database_path == ":memory:":
+            self._memory_connection = connection
         return connection
+
+    def _release(self, connection: sqlite3.Connection) -> None:
+        if connection is not self._memory_connection:
+            connection.close()
+
+    def close(self) -> None:
+        """Close the store and its lifetime-scoped in-memory connection."""
+        if self._memory_connection is not None:
+            self._memory_connection.close()
+            self._memory_connection = None
+        self._closed = True
 
     @staticmethod
     def _account_id(account: str, currency: str) -> str:
@@ -126,6 +148,8 @@ class ComputeSponsorshipStore:
         currency = cls._require_text(currency, "currency").lower()
         source_class = cls._require_text(source_class, "source_class")
         evidence_hash = cls._require_text(evidence_hash, "evidence_hash")
+        if not _EVIDENCE_HASH.fullmatch(evidence_hash):
+            raise ValueError("evidence_hash must be sha256 followed by 64 lowercase hexadecimal characters")
         if isinstance(amount_minor, bool) or not isinstance(amount_minor, int) or amount_minor <= 0:
             raise ValueError("amount_minor must be a positive integer")
         if isinstance(received_at_ms, bool) or not isinstance(received_at_ms, int) or received_at_ms < 0:
@@ -229,20 +253,24 @@ class ComputeSponsorshipStore:
                 connection.execute("ROLLBACK")
             raise
         finally:
-            connection.close()
+            self._release(connection)
 
     def funding_balance(self, account: str = "reserve:available", currency: str = "usd") -> int:
         account = self._require_text(account, "account")
         currency = self._require_text(currency, "currency").lower()
-        with closing(self._connect()) as connection:
+        connection = self._connect()
+        try:
             row = connection.execute(
                 "SELECT balance_minor FROM settlement_accounts WHERE account_id = ?",
                 (self._account_id(account, currency),),
             ).fetchone()
             return int(row["balance_minor"]) if row else 0
+        finally:
+            self._release(connection)
 
     def audit_funding(self) -> Dict[str, Any]:
-        with closing(self._connect()) as connection:
+        connection = self._connect()
+        try:
             account_total = connection.execute(
                 "SELECT COALESCE(SUM(balance_minor), 0) AS total FROM settlement_accounts"
             ).fetchone()["total"]
@@ -268,3 +296,5 @@ class ComputeSponsorshipStore:
                 "invalid_negative_accounts": [row["account_id"] for row in invalid_negative],
                 "funding_receipts": receipts,
             }
+        finally:
+            self._release(connection)
