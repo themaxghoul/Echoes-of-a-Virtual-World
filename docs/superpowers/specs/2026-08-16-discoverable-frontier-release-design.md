@@ -71,6 +71,16 @@ Autonomous residents perceive only what their current location and evidence allo
 
 Initiative continues to derive from needs, goals, competence, personality, relationships, available perceptions, resources, risk, and expected utility. Human and AI actions differ only in how an intention is selected; physical execution and verification requirements are identical.
 
+## World-Scoped Creator Authority
+
+Sirix-1's creator authority exists in a separate authenticated operator control plane and applies only to the catalogued EoV world. It is not a profession, social rank, competency, religion, supernatural power, or fact automatically available to simulated minds.
+
+The authority is capability-based rather than trusted from a client-supplied username. A valid creator session may inspect, recover, moderate, pause, migrate, or deliberately amend the world through explicit operator operations. Every consequential operator operation requires confirmation, records the authenticated principal, reason, affected state, and before/after revisions in a protected audit trail, and is distinguishable from ordinary causal history. Destructive operations require stronger confirmation and a recovery path where technically possible.
+
+Ordinary players and AI entities do not receive creator-role metadata, audit-plane access, hidden statistics, or theological evidence. An embodied Sirix-1 character exposes null-read privileged statistics to ordinary inspection and blocks privilege discovery through normal investigation. This privacy boundary does not falsify observable physical events or alter another entity's private memory.
+
+When Sirix-1 acts through an embodied character, the character uses the same movement, material, tool, energy, competence, verification, and conservation rules as humans and AI. World amendments performed through the operator plane are labeled administrative interventions rather than disguised as character actions. This prevents creator authority from becoming an in-world god while retaining complete administration of the catalogued world.
+
 ## Concurrency, Recovery, and Failure
 
 Tile and resource mutations use expected revisions, exclusive reservations, and idempotent action identifiers. Competing actions cannot extract the same material twice or prepare the same plot through conflicting writes.
@@ -108,6 +118,9 @@ Automated tests must prove:
 - extracted material remains in actor custody until an explicit deposit transfer;
 - subjective memory contains perceived causal events rather than omniscient state;
 - human and AI performers satisfy the same tools, competence, access, time, energy, reservation, and verification rules;
+- creator capabilities require an authenticated world-scoped operator session and never derive from a supplied actor name;
+- ordinary observations expose neither creator-role metadata nor privileged Sirix-1 statistics;
+- embodied Sirix-1 actions obey canonical physics, while operator amendments remain separately labeled and audited;
 - CU valuation remains nonspendable and balanced against verified evidence;
 - interrupted writes reopen from a valid state without repeating output.
 
