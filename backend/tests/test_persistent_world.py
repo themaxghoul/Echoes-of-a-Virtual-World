@@ -1542,6 +1542,64 @@ class PersistentWorldTests(unittest.TestCase):
         self.assertFalse(rejected["result"]["accepted"])
         self.assertEqual("destination_unknown", rejected["result"]["reason"])
 
+    def test_frontier_excavation_uses_verified_shared_action_and_preserves_actor_custody(self):
+        joined = self.store.apply_action(self.world["world_id"], "excavator-join", "excavator", {"type": "join", "location": [9, 9]}, expected_revision=1)
+        inspector_joined = self.store.apply_action(self.world["world_id"], "inspector-join", "inspector", {"type": "join", "location": [9, 10]}, expected_revision=joined["revision"])
+        snapshot = self.store.snapshot()
+        state = snapshot["state"]
+        state["players"]["excavator"]["equipment"]["shovel"] = {"condition": 0.9, "reserved_by": None, "provenance": "test-checkout"}
+        state["players"]["excavator"]["inventory"]["shovel"] = 1
+        state["players"]["excavator"]["competency_records"]["excavation"] = {"demonstrated": 0.2, "provenance": ["test-practice"]}
+        state["players"]["inspector"]["competency_records"]["measurement"] = {"demonstrated": 0.2, "provenance": ["test-verification"]}
+        with self.store.transaction() as connection:
+            connection.execute("UPDATE worlds SET state_json=? WHERE world_id=?", (json.dumps(state), snapshot["world_id"]))
+
+        surveyed = self.store.apply_action(self.world["world_id"], "survey-excavation-tile", "excavator", {"type": "survey_frontier", "location": [9, 9]}, expected_revision=inspector_joined["revision"])
+        proposed = self.store.apply_action(self.world["world_id"], "propose-excavation-tile", "excavator", {"type": "propose_frontier_extraction", "location": [9, 9], "mode": "excavate"}, expected_revision=surveyed["revision"])
+        action_id = proposed["result"]["canonical_action_id"]
+        self.assertTrue(proposed["result"]["accepted"])
+        for index, operation in enumerate(("accept", "reserve"), 1):
+            result = self.store.apply_action(self.world["world_id"], f"excavation-{operation}", "excavator", {"type": "shared_action", "operation": operation, "shared_action_id": action_id}, now_ms=1_000_010 + index)
+            self.assertTrue(result["result"]["accepted"])
+        executed = self.store.apply_action(self.world["world_id"], "excavation-execute", "excavator", {"type": "shared_action", "operation": "execute", "shared_action_id": action_id, "samples": [{"stock_before": proposed["result"]["stock"], "observed_yield": 1}]}, now_ms=1_000_020)
+        self.assertTrue(executed["result"]["accepted"])
+        self.store.advance_due(now_ms=1_000_000 + 8 * 15_000, max_ticks=8)
+        verified = self.store.apply_action(self.world["world_id"], "excavation-verify", "inspector", {"type": "shared_action", "operation": "verify", "shared_action_id": action_id})
+        self.assertTrue(verified["result"]["accepted"], verified["result"])
+        commissioned = self.store.apply_action(self.world["world_id"], "excavation-commission", "inspector", {"type": "shared_action", "operation": "commission", "shared_action_id": action_id}, expected_revision=verified["revision"])
+        self.assertTrue(commissioned["result"]["accepted"], commissioned["result"])
+
+        final = commissioned["result"]["record"]
+        material = final["definition"]["output_item"]
+        state = self.store.snapshot()["state"]
+        self.assertEqual("commissioned", final["state"])
+        self.assertEqual(1, state["players"]["excavator"]["inventory"][material])
+        self.assertEqual(40, state["terrain_modifications"]["9,9"]["excavation_depth_cm"])
+        self.assertFalse(state["shared_actions"]["valuation_claims"][-1]["spendable"])
+
+    def test_deposit_and_plot_preparation_require_physical_custody_and_survey(self):
+        joined = self.store.apply_action(self.world["world_id"], "builder-join", "builder", {"type": "join", "location": [10, 10]}, expected_revision=1)
+        denied = self.store.apply_action(self.world["world_id"], "prepare-unsurveyed", "builder", {"type": "prepare_frontier_plot", "location": [10, 10]}, expected_revision=joined["revision"])
+        self.assertFalse(denied["result"]["accepted"])
+
+        snapshot = self.store.snapshot()
+        state = snapshot["state"]
+        state["players"]["builder"]["inventory"].update({"shovel": 1, "stone": 2})
+        state["players"]["builder"]["equipment"]["shovel"] = {"condition": 0.9, "reserved_by": None, "provenance": "test-checkout"}
+        with self.store.transaction() as connection:
+            connection.execute("UPDATE worlds SET state_json=? WHERE world_id=?", (json.dumps(state), snapshot["world_id"]))
+        surveyed = self.store.apply_action(self.world["world_id"], "survey-build-tile", "builder", {"type": "survey_frontier", "location": [10, 10]})
+        prepared = self.store.apply_action(self.world["world_id"], "prepare-surveyed", "builder", {"type": "prepare_frontier_plot", "location": [10, 10]}, expected_revision=surveyed["revision"])
+        self.assertTrue(prepared["result"]["accepted"])
+        self.assertTrue(self.store.snapshot()["state"]["terrain_modifications"]["10,10"]["prepared_foundation"])
+
+        moved = self.store.apply_action(self.world["world_id"], "builder-at-warehouse", "builder", {"type": "join", "location": [5, 11]}, expected_revision=prepared["revision"])
+        deposited = self.store.apply_action(self.world["world_id"], "deposit-builder-stone", "builder", {"type": "deposit_material", "resource": "stone", "amount": 1}, expected_revision=moved["revision"])
+        self.assertTrue(deposited["result"]["accepted"])
+        state = self.store.snapshot()["state"]
+        self.assertEqual(0, state["players"]["builder"]["inventory"]["stone"])
+        self.assertEqual(25, state["resources"]["stone"])
+
 
 if __name__ == "__main__":
     unittest.main()

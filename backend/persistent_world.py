@@ -723,6 +723,7 @@ def _remember_consequence(state: Dict[str, Any], tick: int, cause: str, effect: 
 
 
 MATERIAL_BASE_VALUES = {"timber": 3.0, "stone": 4.0, "raw_food": 2.0, "fuel": 3.0, "containers": 5.0}
+FRONTIER_BASE_VALUES = {"soil": 1.0, "clay": 2.5, "iron_ore": 6.0}
 SETTLEMENT_REORDER_TARGETS = {"timber": 25, "stone": 20, "raw_food": 36, "fuel": 20, "containers": 12}
 
 
@@ -777,9 +778,10 @@ def _regional_remaining(state: Dict[str, Any], resource: str) -> int:
 
 def _update_material_signal(state: Dict[str, Any], resource: str, tick: int, cause: str) -> Dict[str, Any]:
     remaining = _regional_remaining(state, resource)
-    capacity = max(1, int(state["environment"]["regional_capacity"][resource]))
+    capacity = max(1, int(state["environment"]["regional_capacity"].get(resource, remaining or 1)))
     scarcity = round(max(0.0, min(1.0, 1 - remaining / capacity)), 4)
-    value = round(MATERIAL_BASE_VALUES[resource] * (1 + scarcity * 2), 2)
+    base_value = MATERIAL_BASE_VALUES.get(resource, FRONTIER_BASE_VALUES.get(resource, 1.0))
+    value = round(base_value * (1 + scarcity * 2), 2)
     prior = state["economy"]["market_signals"].get(resource)
     signal = {
         "resource": resource, "tick": tick, "remaining": remaining, "capacity": capacity,
@@ -2762,6 +2764,11 @@ def _site_extraction_definition(site: Dict[str, Any]) -> Dict[str, Any]:
         "reeds": ("containers", 2, "farm_tools", "harvesting", 4),
     }
     resource, amount, tool, domain, energy = catalog[site["type"]]
+    resource = site.get("material", resource)
+    amount = int(site.get("yield_amount", amount))
+    tool = site.get("required_tool", tool)
+    domain = site.get("competence_domain", domain)
+    energy = int(site.get("energy_cost", energy))
     return _shared_action_definition_from(site_resource_extraction(resource, min(amount, int(site.get("stock", 0))), tool, domain, energy))
 
 
@@ -3358,17 +3365,31 @@ def _process_shared_actions(state: Dict[str, Any], tick: int) -> list[Dict[str, 
                 continue
             resource = record["definition"]["output_item"]
             region = state["environment"]["regions"][site["region"]]
-            regional_before = int(region.get("stocks", {}).get(resource, 0))
-            if regional_before < amount:
+            frontier_source = bool(site.get("frontier_tile"))
+            regional_before = int(region.get("stocks", {}).get(resource, 0)) if not frontier_source else stock_before
+            if not frontier_source and regional_before < amount:
                 record["failure_reason"] = "regional stock ledger cannot conserve proposed yield"
                 event = _append_shared_action_event(state, record, "failed", record["actor_id"], outputs={"reason": record["failure_reason"]}, physical=False)
                 _release_shared_commitments(state, record)
                 emitted.append({"type": "shared_action_failed", "actor_id": record["actor_id"], "payload": {"action_id": record["id"], "event": event}})
                 continue
             site["stock"] -= amount
-            region["stocks"][resource] -= amount
+            if not frontier_source:
+                region["stocks"][resource] -= amount
+            else:
+                key = site["frontier_tile"]
+                modification = state["terrain_modifications"].setdefault(key, {})
+                if site.get("frontier_mode") == "harvest":
+                    modification["surface_stock"] = int(site["stock"])
+                else:
+                    layer_index = str(site.get("frontier_layer", 0))
+                    modification.setdefault("layer_stocks", {})[layer_index] = int(site["stock"])
+                    modification["excavation_depth_cm"] = int(modification.get("excavation_depth_cm", 0)) + 40
+                    if modification["excavation_depth_cm"] >= 80:
+                        modification.update({"passable": False, "travel_cost_milli": 4_000})
             observed_yield = int(observations[0]["observed_yield"])
-            record["output"] = {"resource": resource, "yield": amount, "observed_yield": observed_yield, "stock_before": stock_before, "stock_after": int(site["stock"]), "regional_before": regional_before, "regional_after": int(region["stocks"][resource]), "conserved": stock_before - int(site["stock"]) == amount and regional_before - int(region["stocks"][resource]) == amount}
+            regional_after = int(region.get("stocks", {}).get(resource, 0)) if not frontier_source else int(site["stock"])
+            record["output"] = {"resource": resource, "yield": amount, "observed_yield": observed_yield, "stock_before": stock_before, "stock_after": int(site["stock"]), "regional_before": regional_before, "regional_after": regional_after, "conserved": stock_before - int(site["stock"]) == amount and (frontier_source or regional_before - regional_after == amount), "frontier_tile": site.get("frontier_tile")}
             evidence = [{"kind": "finite_site_stock_change", "site_id": site["id"], "measurements": copy.deepcopy(record["output"])}]
             site.setdefault("history", []).append({"tick": tick, "actor": record["actor_id"], "operation": "canonical_extraction_submitted", "outputs": copy.deepcopy(record["output"]), "causal_action_id": record["id"]})
             state["environment"].setdefault("extraction_history", []).append({"tick": tick, "actor": record["actor_id"], "site_id": site["id"], "resource": resource, "amount": amount, "action_id": record["id"], "status": "awaiting_verification"})
@@ -3934,6 +3955,83 @@ def apply_player_action(state: Dict[str, Any], actor_id: str, action: Dict[str, 
         state["water_system"]["batches"].append(batch)
         _remember_consequence(state, state["clock"]["tick"], batch["source_evidence"], f"laboratory-test-required:{batch['id']}", [actor_id, "mira"])
         return {"accepted": True, "type": action_type, "batch": copy.deepcopy(batch), "physical_change": True}
+    if action_type == "survey_frontier":
+        player = state["players"].get(actor_id)
+        location = action.get("location")
+        if not player or not isinstance(location, list) or len(location) != 2 or _distance(player.get("location", [-99, -99]), location) > 1:
+            return {"accepted": False, "reason": "survey requires physical access beside a frontier tile"}
+        key = _tile_key(location)
+        evidence = state.get("discoveries", {}).get(actor_id, {}).get(key)
+        if not evidence:
+            return {"accepted": False, "reason": "survey requires a previously observed tile"}
+        tile = FrontierGrid(state["frontier"]["seed"], state["frontier"]["size"]).tile_at(*location)
+        evidence.update({"level": "surveyed", "survey": {"elevation": tile.elevation, "passable": tile.passable, "foundation_suitable": tile.passable and tile.terrain != "wetland", "measured_tick": state["clock"]["tick"]}})
+        return {"accepted": True, "type": action_type, "location": location, "evidence": copy.deepcopy(evidence["survey"]), "physical_change": False}
+    if action_type == "propose_frontier_extraction":
+        player = state["players"].get(actor_id)
+        location = action.get("location")
+        mode = action.get("mode")
+        if not player or not isinstance(location, list) or len(location) != 2 or _distance(player.get("location", [-99, -99]), location) > 1:
+            return {"accepted": False, "reason": "extraction requires physical access beside the tile"}
+        key = _tile_key(location)
+        evidence = state.get("discoveries", {}).get(actor_id, {}).get(key, {})
+        if evidence.get("level") not in {"surveyed", "prospected"}:
+            return {"accepted": False, "reason": "extraction requires surveyed evidence"}
+        grid_tile = FrontierGrid(state["frontier"]["seed"], state["frontier"]["size"]).tile_at(*location)
+        modification = state["terrain_modifications"].setdefault(key, {})
+        if mode == "harvest" and grid_tile.surface:
+            material, stock, tool, domain = grid_tile.surface.material, int(modification.get("surface_stock", grid_tile.surface.stock)), "axe", "forestry"
+            site_type, layer_index = "tree", None
+        elif mode == "excavate":
+            depth = int(modification.get("excavation_depth_cm", 0))
+            layer_index = min(len(grid_tile.substrate) - 1, depth // 40)
+            layer = grid_tile.substrate[layer_index]
+            layer_stocks = modification.setdefault("layer_stocks", {})
+            material, stock, tool, domain = layer.material, int(layer_stocks.get(str(layer_index), layer.stock)), "shovel", "excavation"
+            site_type = "mineral"
+        else:
+            return {"accepted": False, "reason": "choose harvest or excavate for an observed finite source"}
+        if stock < 1:
+            return {"accepted": False, "reason": "frontier source is depleted"}
+        site_id = f"frontier:{key}:{mode}:{layer_index if layer_index is not None else 'surface'}"
+        site = state["resource_sites"].setdefault(site_id, {"id": site_id, "type": site_type, "region": "settlement", "location": list(location), "name": f"Frontier {material} at {key}", "history": []})
+        site.update({"stock": stock, "capacity": stock, "material": material, "yield_amount": 1, "required_tool": tool, "competence_domain": domain, "energy_cost": 5, "frontier_tile": key, "frontier_layer": layer_index, "frontier_mode": mode})
+        state["environment"].setdefault("regional_capacity", {}).setdefault(material, max(1, stock))
+        state["economy"].setdefault("prices", {}).setdefault(material, 2.0)
+        canonical_id = f"frontier-extract:{actor_id}:{key}:{state['clock']['tick']}:{len(state['shared_actions']['records']) + 1}"
+        proposal = apply_shared_action_command(state, actor_id, {"operation": "propose", "shared_action_id": canonical_id, "action_type": "extract_site_resource", "target_id": site_id, "intent": f"remove finite {material} from tile {key}", "observations": [f"survey:{key}", f"measured-stock:{stock}"]})
+        return {**proposal, "canonical_action_id": canonical_id, "stock": stock, "material": material}
+    if action_type == "prepare_frontier_plot":
+        player = state["players"].get(actor_id)
+        location = action.get("location")
+        if not player or not isinstance(location, list) or len(location) != 2 or _distance(player.get("location", [-99, -99]), location) > 1:
+            return {"accepted": False, "reason": "plot preparation requires physical access"}
+        key = _tile_key(location)
+        evidence = state.get("discoveries", {}).get(actor_id, {}).get(key, {})
+        if evidence.get("level") not in {"surveyed", "prospected"} or not evidence.get("survey", {}).get("foundation_suitable"):
+            return {"accepted": False, "reason": "a suitable surveyed tile is required"}
+        if player.get("inventory", {}).get("shovel", 0) < 1 or player.get("inventory", {}).get("stone", 0) < 1 or player.get("energy", 0) < 4:
+            return {"accepted": False, "reason": "a shovel, one stone, and sufficient energy are required"}
+        player["inventory"]["stone"] -= 1
+        player["energy"] = round(player["energy"] - 4, 2)
+        state["terrain_modifications"].setdefault(key, {}).update({"prepared_foundation": True, "prepared_by": actor_id, "prepared_tick": state["clock"]["tick"]})
+        _evidence(state, state["clock"]["tick"], f"frontier plot {key} prepared", [actor_id], {"stone": 1}, ["shovel"], evidence["survey"], None, [f"survey:{actor_id}:{key}"], ["foundation suitability", "physical preparation"])
+        return {"accepted": True, "type": action_type, "location": location, "physical_change": True}
+    if action_type == "deposit_material":
+        player = state["players"].get(actor_id)
+        resource, amount = action.get("resource"), action.get("amount")
+        warehouse = state["places"]["warehouse"]["location"]
+        if not player or _distance(player.get("location", [-99, -99]), warehouse) > 1:
+            return {"accepted": False, "reason": "deposit requires physical delivery beside the warehouse"}
+        if not isinstance(resource, str) or not isinstance(amount, int) or amount < 1 or player.get("inventory", {}).get(resource, 0) < amount:
+            return {"accepted": False, "reason": "actor custody does not contain the requested deposit"}
+        before = int(state["resources"].get(resource, 0))
+        player["inventory"][resource] -= amount
+        state["resources"][resource] = before + amount
+        record = {"tick": state["clock"]["tick"], "actor": actor_id, "resource": resource, "amount": amount, "actor_after": player["inventory"][resource], "communal_before": before, "communal_after": state["resources"][resource], "conserved": True}
+        state["environment"].setdefault("deposit_history", []).append(record)
+        _evidence(state, state["clock"]["tick"], f"physical {resource} deposit", [actor_id], {resource: amount}, ["warehouse scale"], record, "dev", [], ["custody transfer", "communal count"])
+        return {"accepted": True, "type": action_type, "deposit": record, "physical_change": True}
     if action_type == "join":
         requested = action.get("location", [8, 5])
         location = requested if isinstance(requested, list) and len(requested) == 2 and all(isinstance(value, int) and 0 <= value < 64 for value in requested) else [8, 5]
