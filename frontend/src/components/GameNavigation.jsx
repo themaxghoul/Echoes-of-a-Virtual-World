@@ -56,6 +56,7 @@ const PAGE_TITLES = {
   '/inventory': 'Inventory',
   '/quests': 'Quests',
   '/profile': 'Profile',
+  '/settings': 'Game Settings',
   '/earnings': 'Earnings Hub',
   '/dataspace': 'Dataspace'
 };
@@ -96,9 +97,15 @@ export const GameNavigation = ({
   };
 
   const handleLogout = () => {
+    if (window.eovDesktop) window.eovDesktop.logout().catch(() => {});
+    sessionStorage.removeItem('eovAccessToken');
+    sessionStorage.removeItem('eovDesktopAccessToken');
     localStorage.removeItem('userId');
     localStorage.removeItem('username');
     localStorage.removeItem('displayName');
+    localStorage.removeItem('isOwner');
+    localStorage.removeItem('permissionLevel');
+    localStorage.removeItem('eovNetworkUserId');
     localStorage.removeItem('currentCharacterId');
     localStorage.removeItem('gameMode');
     clearNavHistory();
@@ -138,6 +145,16 @@ export const GameNavigation = ({
       </div>
       
       <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => navigate('/settings')}
+          className="rounded-sm"
+          aria-label="Game settings"
+          data-testid="nav-settings-btn"
+        >
+          <Settings className="w-5 h-5 text-muted-foreground" />
+        </Button>
         {showProfile && (
           <Button
             variant="ghost"

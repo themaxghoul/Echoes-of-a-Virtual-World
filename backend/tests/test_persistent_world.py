@@ -983,6 +983,23 @@ class PersistentWorldTests(unittest.TestCase):
         advanced = self.store.advance_due(now_ms=1_000_000 + 8 * 15_000, max_ticks=8)["state"]
         self.assertTrue(any(message["kind"] == "autonomous" for message in advanced["communications"]["messages"]))
 
+    def test_directed_non_english_speech_considers_only_the_nearby_target(self):
+        joined = self.store.apply_action(self.world["world_id"], "join-directed", "speaker", {"type": "join", "location": [9, 7]}, now_ms=1_000_000)
+        spoken = self.store.apply_action(
+            self.world["world_id"], "say-directed-spanish", "speaker",
+            {"type": "speak", "content": "Hola Ada, ¿puedes hablar conmigo?", "target_id": "ada"},
+            expected_revision=joined["revision"], now_ms=1_000_001,
+        )
+
+        decision = spoken["result"]["response_decisions"][0]
+        self.assertEqual("ada", decision["resident_id"])
+        self.assertTrue(decision["eligible"])
+        self.assertEqual("best_effort", decision["language_support"])
+        self.assertGreater(decision["probability"], 0)
+        self.assertLess(decision["probability"], 1)
+        self.assertTrue(all(reply["speaker_id"] == "ada" for reply in spoken["result"]["replies"]))
+        self.assertTrue(any(memory.get("actor") == "speaker" for memory in self.store.snapshot()["state"]["npcs"]["ada"]["memories"]))
+
     def test_witnessed_discourse_accumulates_into_later_council_action_without_direct_physical_change(self):
         snapshot = self.store.snapshot()
         state = snapshot["state"]
@@ -1495,8 +1512,19 @@ class PersistentWorldTests(unittest.TestCase):
         self.assertTrue(ordinary["result"]["accepted"])
 
         repositioned = self.store.apply_action(snapshot["world_id"], "ask-dev-position", "borrower", {"type": "join", "location": [11, 5]}, expected_revision=ordinary["revision"])
-        spoken = self.store.apply_action(snapshot["world_id"], "ask-dev-trust", "borrower", {"type": "speak", "content": "Can I borrow a tool through checkout?"}, expected_revision=repositioned["revision"])
-        dev_reply = next(reply for reply in spoken["result"]["replies"] if reply["speaker_id"] == "dev")
+        revision = repositioned["revision"]
+        dev_reply = None
+        for attempt in range(1, 21):
+            spoken = self.store.apply_action(
+                snapshot["world_id"], f"ask-dev-trust-{attempt}", "borrower",
+                {"type": "speak", "content": f"Can I borrow a tool through checkout? Attempt {attempt}", "target_id": "dev"},
+                expected_revision=revision,
+            )
+            revision = spoken["revision"]
+            dev_reply = next((reply for reply in spoken["result"]["replies"] if reply["speaker_id"] == "dev"), None)
+            if dev_reply:
+                break
+        self.assertIsNotNone(dev_reply, "deterministic directed-response sequence should eventually allow Dev to answer")
         self.assertIn("trust 0.37", dev_reply["content"])
 
     def test_frontier_migration_is_bounded_and_private_observations_hide_substrate(self):
@@ -1594,11 +1622,29 @@ class PersistentWorldTests(unittest.TestCase):
         self.assertTrue(self.store.snapshot()["state"]["terrain_modifications"]["10,10"]["prepared_foundation"])
 
         moved = self.store.apply_action(self.world["world_id"], "builder-at-warehouse", "builder", {"type": "join", "location": [5, 11]}, expected_revision=prepared["revision"])
-        deposited = self.store.apply_action(self.world["world_id"], "deposit-builder-stone", "builder", {"type": "deposit_material", "resource": "stone", "amount": 1}, expected_revision=moved["revision"])
-        self.assertTrue(deposited["result"]["accepted"])
+        inspector = self.store.apply_action(self.world["world_id"], "receiver-at-warehouse", "receiver", {"type": "join", "location": [5, 10]}, expected_revision=moved["revision"])
+        snapshot = self.store.snapshot()
+        state = snapshot["state"]
+        state["players"]["receiver"]["competency_records"]["measurement"] = {"demonstrated": 0.2, "provenance": ["verified-receiving-practice"]}
+        with self.store.transaction() as connection:
+            connection.execute("UPDATE worlds SET state_json=? WHERE world_id=?", (json.dumps(state), snapshot["world_id"]))
+        proposed = self.store.apply_action(self.world["world_id"], "deposit-builder-stone", "builder", {"type": "deposit_material", "resource": "stone", "amount": 1}, expected_revision=inspector["revision"])
+        action_id = proposed["result"]["canonical_action_id"]
+        self.assertTrue(proposed["result"]["accepted"])
+        self.assertEqual(1, self.store.snapshot()["state"]["players"]["builder"]["inventory"]["stone"])
+        for operation in ("accept", "reserve"):
+            transitioned = self.store.apply_action(self.world["world_id"], f"deposit-{operation}", "builder", {"type": "shared_action", "operation": operation, "shared_action_id": action_id})
+            self.assertTrue(transitioned["result"]["accepted"])
+        self.store.apply_action(self.world["world_id"], "deposit-execute", "builder", {"type": "shared_action", "operation": "execute", "shared_action_id": action_id, "samples": [{"custody_before": 1, "observed_amount": 1}]})
+        self.store.advance_due(now_ms=1_000_000 + 5 * 15_000, max_ticks=5)
+        verified = self.store.apply_action(self.world["world_id"], "deposit-verify", "receiver", {"type": "shared_action", "operation": "verify", "shared_action_id": action_id})
+        self.assertTrue(verified["result"]["accepted"], verified["result"])
+        deposited = self.store.apply_action(self.world["world_id"], "deposit-commission", "receiver", {"type": "shared_action", "operation": "commission", "shared_action_id": action_id}, expected_revision=verified["revision"])
+        self.assertEqual("commissioned", deposited["result"]["record"]["state"])
         state = self.store.snapshot()["state"]
         self.assertEqual(0, state["players"]["builder"]["inventory"]["stone"])
         self.assertEqual(25, state["resources"]["stone"])
+        self.assertFalse(state["shared_actions"]["valuation_claims"][-1]["spendable"])
 
     def test_creator_privileges_are_redacted_and_operator_amendments_are_separately_audited(self):
         joined = self.store.apply_action(self.world["world_id"], "sirix-embodied-join", "owner-uuid", {"type": "join", "location": [8, 9]}, expected_revision=1)

@@ -62,11 +62,30 @@ const LandingPage = () => {
           <button 
             data-testid="continue-journey-btn"
             onClick={async () => {
+              if (window.eovDesktop) {
+                const result = await window.eovDesktop.resumeLast();
+                if (result.ok) {
+                  const userId = result.user.id;
+                  sessionStorage.removeItem('eovAccessToken');
+                  localStorage.removeItem('eovNetworkUserId');
+                  localStorage.setItem('userId', userId);
+                  localStorage.setItem('username', result.user.username);
+                  localStorage.setItem('displayName', result.user.display_name);
+                  localStorage.setItem('isOwner', result.user.is_owner ? 'true' : 'false');
+                  localStorage.setItem('permissionLevel', result.user.permission_level || 'basic');
+                  localStorage.setItem('currentCharacterId', result.character.id);
+                  localStorage.setItem('characterName', result.character.name);
+                  const allowed = ['/select-mode', '/village', '/play', '/unity', '/settings'];
+                  const lastRoute = localStorage.getItem(`eovLastRoute:${userId}`);
+                  navigate(allowed.includes(lastRoute) ? lastRoute : '/select-mode');
+                  return;
+                }
+                navigate('/auth');
+                return;
+              }
               const userId = localStorage.getItem('userId');
               const charId = localStorage.getItem('currentCharacterId');
-              
-              // Must have both userId and charId
-              if (!userId || !charId) {
+              if (!userId || !charId || !sessionStorage.getItem('eovAccessToken')) {
                 navigate('/auth');
                 return;
               }
@@ -136,10 +155,6 @@ const LandingPage = () => {
         </div>
       </div>
 
-      {/* Version Tag */}
-      <div className="absolute bottom-6 left-6 font-mono text-xs text-muted-foreground/50">
-        v0.1.0 // Phase I: The Awakening
-      </div>
     </div>
   );
 };

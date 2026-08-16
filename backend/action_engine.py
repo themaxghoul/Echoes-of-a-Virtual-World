@@ -44,6 +44,7 @@ class ActionDefinition:
     verification_threshold: float = 0.0
     verifier_competence_domain: Optional[str] = None
     minimum_verifier_competence: float = 0.0
+    input_custody: str = "actor_inventory"
     output_custody: str = "commissioned_store"
 
 
@@ -82,6 +83,7 @@ class ActionRecord:
 class ActionWorld:
     tick: int = 0
     inventories: Dict[str, Dict[str, int]] = field(default_factory=dict)
+    communal_inventory: Dict[str, int] = field(default_factory=dict)
     tools: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     stations: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     reservations: Dict[str, Dict[str, Any]] = field(default_factory=dict)
@@ -182,7 +184,8 @@ class SharedActionEngine:
         if competency < req.minimum_competence:
             raise ValueError("insufficient demonstrated competence")
         inventory = self.world.inventories.setdefault(actor.actor_id, {})
-        missing_materials = {name: amount - inventory.get(name, 0) for name, amount in req.materials.items() if inventory.get(name, 0) < amount}
+        material_source = self.world.communal_inventory if action.definition.input_custody == "communal_store" else inventory
+        missing_materials = {name: amount - material_source.get(name, 0) for name, amount in req.materials.items() if material_source.get(name, 0) < amount}
         if missing_materials:
             raise ValueError(f"missing materials: {missing_materials}")
         for tool_id, condition in req.tools.items():
@@ -203,7 +206,7 @@ class SharedActionEngine:
             station["reserved_by"] = action_id
         if target_site:
             target_site["reserved_by"] = action_id
-        self.world.reservations[action_id] = {"materials": copy.deepcopy(req.materials), "tools": sorted(req.tools), "station": req.station, "target_site": action.target_id if target_site else None, "actor": actor.actor_id}
+        self.world.reservations[action_id] = {"materials": copy.deepcopy(req.materials), "material_before": {name: material_source.get(name, 0) for name in req.materials}, "input_custody": action.definition.input_custody, "tools": sorted(req.tools), "station": req.station, "target_site": action.target_id if target_site else None, "actor": actor.actor_id}
         action.reserved_tick = self.world.tick
         self._event(action, "reserved", actor.actor_id, inputs=self.world.reservations[action_id])
         return action
@@ -217,8 +220,10 @@ class SharedActionEngine:
         self.world.tick += req.duration_ticks
         actor.energy -= req.energy
         inventory = self.world.inventories[actor.actor_id]
+        reservation = self.world.reservations.get(action_id, {})
+        material_source = self.world.communal_inventory if action.definition.input_custody == "communal_store" else inventory
         for name, amount in req.materials.items():
-            inventory[name] -= amount
+            material_source[name] -= amount
         for tool_id in req.tools:
             self.world.tools[tool_id]["condition"] = max(0.0, self.world.tools[tool_id]["condition"] - 0.01)
             self.world.tools[tool_id]["reserved_by"] = None
@@ -282,6 +287,19 @@ class SharedActionEngine:
             site["stock"] -= amount
             action.output = {"resource": action.definition.output_item, "yield": amount, "observed_yield": observations[0][1], "stock_before": before, "stock_after": int(site["stock"]), "conserved": before - int(site["stock"]) == amount}
             execution_evidence = [{"kind": "finite_site_stock_change", "site_id": action.target_id, "measurements": copy.deepcopy(action.output)}]
+        elif action.definition.execution_model == "custody_transfer":
+            observations = [(int(sample["custody_before"]), int(sample["observed_amount"])) for sample in samples if isinstance(sample, dict) and isinstance(sample.get("custody_before"), (int, float)) and isinstance(sample.get("observed_amount"), (int, float))]
+            item = action.definition.output_item
+            before = int((reservation or {}).get("material_before", {}).get(item, 0))
+            after = int(inventory.get(item, 0))
+            amount = action.definition.output_amount
+            if not observations:
+                action.failure_reason = "no custody transfer measurement"
+                self._event(action, "failed", actor.actor_id, outputs={"reason": action.failure_reason}, physical=True)
+                self.world.actor_commitments.pop(actor.actor_id, None)
+                return action
+            action.output = {"resource": item, "custody_before": before, "custody_after": after, "transferred": amount, "observed_amount": observations[0][1], "conserved": before - after == amount}
+            execution_evidence = [{"kind": "custody_transfer_count", **copy.deepcopy(action.output)}]
         else:
             readings = [sample.get("reading") for sample in samples if isinstance(sample.get("reading"), (int, float))]
             if not readings:
@@ -304,7 +322,7 @@ class SharedActionEngine:
             raise ValueError("Submitted action required")
         if verifier.actor_id == action.actor_id:
             raise ValueError("Verification must be independent")
-        verifier_channel = "resource_detail" if action.definition.execution_model == "finite_site_extraction" else "instrumentation"
+        verifier_channel = "resource_detail" if action.definition.execution_model in {"finite_site_extraction", "custody_transfer"} else "instrumentation"
         if verifier_channel not in verifier.perceptions:
             raise ValueError(f"Verifier lacks {verifier_channel} perception")
         verifier_domain = action.definition.verifier_competence_domain
@@ -320,6 +338,9 @@ class SharedActionEngine:
         elif action.definition.execution_model == "finite_site_extraction":
             passed = bool(action.output.get("conserved")) and action.output.get("yield") == action.output.get("observed_yield")
             verification_evidence = [{"kind": "independent_stock_and_yield_check", **copy.deepcopy(action.output)}]
+        elif action.definition.execution_model == "custody_transfer":
+            passed = bool(action.output.get("conserved")) and action.output.get("transferred") == action.output.get("observed_amount")
+            verification_evidence = [{"kind": "independent_custody_count", **copy.deepcopy(action.output)}]
         else:
             passed = action.output.get("spread", float("inf")) <= action.definition.verification_tolerance
             verification_evidence = [{"kind": "independent_check", "tolerance": action.definition.verification_tolerance, "observed_spread": action.output.get("spread")}]
@@ -354,6 +375,8 @@ class SharedActionEngine:
             if action.definition.output_custody == "actor_inventory":
                 inventory = self.world.inventories.setdefault(action.actor_id, {})
                 inventory[item] = inventory.get(item, 0) + amount
+            elif action.definition.output_custody == "communal_store":
+                self.world.communal_inventory[item] = self.world.communal_inventory.get(item, 0) + amount
             else:
                 self.world.commissioned_outputs.setdefault(action.actor_id, {})[item] = self.world.commissioned_outputs.setdefault(action.actor_id, {}).get(item, 0) + amount
         value = action.definition.provisional_cu_milli
@@ -397,6 +420,7 @@ MEASUREMENT_TOOL_CALIBRATION = ActionDefinition(
     verification_tolerance=0.02,
     verifier_competence_domain="measurement",
     minimum_verifier_competence=0.1,
+    input_custody="communal_store",
 )
 
 
@@ -415,6 +439,7 @@ COMMUNAL_MEAL_PREPARATION = ActionDefinition(
     verification_threshold=0.75,
     verifier_competence_domain="food_safety",
     minimum_verifier_competence=0.1,
+    input_custody="communal_store",
 )
 
 
@@ -433,6 +458,7 @@ MECHANICAL_PUMP_REPAIR = ActionDefinition(
     verification_threshold=0.8,
     verifier_competence_domain="measurement",
     minimum_verifier_competence=0.1,
+    input_custody="communal_store",
 )
 
 
@@ -452,4 +478,23 @@ def site_resource_extraction(resource: str, amount: int, tool: str, domain: str,
         verifier_competence_domain="measurement",
         minimum_verifier_competence=0.1,
         output_custody="actor_inventory",
+    )
+
+
+def material_custody_transfer(resource: str, amount: int) -> ActionDefinition:
+    """Move verified actor-held material into communal custody without teleportation."""
+    if not resource or amount < 1:
+        raise ValueError("custody transfer requires a resource and positive amount")
+    return ActionDefinition(
+        action_type="deposit_material",
+        requirements=ActionRequirements(
+            materials={resource: amount}, energy=max(1, amount),
+            competence_domain="logistics", minimum_competence=0.0,
+            perception_channels={"resource_detail", "spatial_layout"}, duration_ticks=max(2, amount),
+        ),
+        output_item=resource, output_amount=amount,
+        provisional_cu_milli=amount * 500,
+        execution_model="custody_transfer",
+        verifier_competence_domain="measurement", minimum_verifier_competence=0.1,
+        input_custody="actor_inventory", output_custody="communal_store",
     )

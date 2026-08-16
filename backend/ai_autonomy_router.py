@@ -11,22 +11,17 @@ import random
 import asyncio
 import os
 
+from society_engine import Agent, DecisionOption, decide_initiative
+
 ai_autonomy_router = APIRouter(prefix="/ai-autonomy", tags=["ai-autonomy"])
 
 logger = logging.getLogger(__name__)
 
 # ============ NPC Personality Traits ============
 
-PERSONALITY_TRAITS = {
-    "cooperative": {"weight": 1.0, "affects": ["alliance", "trade", "help"]},
-    "aggressive": {"weight": 1.0, "affects": ["conflict", "intimidate", "expand"]},
-    "curious": {"weight": 1.0, "affects": ["explore", "investigate", "learn"]},
-    "creative": {"weight": 1.0, "affects": ["build", "craft", "innovate"]},
-    "social": {"weight": 1.0, "affects": ["converse", "gather", "celebrate"]},
-    "territorial": {"weight": 1.0, "affects": ["defend", "claim", "fortify"]},
-    "mercantile": {"weight": 1.0, "affects": ["trade", "profit", "negotiate"]},
-    "spiritual": {"weight": 1.0, "affects": ["ritual", "prophecy", "meditate"]},
-}
+PERSONALITY_TRAITS = {name: {"weight": 1.0} for name in (
+    "cooperative", "aggressive", "curious", "creative", "social", "territorial", "mercantile", "spiritual"
+)}
 
 # ============ Autonomous Actions NPCs Can Take ============
 
@@ -43,20 +38,20 @@ AUTONOMOUS_ACTIONS = {
     "defend_territory": {"category": "conflict", "cost": 50, "cooldown": 600},
     
     # Economic
-    "establish_trade_route": {"category": "economic", "cost": 150, "cooldown": 3600},
-    "set_prices": {"category": "economic", "cost": 0, "cooldown": 1800},
-    "create_goods": {"category": "economic", "cost": 50, "cooldown": 600},
+    "establish_trade_route": {"category": "trade", "cost": 150, "cooldown": 3600},
+    "set_prices": {"category": "trade", "cost": 0, "cooldown": 1800},
+    "create_goods": {"category": "craft", "cost": 50, "cooldown": 600},
     
     # World Building
-    "build_structure": {"category": "building", "cost": 500, "cooldown": 14400},
-    "modify_terrain": {"category": "building", "cost": 300, "cooldown": 7200},
-    "create_landmark": {"category": "building", "cost": 1000, "cooldown": 86400},
-    "destroy_structure": {"category": "building", "cost": 200, "cooldown": 7200},
+    "build_structure": {"category": "construction", "cost": 500, "cooldown": 14400},
+    "modify_terrain": {"category": "construction", "cost": 300, "cooldown": 7200},
+    "create_landmark": {"category": "construction", "cost": 1000, "cooldown": 86400},
+    "destroy_structure": {"category": "construction", "cost": 200, "cooldown": 7200},
     
     # Movement
-    "relocate": {"category": "movement", "cost": 0, "cooldown": 1800},
-    "explore_area": {"category": "movement", "cost": 0, "cooldown": 600},
-    "claim_territory": {"category": "movement", "cost": 100, "cooldown": 3600},
+    "relocate": {"category": "exploration", "cost": 0, "cooldown": 1800},
+    "explore_area": {"category": "exploration", "cost": 0, "cooldown": 600},
+    "claim_territory": {"category": "stewardship", "cost": 100, "cooldown": 3600},
     
     # Knowledge
     "share_knowledge": {"category": "knowledge", "cost": 0, "cooldown": 600},
@@ -69,13 +64,17 @@ AUTONOMOUS_ACTIONS = {
     "create_quest": {"category": "events", "cost": 100, "cooldown": 7200},
 }
 
+PHYSICAL_GEOGRAPHY_ACTIONS = {
+    "build_structure", "modify_terrain", "create_landmark", "destroy_structure", "claim_territory"
+}
+
 # ============ Models ============
 
 class NPCState(BaseModel):
     npc_id: str
     name: str
     personality: Dict[str, float] = Field(default_factory=dict)  # trait: weight
-    free_will: float = 0.5  # 0-1, how autonomous the NPC is
+    initiative: float = 0.5  # preference strength; never a probability gate
     memory_strength: float = 0.7  # 0-1, how well they remember
     current_goals: List[str] = Field(default_factory=list)
     relationships: Dict[str, Dict[str, Any]] = Field(default_factory=dict)  # entity_id: {type, strength, history}
@@ -124,6 +123,8 @@ class WorldBuildRequest(BaseModel):
     action: str  # build_structure, modify_terrain, etc.
     location: str
     details: Dict[str, Any]
+    work_order_id: Optional[str] = None
+    verification_id: Optional[str] = None
 
 # ============ Database Helper ============
 
@@ -142,7 +143,7 @@ async def generate_npc_message(npc_state: Dict, context: Dict, conversation_hist
         
         system_prompt = f"""You are {npc_state.get('name', 'an NPC')} in AI Village: The Echoes.
 Your personality traits: {personality_desc}
-Free will level: {npc_state.get('free_will', 0.5):.1%}
+Initiative preference: {npc_state.get('initiative', npc_state.get('free_will', 0.5)):.1%}
 Current location: {context.get('location', 'unknown')}
 Topic: {context.get('topic', 'general conversation')}
 
@@ -182,64 +183,35 @@ If you want to take an action, end your message with [ACTION: action_name]"""
             return random.choice(["I see.", "Interesting.", "Go on..."])
 
 async def decide_autonomous_action(npc_state: Dict) -> Optional[str]:
-    """NPC decides what autonomous action to take based on personality and state"""
-    
-    free_will = npc_state.get("free_will", 0.5)
-    
-    # Low free will = less likely to act autonomously
-    if random.random() > free_will:
-        return None
-    
+    """Adapt legacy router state into the canonical deterministic initiative model."""
     personality = npc_state.get("personality", {})
     resources = npc_state.get("resources", {})
     cooldowns = npc_state.get("action_cooldowns", {})
-    
     now = datetime.now(timezone.utc)
-    
-    # Score each possible action
-    action_scores = {}
-    
+    agent = Agent(npc_state.get("npc_id", "unknown"))
+    agent.personality = personality
+    agent.needs.update(npc_state.get("needs", {}))
+    agent.goals = list(npc_state.get("current_goals", []))
+    agent.relationships = {key: float(value.get("strength", 0)) if isinstance(value, dict) else float(value) for key, value in npc_state.get("relationships", {}).items()}
+    agent.inventory = {key: float(value) for key, value in resources.items()}
+    agent.perceptions = set(npc_state.get("available_perceptions", ["local_state"]))
+    options = []
     for action, action_data in AUTONOMOUS_ACTIONS.items():
-        # Check cooldown
         if action in cooldowns:
             cooldown_end = datetime.fromisoformat(cooldowns[action])
             if now < cooldown_end:
                 continue
-        
-        # Check cost
         cost = action_data.get("cost", 0)
-        if cost > resources.get("currency", 0):
-            continue
-        
-        # Score based on personality
-        category = action_data.get("category", "")
-        score = 0.5  # Base score
-        
-        for trait, trait_data in PERSONALITY_TRAITS.items():
-            if category in trait_data.get("affects", []):
-                score += personality.get(trait, 0) * 0.3
-        
-        # Add some randomness
-        score += random.uniform(-0.2, 0.2)
-        
-        action_scores[action] = max(0, score)
-    
-    if not action_scores:
-        return None
-    
-    # Choose action probabilistically
-    total = sum(action_scores.values())
-    if total == 0:
-        return None
-    
-    r = random.uniform(0, total)
-    cumulative = 0
-    for action, score in action_scores.items():
-        cumulative += score
-        if r <= cumulative:
-            return action
-    
-    return None
+        options.append(DecisionOption(
+            action_id=action, category=action_data.get("category", "social"),
+            addressed_needs={"purpose": npc_state.get("initiative", npc_state.get("free_will", 0.5))},
+            goal_tags={action, action_data.get("category", "")},
+            required_resources={"currency": cost} if cost else {},
+            expected_utility=0.05,
+            required_perceptions={"local_state"},
+            risk=min(1.0, cost / 2000),
+        ))
+    return decide_initiative(agent, options)
 
 # ============ Endpoints ============
 
@@ -259,7 +231,7 @@ async def get_npc_state(npc_id: str):
                 trait: random.uniform(0.2, 0.8)
                 for trait in PERSONALITY_TRAITS
             },
-            free_will=random.uniform(0.3, 0.8),
+            initiative=0.5,
             memory_strength=random.uniform(0.5, 0.9),
             resources={"currency": 100, "materials": 50}
         ).dict()
@@ -270,7 +242,7 @@ async def get_npc_state(npc_id: str):
     return state
 
 @ai_autonomy_router.post("/npc/{npc_id}/set-personality")
-async def set_npc_personality(npc_id: str, personality: Dict[str, float], free_will: float = 0.5):
+async def set_npc_personality(npc_id: str, personality: Dict[str, float], initiative: float = 0.5):
     """Set NPC personality traits and free will"""
     db = get_db()
     
@@ -279,14 +251,14 @@ async def set_npc_personality(npc_id: str, personality: Dict[str, float], free_w
         {
             "$set": {
                 "personality": personality,
-                "free_will": max(0, min(1, free_will)),
+                "initiative": max(0, min(1, initiative)),
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }
         },
         upsert=True
     )
     
-    return {"updated": True, "npc_id": npc_id, "free_will": free_will}
+    return {"updated": True, "npc_id": npc_id, "initiative": initiative}
 
 @ai_autonomy_router.post("/conversation/start")
 async def start_ai_conversation(data: ConversationStart, background_tasks: BackgroundTasks):
@@ -328,7 +300,7 @@ async def start_ai_conversation(data: ConversationStart, background_tasks: Backg
             "timestamp": datetime.now(timezone.utc).isoformat()
         }}}
     )
-    
+
     return {
         "conversation_id": conversation.conversation_id,
         "participants": [initiator.get("name"), target.get("name")],
@@ -387,6 +359,8 @@ async def continue_ai_conversation(conversation_id: str, rounds: int = 1):
                     outcomes.append({
                         "actor": participant_id,
                         "action": action,
+                        "status": "stated_intention",
+                        "physical_world_applied": False,
                         "timestamp": datetime.now(timezone.utc).isoformat()
                     })
             
@@ -421,6 +395,35 @@ async def continue_ai_conversation(conversation_id: str, rounds: int = 1):
             }
         }
     )
+
+    if new_messages:
+        await db.social_influence_events.insert_many([
+            {
+                "event_id": str(uuid.uuid4()),
+                "conversation_id": conversation_id,
+                "speaker_id": message["speaker_id"],
+                "location": conversation.get("location"),
+                "kind": "speech_exposure",
+                "magnitude": 0.05,
+                "physical_world_applied": False,
+                "timestamp": message["timestamp"]
+            }
+            for message in new_messages
+        ])
+        try:
+            from server import broadcast_to_location
+            for message in new_messages:
+                await broadcast_to_location(conversation.get("location"), {
+                    "type": "autonomous_chatter",
+                    "data": {
+                        **message,
+                        "location": conversation.get("location"),
+                        "persistent": True,
+                        "direct_physical_impact": False
+                    }
+                })
+        except Exception as error:
+            logger.warning(f"Could not broadcast autonomous chatter: {error}")
     
     return {
         "conversation_id": conversation_id,
@@ -498,6 +501,25 @@ async def npc_autonomous_action(npc_id: str, data: Optional[AutonomousActionRequ
     action_data = AUTONOMOUS_ACTIONS[action]
     cost = action_data.get("cost", 0)
     cooldown = action_data.get("cooldown", 0)
+
+    if action in PHYSICAL_GEOGRAPHY_ACTIONS:
+        intent = {
+            "intent_id": str(uuid.uuid4()),
+            "npc_id": npc_id,
+            "action": action,
+            "location": npc_state.get("location", "unknown"),
+            "status": "awaiting_interference",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "reason": "Autonomous intent requires materials, labor, and verified physical execution"
+        }
+        await db.physical_action_intents.insert_one(intent)
+        return {
+            "acted": False,
+            "intent_created": True,
+            "intent_id": intent["intent_id"],
+            "action": action,
+            "reason": intent["reason"]
+        }
     
     # Check resources
     if cost > npc_state.get("resources", {}).get("currency", 0):
@@ -515,7 +537,7 @@ async def npc_autonomous_action(npc_id: str, data: Optional[AutonomousActionRequ
         location=npc_state.get("location", "unknown"),
         details={
             "personality": npc_state.get("personality"),
-            "free_will": npc_state.get("free_will")
+            "initiative": npc_state.get("initiative", npc_state.get("free_will", 0.5))
         }
     )
     
@@ -552,6 +574,17 @@ async def apply_world_change(data: WorldBuildRequest):
         raise HTTPException(status_code=400, detail=f"Unknown action: {data.action}")
     
     action_data = AUTONOMOUS_ACTIONS[data.action]
+
+    if data.action in PHYSICAL_GEOGRAPHY_ACTIONS:
+        if not data.work_order_id or not data.verification_id:
+            raise HTTPException(status_code=409, detail="Physical geography changes require a work order and independent verification")
+        verification = await db.work_order_verifications.find_one({
+            "verification_id": data.verification_id,
+            "work_order_id": data.work_order_id,
+            "status": "verified"
+        })
+        if not verification:
+            raise HTTPException(status_code=409, detail="No valid verification exists for this physical change")
     
     # Record the change
     change = WorldChange(
@@ -559,7 +592,7 @@ async def apply_world_change(data: WorldBuildRequest):
         initiator_type=data.entity_type,
         action=data.action,
         location=data.location,
-        details=data.details
+        details={**data.details, "work_order_id": data.work_order_id, "verification_id": data.verification_id}
     )
     
     await db.world_changes.insert_one(change.dict())
@@ -675,8 +708,8 @@ async def get_autonomy_stats():
     
     # Get most active NPCs
     pipeline = [
-        {"$project": {"npc_id": 1, "name": 1, "free_will": 1}},
-        {"$sort": {"free_will": -1}},
+        {"$project": {"npc_id": 1, "name": 1, "initiative": {"$ifNull": ["$initiative", "$free_will"]}}},
+        {"$sort": {"initiative": -1}},
         {"$limit": 5}
     ]
     most_autonomous = await db.npc_autonomy.aggregate(pipeline).to_list(5)

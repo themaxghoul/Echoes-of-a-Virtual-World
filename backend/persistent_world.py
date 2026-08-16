@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import copy
+import hashlib
 import math
 import sqlite3
 import threading
@@ -13,7 +14,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
-from action_engine import COMMUNAL_MEAL_PREPARATION, MEASUREMENT_TOOL_CALIBRATION, MECHANICAL_PUMP_REPAIR, site_resource_extraction
+from action_engine import COMMUNAL_MEAL_PREPARATION, MEASUREMENT_TOOL_CALIBRATION, MECHANICAL_PUMP_REPAIR, material_custody_transfer, site_resource_extraction
 from causal_ledger import CausalEvent, CausalLedger
 from terrain_engine import FrontierGrid
 
@@ -954,6 +955,38 @@ def _npc_reply(npc: Dict[str, Any], content: str, state: Dict[str, Any], actor_i
     if "?" in content or any(word in words for word in ("why", "what", "where", "when", "how", "can you")):
         return f"From what I can currently perceive, {npc['reason'].lower()} Ask me about my work, nearby resources, or what help is needed."
     return f"I heard you. {npc['reason']} I can keep talking even while I decide what to do next."
+
+
+ENGLISH_DIALOGUE_CUES = (
+    "hello", "hi", "hey", "work", "help", "job", "tree", "wood", "stone", "mine",
+    "resource", "why", "what", "where", "when", "how", "can you", "please", "thanks",
+)
+
+
+def _directed_response_decision(npc: Dict[str, Any], actor_id: str, content: str, tick: int, ordinal: int) -> Dict[str, Any]:
+    """Make willingness stochastic in feel but deterministic for replay."""
+    relationship = npc.get("relationships", {}).get(actor_id, {"trust": 0.5})
+    trust = max(0.0, min(1.0, float(relationship.get("trust", 0.5))))
+    needs = npc.get("needs", {})
+    belonging = max(0.0, min(1.0, float(needs.get("belonging", 50.0)) / 100.0))
+    physical_margin = min(float(needs.get("nutrition", 70.0)), float(needs.get("hydration", 70.0)), float(needs.get("rest", 70.0))) / 100.0
+    energy = max(0.0, min(1.0, float(npc.get("energy", 100.0)) / 100.0))
+    workload_cost = 0.08 if npc.get("intention") not in {None, "", "rest", "listen"} else 0.0
+    probability = max(0.12, min(0.92, 0.24 + trust * 0.24 + (1.0 - belonging) * 0.18 + energy * 0.18 + physical_margin * 0.14 - workload_cost))
+    seed = f"{tick}|{ordinal}|{actor_id}|{npc['id']}|{content}".encode("utf-8")
+    roll = int.from_bytes(hashlib.sha256(seed).digest()[:8], "big") / float((1 << 64) - 1)
+    lowered = content.casefold()
+    language_support = "english_optimized" if any(cue in lowered for cue in ENGLISH_DIALOGUE_CUES) else "best_effort"
+    return {
+        "resident_id": npc["id"], "eligible": True,
+        "probability": round(probability, 4), "roll": round(roll, 4),
+        "responded": roll < probability, "language_support": language_support,
+        "factors": {
+            "trust": round(trust, 4), "social_need": round(1.0 - belonging, 4),
+            "energy": round(energy, 4), "physical_margin": round(physical_margin, 4),
+            "workload_cost": workload_cost,
+        },
+    }
 
 
 DISCOURSE_KEYWORDS = {
@@ -2759,6 +2792,8 @@ def _shared_action_perceptions(state: Dict[str, Any], entity: Dict[str, Any], re
             site = state.get("resource_sites", {}).get(record.get("target_id"))
             if site and entity.get("current_region", "settlement") == site.get("region"):
                 channels.update({"resource_detail", "spatial_layout"})
+        if record.get("definition", {}).get("execution_model") == "custody_transfer":
+            channels.update({"resource_detail", "spatial_layout", "records"})
     return channels
 
 
@@ -2812,6 +2847,7 @@ def _shared_action_definition(action_type: str) -> Dict[str, Any]:
         "verification_threshold": definition.verification_threshold,
         "verifier_competence_domain": definition.verifier_competence_domain,
         "minimum_verifier_competence": definition.minimum_verifier_competence,
+        "input_custody": definition.input_custody,
         "output_custody": definition.output_custody,
     }
 
@@ -2831,6 +2867,10 @@ def _site_extraction_definition(site: Dict[str, Any]) -> Dict[str, Any]:
     return _shared_action_definition_from(site_resource_extraction(resource, min(amount, int(site.get("stock", 0))), tool, domain, energy))
 
 
+def _material_transfer_definition(resource: str, amount: int) -> Dict[str, Any]:
+    return _shared_action_definition_from(material_custody_transfer(resource, amount))
+
+
 def _shared_action_definition_from(definition) -> Dict[str, Any]:
     requirements = definition.requirements
     return {
@@ -2840,7 +2880,7 @@ def _shared_action_definition_from(definition) -> Dict[str, Any]:
         "provisional_cu_milli": definition.provisional_cu_milli, "verification_tolerance": definition.verification_tolerance,
         "execution_model": definition.execution_model, "verification_threshold": definition.verification_threshold,
         "verifier_competence_domain": definition.verifier_competence_domain, "minimum_verifier_competence": definition.minimum_verifier_competence,
-        "output_custody": definition.output_custody,
+        "input_custody": definition.input_custody, "output_custody": definition.output_custody,
     }
 
 
@@ -2859,7 +2899,7 @@ def apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: D
         if record:
             return {"accepted": False, "reason": "shared action already exists"}
         action_type = command.get("action_type")
-        if action_type not in {MEASUREMENT_TOOL_CALIBRATION.action_type, COMMUNAL_MEAL_PREPARATION.action_type, MECHANICAL_PUMP_REPAIR.action_type, "extract_site_resource"}:
+        if action_type not in {MEASUREMENT_TOOL_CALIBRATION.action_type, COMMUNAL_MEAL_PREPARATION.action_type, MECHANICAL_PUMP_REPAIR.action_type, "extract_site_resource", "deposit_material"}:
             return {"accepted": False, "reason": "unsupported canonical action type"}
         observations = [str(item)[:120] for item in command.get("observations", []) if str(item).strip()][:16]
         if not observations:
@@ -2874,6 +2914,14 @@ def apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: D
             site = state.get("resource_sites", {}).get(target_id)
             if not site or not site.get("installed_pump"):
                 return {"accepted": False, "reason": "pump repair requires an existing installed pump target"}
+        elif action_type == "deposit_material":
+            target_id = str(command.get("resource", "")).strip()
+            amount = command.get("amount")
+            location = "warehouse"
+            if not target_id or not isinstance(amount, int) or not 1 <= amount <= 20:
+                return {"accepted": False, "reason": "deposit requires a bounded material and amount"}
+            if entity.get("inventory", {}).get(target_id, 0) < amount:
+                return {"accepted": False, "reason": "actor custody does not contain the proposed deposit"}
         else:
             target_id = str(command.get("target_id", ""))
             location = f"resource_site:{target_id}"
@@ -2882,7 +2930,7 @@ def apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: D
                 return {"accepted": False, "reason": "extraction requires a supported finite resource site"}
             if site.get("stock", 0) < 1:
                 return {"accepted": False, "reason": "resource site is depleted"}
-        definition = _site_extraction_definition(site) if action_type == "extract_site_resource" else _shared_action_definition(action_type)
+        definition = _site_extraction_definition(site) if action_type == "extract_site_resource" else _material_transfer_definition(target_id, amount) if action_type == "deposit_material" else _shared_action_definition(action_type)
         record = {
             "id": shared_action_id, "definition": definition, "actor_id": actor_id,
             "actor_kind": "human" if actor_id in state["players"] else "ai",
@@ -2993,7 +3041,8 @@ def apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: D
             if not supervised_ready:
                 reason = "insufficient demonstrated competence or verified supervision" if record.get("practice_order_id") else "insufficient demonstrated competence"
                 return {"accepted": False, "reason": reason}
-        missing = {name: amount - state["resources"].get(name, 0) for name, amount in requirements["materials"].items() if state["resources"].get(name, 0) < amount}
+        material_source = entity.setdefault("inventory", {}) if record["definition"].get("input_custody") == "actor_inventory" else state["resources"]
+        missing = {name: amount - material_source.get(name, 0) for name, amount in requirements["materials"].items() if material_source.get(name, 0) < amount}
         if missing:
             return {"accepted": False, "reason": f"missing materials: {missing}"}
         tool_sources = {}
@@ -3024,7 +3073,14 @@ def apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: D
             station["reserved_by"] = shared_action_id
         if target_site:
             target_site["reserved_by"] = shared_action_id
-        reservation = {"materials": copy.deepcopy(requirements["materials"]), "tools": sorted(requirements["tools"]), "tool_sources": tool_sources, "station": requirements["station"], "target_site": target_site["id"] if target_site else None, "actor_id": actor_id}
+        reservation = {
+            "materials": copy.deepcopy(requirements["materials"]),
+            "material_before": {name: material_source.get(name, 0) for name in requirements["materials"]},
+            "input_custody": record["definition"].get("input_custody", "communal_store"),
+            "tools": sorted(requirements["tools"]), "tool_sources": tool_sources,
+            "station": requirements["station"], "target_site": target_site["id"] if target_site else None,
+            "actor_id": actor_id,
+        }
         shared["reservations"][shared_action_id] = reservation
         record["reserved_tick"] = state["clock"]["tick"]
         event = _append_shared_action_event(state, record, "reserved", actor_id, inputs=reservation)
@@ -3055,6 +3111,10 @@ def apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: D
                 stock_before, observed_yield = sample.get("stock_before"), sample.get("observed_yield")
                 if all(isinstance(value, (int, float)) and math.isfinite(value) for value in (stock_before, observed_yield)):
                     normalized.append({"stock_before": int(stock_before), "observed_yield": int(observed_yield)})
+            elif record["definition"].get("execution_model") == "custody_transfer":
+                custody_before, observed_amount = sample.get("custody_before"), sample.get("observed_amount")
+                if all(isinstance(value, (int, float)) and math.isfinite(value) for value in (custody_before, observed_amount)):
+                    normalized.append({"custody_before": int(custody_before), "observed_amount": int(observed_amount)})
             else:
                 reading = sample.get("reading")
                 if isinstance(reading, (int, float)) and math.isfinite(reading):
@@ -3079,7 +3139,7 @@ def apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: D
             return {"accepted": True, "type": "shared_action", "operation": operation, "record": copy.deepcopy(record), "causal_event": event, "physical_change": False}
         verifier_domain = record["definition"].get("verifier_competence_domain") or requirements["competence_domain"]
         minimum_verifier = record["definition"].get("minimum_verifier_competence", 0.1)
-        verifier_channel = "resource_detail" if record["definition"].get("execution_model") == "finite_site_extraction" else "instrumentation"
+        verifier_channel = "resource_detail" if record["definition"].get("execution_model") in {"finite_site_extraction", "custody_transfer"} else "instrumentation"
         if verifier_channel not in _shared_action_perceptions(state, entity, record) or _shared_competence(entity, verifier_domain) < minimum_verifier:
             return {"accepted": False, "reason": "verifier lacks measured competence or target perception"}
         if record["definition"].get("execution_model") == "thermal_batch":
@@ -3091,6 +3151,9 @@ def apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: D
         elif record["definition"].get("execution_model") == "finite_site_extraction":
             passed = bool(record["output"].get("conserved")) and record["output"].get("observed_yield") == record["output"].get("yield")
             verification_evidence = {"kind": "independent_stock_and_yield_check", "stock_before": record["output"].get("stock_before"), "stock_after": record["output"].get("stock_after"), "yield": record["output"].get("yield"), "observed_yield": record["output"].get("observed_yield"), "conserved": record["output"].get("conserved")}
+        elif record["definition"].get("execution_model") == "custody_transfer":
+            passed = bool(record["output"].get("conserved")) and record["output"].get("transferred") == record["output"].get("observed_amount")
+            verification_evidence = {"kind": "independent_custody_count", **copy.deepcopy(record["output"])}
         else:
             passed = record["output"].get("spread", float("inf")) <= record["definition"]["verification_tolerance"]
             verification_evidence = {"kind": "independent_check", "tolerance": record["definition"]["verification_tolerance"], "observed_spread": record["output"].get("spread")}
@@ -3126,6 +3189,8 @@ def apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: D
         if record["definition"].get("output_custody") == "actor_inventory":
             performer_inventory = _shared_entity(state, record["actor_id"]).setdefault("inventory", {})
             performer_inventory[item] = performer_inventory.get(item, 0) + held
+        elif record["definition"].get("output_custody") == "communal_store":
+            state["resources"][item] = state["resources"].get(item, 0) + held
         else:
             outputs = shared["commissioned_outputs"].setdefault(record["actor_id"], {})
             outputs[item] = outputs.get(item, 0) + held
@@ -3361,8 +3426,9 @@ def _process_shared_actions(state: Dict[str, Any], tick: int) -> list[Dict[str, 
             _release_shared_commitments(state, record)
             emitted.append({"type": "shared_action_failed", "actor_id": record["actor_id"], "payload": {"action_id": record["id"], "event": event}})
             continue
+        material_source = entity.setdefault("inventory", {}) if reservation.get("input_custody") == "actor_inventory" else state["resources"]
         for name, amount in requirements["materials"].items():
-            state["resources"][name] -= amount
+            material_source[name] -= amount
         entity["energy"] = round(entity.get("energy", 0) - requirements["energy"], 2)
         for tool_id in requirements["tools"]:
             tool, _ = _shared_tool_record(state, entity, tool_id)
@@ -3375,12 +3441,13 @@ def _process_shared_actions(state: Dict[str, Any], tick: int) -> list[Dict[str, 
         instruction = execution_model == "instruction_session"
         restoration = execution_model == "condition_restoration"
         extraction = execution_model == "finite_site_extraction"
+        custody_transfer = execution_model == "custody_transfer"
         target_site = state.get("resource_sites", {}).get(reservation.get("target_site")) if reservation else None
         if target_site and target_site.get("reserved_by") == record["id"]:
             target_site["reserved_by"] = None
         observations = record.get("samples", [])
         if not observations:
-            record["failure_reason"] = "no source-grounded instruction segments" if instruction else "no measured thermal history" if thermal else "no condition measurements" if restoration else "no stock and yield observation" if extraction else "no measurable samples"
+            record["failure_reason"] = "no source-grounded instruction segments" if instruction else "no measured thermal history" if thermal else "no condition measurements" if restoration else "no stock and yield observation" if extraction else "no custody transfer measurement" if custody_transfer else "no measurable samples"
             event = _append_shared_action_event(state, record, "failed", record["actor_id"], outputs={"reason": record["failure_reason"]}, physical=True)
             _release_shared_commitments(state, record)
             emitted.append({"type": "shared_action_failed", "actor_id": record["actor_id"], "payload": {"action_id": record["id"], "event": event}})
@@ -3453,6 +3520,18 @@ def _process_shared_actions(state: Dict[str, Any], tick: int) -> list[Dict[str, 
             site.setdefault("history", []).append({"tick": tick, "actor": record["actor_id"], "operation": "canonical_extraction_submitted", "outputs": copy.deepcopy(record["output"]), "causal_action_id": record["id"]})
             state["environment"].setdefault("extraction_history", []).append({"tick": tick, "actor": record["actor_id"], "site_id": site["id"], "resource": resource, "amount": amount, "action_id": record["id"], "status": "awaiting_verification"})
             _update_material_signal(state, resource, tick, f"canonical-site-extraction:{record['id']}")
+        elif custody_transfer:
+            resource = record["definition"]["output_item"]
+            amount = int(record["definition"]["output_amount"])
+            before = int(reservation.get("material_before", {}).get(resource, 0))
+            after = int(entity.get("inventory", {}).get(resource, 0))
+            observed_amount = int(observations[0]["observed_amount"])
+            record["output"] = {
+                "resource": resource, "custody_before": before, "custody_after": after,
+                "transferred": amount, "observed_amount": observed_amount,
+                "conserved": before - after == amount,
+            }
+            evidence = [{"kind": "custody_transfer_count", **copy.deepcopy(record["output"])}]
         else:
             readings = [sample["reading"] for sample in observations]
             spread = round(max(readings) - min(readings), 6)
@@ -4084,13 +4163,14 @@ def apply_player_action(state: Dict[str, Any], actor_id: str, action: Dict[str, 
             return {"accepted": False, "reason": "deposit requires physical delivery beside the warehouse"}
         if not isinstance(resource, str) or not isinstance(amount, int) or amount < 1 or player.get("inventory", {}).get(resource, 0) < amount:
             return {"accepted": False, "reason": "actor custody does not contain the requested deposit"}
-        before = int(state["resources"].get(resource, 0))
-        player["inventory"][resource] -= amount
-        state["resources"][resource] = before + amount
-        record = {"tick": state["clock"]["tick"], "actor": actor_id, "resource": resource, "amount": amount, "actor_after": player["inventory"][resource], "communal_before": before, "communal_after": state["resources"][resource], "conserved": True}
-        state["environment"].setdefault("deposit_history", []).append(record)
-        _evidence(state, state["clock"]["tick"], f"physical {resource} deposit", [actor_id], {resource: amount}, ["warehouse scale"], record, "dev", [], ["custody transfer", "communal count"])
-        return {"accepted": True, "type": action_type, "deposit": record, "physical_change": True}
+        canonical_id = f"warehouse-deposit:{actor_id}:{resource}:{state['clock']['tick']}:{len(state['shared_actions']['records']) + 1}"
+        proposal = apply_shared_action_command(state, actor_id, {
+            "operation": "propose", "shared_action_id": canonical_id,
+            "action_type": "deposit_material", "resource": resource, "amount": amount,
+            "intent": f"transfer {amount} {resource} from actor custody into the communal warehouse",
+            "observations": [f"actor-held:{resource}:{player['inventory'][resource]}", f"warehouse-access:{warehouse}"],
+        })
+        return {**proposal, "canonical_action_id": canonical_id, "resource": resource, "amount": amount}
     if action_type == "join":
         requested = action.get("location", [8, 5])
         location = requested if isinstance(requested, list) and len(requested) == 2 and all(isinstance(value, int) and 0 <= value < 64 for value in requested) else [8, 5]
@@ -4362,14 +4442,27 @@ def apply_player_action(state: Dict[str, Any], actor_id: str, action: Dict[str, 
         state["communications"]["messages"].append(player_message)
         civic_claim = _record_witnessed_discourse(state, player_message)
         replies = []
-        respondents = sorted(heard, key=lambda item: (0 if item["id"] == target_id else 1, _distance(item["location"], player["location"]), item["id"]))[:2]
-        for npc in respondents:
-            reply = {"id": str(uuid.uuid4()), "tick": state["clock"]["tick"], "speaker_id": npc["id"], "speaker": npc["name"], "content": _npc_reply(npc, content, state, actor_id), "kind": "reply", "response_to": player_message["id"], "audible_to": [actor_id], "location": list(npc["location"])}
-            state["communications"]["messages"].append(reply)
-            npc["memories"].append({"tick": state["clock"]["tick"], "kind": "conversation", "actor": actor_id, "text": f"Heard {actor_id} say: {content}"})
-            replies.append(reply)
+        response_decisions = []
+        target = next((npc for npc in heard if npc["id"] == target_id), None) if target_id else None
+        if target_id and not target:
+            response_decisions.append({"resident_id": target_id, "eligible": False, "probability": 0.0, "roll": None, "responded": False, "language_support": "best_effort", "reason": "out_of_audible_range"})
+        elif target:
+            decision = _directed_response_decision(target, actor_id, content, state["clock"]["tick"], len(state["communications"]["messages"]))
+            response_decisions.append(decision)
+            if decision["responded"]:
+                reply = {"id": str(uuid.uuid4()), "tick": state["clock"]["tick"], "speaker_id": target["id"], "speaker": target["name"], "content": _npc_reply(target, content, state, actor_id), "kind": "reply", "response_to": player_message["id"], "audible_to": [actor_id], "location": list(target["location"]), "decision": copy.deepcopy(decision)}
+                state["communications"]["messages"].append(reply)
+                replies.append(reply)
+        for npc in heard:
+            npc["memories"].append({
+                "tick": state["clock"]["tick"],
+                "kind": "directed_conversation" if npc["id"] == target_id else "overheard_speech",
+                "actor": actor_id,
+                "targeted": npc["id"] == target_id,
+                "text": f"Heard {actor_id} say: {content}",
+            })
         state["communications"]["messages"] = state["communications"]["messages"][-250:]
-        return {"accepted": True, "type": action_type, "heard_by": [npc["id"] for npc in heard], "replies": replies, "civic_claim": civic_claim, "physical_change": False}
+        return {"accepted": True, "type": action_type, "target_id": target_id, "heard_by": [npc["id"] for npc in heard], "replies": replies, "response_decisions": response_decisions, "civic_claim": civic_claim, "physical_change": False}
     if action_type == "endorse_priority":
         priority = action.get("priority")
         if priority not in INITIATIVE_BLUEPRINTS:

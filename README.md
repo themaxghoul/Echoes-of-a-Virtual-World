@@ -40,6 +40,20 @@ Very early prototype.
 - Marketplace and structural virtual economy still being built  
 - Persistent memory and emergent systems under active development
 
+### Financial safety
+
+EoV currently runs a simulation-only economy. CU is non-spendable provisional accounting. Real deposits, withdrawals, conversions, wallets, and earnings providers are hard-disabled, and legacy consequential mutations remain quarantined while they are moved into authenticated transactional domains. See [Economy and concurrency boundary](docs/ECONOMY_AND_CONCURRENCY_BOUNDARY.md).
+
+### Reproducible core verification
+
+Install Python 3.12, Node 22, and pnpm 11.9.0, then run from a clean checkout:
+
+```powershell
+pwsh -File scripts/verify_core.ps1
+```
+
+The identical regression gate runs in GitHub Actions.
+
 ### Tech Stack
 - **Backend**: Python, FastAPI
 - **Frontend**: React (JavaScript)

@@ -1,6 +1,7 @@
 let localUrl = '';
 try { localUrl = JSON.parse(localStorage.getItem('eov-game-settings'))?.worldServerUrl || ''; } catch { localUrl = ''; }
-const configuredUrl = (process.env.REACT_APP_WORLD_SERVER_URL || localUrl).trim().replace(/\/$/, '');
+const desktopDefaultUrl = window.eovDesktop ? 'http://127.0.0.1:8765' : '';
+const configuredUrl = (process.env.REACT_APP_WORLD_SERVER_URL || localUrl || desktopDefaultUrl).trim().replace(/\/$/, '');
 export const worldServerUrl = configuredUrl;
 export const worldServerConfigured = Boolean(configuredUrl);
 export const defaultWorldId = 'founders-settlement';
@@ -14,6 +15,13 @@ export async function fetchWorldSnapshot(worldId = defaultWorldId, signal) {
   if (!configuredUrl) throw new Error('No persistent world server configured');
   const response = await fetch(`${configuredUrl}/worlds/${encodeURIComponent(worldId)}`, { signal, cache: 'no-store', headers: authenticatedHeaders() });
   if (!response.ok) throw new Error(`World server returned ${response.status}`);
+  return response.json();
+}
+
+export async function fetchWorldHealth(signal) {
+  if (!configuredUrl) throw new Error('No persistent world server configured');
+  const response = await fetch(`${configuredUrl}/health`, { signal, cache: 'no-store' });
+  if (!response.ok) throw new Error(`World health check returned ${response.status}`);
   return response.json();
 }
 

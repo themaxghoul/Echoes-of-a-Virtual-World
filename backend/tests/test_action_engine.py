@@ -3,7 +3,7 @@ import unittest
 
 from action_engine import (
     ActionWorld, ActorContext, COMMUNAL_MEAL_PREPARATION, MEASUREMENT_TOOL_CALIBRATION,
-    MECHANICAL_PUMP_REPAIR, SharedActionEngine, site_resource_extraction,
+    MECHANICAL_PUMP_REPAIR, SharedActionEngine, material_custody_transfer, site_resource_extraction,
 )
 from competency_engine import CompetencyProfile
 from society_engine import Agent, DecisionOption, decide_initiative, remember_perceived_event
@@ -18,7 +18,7 @@ def actor(actor_id="worker", kind="human", perspective="first_person", competenc
 
 def world_for(actor_id="worker"):
     return ActionWorld(
-        inventories={actor_id: {"reference_strip": 2}},
+        inventories={actor_id: {}}, communal_inventory={"reference_strip": 2},
         tools={"marked_measure": {"condition": 0.8, "reserved_by": None}},
         stations={"measurement_bench": {"reserved_by": None}},
     )
@@ -33,7 +33,7 @@ def domain_actor(actor_id, kind, domain, competence=0.2, perceptions=None):
 
 def meal_world(actor_id):
     return ActionWorld(
-        inventories={actor_id: {"raw_food": 3, "tested_water": 2, "fuel": 1}},
+        inventories={actor_id: {}}, communal_inventory={"raw_food": 3, "tested_water": 2, "fuel": 1},
         tools={"cooking_pot": {"condition": 0.9, "reserved_by": None}, "food_thermometer": {"condition": 0.9, "reserved_by": None}},
         stations={"communal_hearth": {"reserved_by": None}},
     )
@@ -59,7 +59,7 @@ class SharedActionEngineTests(unittest.TestCase):
         engine = SharedActionEngine(world_for())
         action = complete(engine, actor(), actor("inspector", "ai"))
         self.assertEqual("commissioned", action.state)
-        self.assertEqual(1, engine.world.inventories["worker"]["reference_strip"])
+        self.assertEqual(1, engine.world.communal_inventory["reference_strip"])
         self.assertEqual(1, engine.world.commissioned_outputs["worker"]["calibrated_measure"])
         self.assertEqual(0, sum(engine.world.valuation_accounts_milli.values()))
         self.assertFalse(engine.world.valuation_claims[0]["spendable"])
@@ -74,7 +74,7 @@ class SharedActionEngineTests(unittest.TestCase):
         self.assertEqual("no measurable samples", action.failure_reason)
         self.assertEqual({}, engine.world.commissioned_outputs)
         self.assertEqual([], engine.world.valuation_claims)
-        self.assertEqual(1, engine.world.inventories["worker"]["reference_strip"])
+        self.assertEqual(1, engine.world.communal_inventory["reference_strip"])
 
     def test_human_and_ai_have_identical_reservation_requirements(self):
         for kind in ("human", "ai"):
@@ -135,7 +135,7 @@ class SharedActionEngineTests(unittest.TestCase):
         engine.verify(action.action_id, inspector)
         engine.commission(action.action_id, inspector)
         self.assertEqual("commissioned", action.state)
-        self.assertEqual({"raw_food": 0, "tested_water": 0, "fuel": 0}, engine.world.inventories[cook.actor_id])
+        self.assertEqual({"raw_food": 0, "tested_water": 0, "fuel": 0}, engine.world.communal_inventory)
         self.assertEqual(3, engine.world.commissioned_outputs[cook.actor_id]["safe_meal_portion"])
         self.assertEqual(0, sum(engine.world.valuation_accounts_milli.values()))
         self.assertTrue(engine.ledger.verify())
@@ -162,7 +162,7 @@ class SharedActionEngineTests(unittest.TestCase):
             worker = domain_actor(f"{kind}-mechanic", kind, "mechanical_engineering", perceptions={"mechanical_detail", "instrumentation"})
             inspector = domain_actor(f"{kind}-inspector", "ai" if kind == "human" else "human", "measurement", perceptions={"mechanical_detail", "instrumentation"})
             world = ActionWorld(
-                inventories={worker.actor_id: {"timber": 1, "containers": 1}},
+                inventories={worker.actor_id: {}}, communal_inventory={"timber": 1, "containers": 1},
                 tools={"maintenance_wrench": {"condition": 0.9, "reserved_by": None}},
                 stations={},
             )
@@ -171,7 +171,7 @@ class SharedActionEngineTests(unittest.TestCase):
             engine.accept(action.action_id, worker); engine.reserve(action.action_id, worker)
             engine.execute(action.action_id, worker, [{"condition_before": 0.3, "condition_after": 0.9}])
             engine.verify(action.action_id, inspector); engine.commission(action.action_id, inspector)
-            outcomes.append((action.state, action.output, sum(engine.world.valuation_accounts_milli.values()), engine.world.inventories[worker.actor_id]))
+            outcomes.append((action.state, action.output, sum(engine.world.valuation_accounts_milli.values()), engine.world.communal_inventory))
         self.assertEqual(outcomes[0], outcomes[1])
         self.assertEqual("commissioned", outcomes[0][0])
         self.assertEqual({"timber": 0, "containers": 0}, outcomes[0][3])
@@ -188,7 +188,7 @@ class SharedActionEngineTests(unittest.TestCase):
         self.assertEqual({}, engine.world.actor_commitments)
         self.assertIsNone(engine.world.tools["marked_measure"]["reserved_by"])
         self.assertIsNone(engine.world.stations["measurement_bench"]["reserved_by"])
-        self.assertEqual({"reference_strip": 2}, engine.world.inventories[worker.actor_id])
+        self.assertEqual({"reference_strip": 2}, engine.world.communal_inventory)
         engine.accept("second", worker)
         self.assertEqual("second", engine.world.actor_commitments[worker.actor_id]["action_id"])
 
@@ -208,6 +208,34 @@ class SharedActionEngineTests(unittest.TestCase):
             outcomes.append((action.state, world.resource_sites["oak"]["stock"], world.inventories[worker.actor_id]["timber"], sum(world.valuation_accounts_milli.values())))
         self.assertEqual(outcomes[0], outcomes[1])
         self.assertEqual(("commissioned", 3, 2, 0), outcomes[0])
+
+    def test_verified_material_deposit_conserves_actor_and_communal_custody_for_human_and_ai(self):
+        outcomes = []
+        definition = material_custody_transfer("stone", 1)
+        for kind in ("human", "ai"):
+            worker = domain_actor(f"{kind}-carrier", kind, "logistics", perceptions={"resource_detail", "spatial_layout"})
+            inspector = domain_actor(f"{kind}-receiver", "ai" if kind == "human" else "human", "measurement", perceptions={"resource_detail", "spatial_layout"})
+            world = ActionWorld(inventories={worker.actor_id: {"stone": 2}}, communal_inventory={"stone": 24})
+            engine = SharedActionEngine(world); engine.register_actor(worker); engine.register_actor(inspector)
+            action = engine.propose(f"{kind}-deposit", definition, worker, "deposit measured stone", "stone", "warehouse", ["actor-custody:stone:2"])
+            engine.accept(action.action_id, worker); engine.reserve(action.action_id, worker)
+            self.assertEqual(2, world.inventories[worker.actor_id]["stone"])
+            engine.execute(action.action_id, worker, [{"custody_before": 2, "observed_amount": 1}])
+            self.assertEqual(1, world.inventories[worker.actor_id]["stone"])
+            self.assertEqual(24, world.communal_inventory["stone"])
+            engine.verify(action.action_id, inspector); engine.commission(action.action_id, inspector)
+            outcomes.append((action.state, world.inventories[worker.actor_id]["stone"], world.communal_inventory["stone"], sum(world.valuation_accounts_milli.values()), world.valuation_claims[0]["spendable"]))
+        self.assertEqual(outcomes[0], outcomes[1])
+        self.assertEqual(("commissioned", 1, 25, 0, False), outcomes[0])
+
+    def test_cancelled_material_deposit_releases_reservation_without_moving_material(self):
+        worker = domain_actor("carrier", "human", "logistics", perceptions={"resource_detail", "spatial_layout"})
+        world = ActionWorld(inventories={worker.actor_id: {"timber": 3}}, communal_inventory={"timber": 10})
+        engine = SharedActionEngine(world); engine.register_actor(worker)
+        action = engine.propose("deposit-cancel", material_custody_transfer("timber", 2), worker, "deposit timber", "timber", "warehouse", ["actor-custody:timber:3"])
+        engine.accept(action.action_id, worker); engine.reserve(action.action_id, worker); engine.cancel(action.action_id, worker)
+        self.assertEqual({"timber": 3}, world.inventories[worker.actor_id])
+        self.assertEqual({"timber": 10}, world.communal_inventory)
 
 
 if __name__ == "__main__":

@@ -44,7 +44,7 @@ const CharacterStatsPanel = ({ characterId, userId, isOpen, onClose }) => {
   
   if (!isOpen) return null;
   
-  const isTranscendent = userProfile?.is_transcendent || userProfile?.permission_level === 'sirix_1';
+  const isTranscendent = userProfile?.is_transcendent === true;
   
   // Format stat value - show ∞ for Sirix-1, hide for others viewing Sirix-1
   const formatStat = (value, isResource = false) => {

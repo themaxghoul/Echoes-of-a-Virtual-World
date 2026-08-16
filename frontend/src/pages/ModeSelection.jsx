@@ -7,11 +7,12 @@ import { Progress } from '@/components/ui/progress';
 import { 
   Gamepad2, MessageSquare, User, Sparkles, Crown,
   ArrowRight, Settings, LogOut, Hammer, ArrowLeftRight,
-  Heart, Zap, Shield, Swords, DollarSign, TrendingUp, Briefcase
+  Heart, Zap, Shield, Swords, DollarSign, TrendingUp, Briefcase, ScanEye, Glasses
 } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
 import { pushNavHistory } from '@/components/GameNavigation';
+import BuildWatermark from '@/components/BuildWatermark';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -41,6 +42,13 @@ const ModeSelection = () => {
       return;
     }
 
+    if (window.eovDesktop) {
+      setCharacter({ id: charId, name: localStorage.getItem('characterName') || 'sirix_1', traits: ['Witness', 'Builder'], health: 100, max_health: 100, stamina: 100, max_stamina: 100, strength: 10, endurance: 10, agility: 10, intelligence: 10 });
+      setUserProfile({ id: userId, username: localStorage.getItem('username'), display_name: localStorage.getItem('displayName') || 'Sirix-1', is_transcendent: localStorage.getItem('isTranscendent') === 'true' });
+      setLoading(false);
+      return;
+    }
+
     try {
       const [charRes, userRes, statsRes] = await Promise.all([
         axios.get(`${API}/character/${charId}`),
@@ -62,6 +70,11 @@ const ModeSelection = () => {
   };
 
   const handleLogout = () => {
+    if (window.eovDesktop) window.eovDesktop.logout().catch(() => {});
+    const token = sessionStorage.getItem('eovAccessToken');
+    if (!window.eovDesktop && token) axios.post(`${API}/auth/logout`, {}, { headers: { Authorization: `Bearer ${token}` } }).catch(() => {});
+    sessionStorage.removeItem('eovAccessToken');
+    sessionStorage.removeItem('eovDesktopAccessToken');
     localStorage.clear();
     toast.success('Logged out successfully');
     navigate('/auth');
@@ -69,6 +82,8 @@ const ModeSelection = () => {
 
   const selectMode = (mode, path) => {
     localStorage.setItem('gameMode', mode);
+    const userId = localStorage.getItem('userId');
+    if (userId) localStorage.setItem(`eovLastRoute:${userId}`, path);
     pushNavHistory(path);
     navigate(path);
   };
@@ -81,6 +96,7 @@ const ModeSelection = () => {
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-gold border-t-transparent rounded-full animate-spin mx-auto mb-4" />
           <p className="font-cinzel text-gold">Loading your journey...</p>
+          <BuildWatermark />
         </div>
       </div>
     );
@@ -132,8 +148,8 @@ const ModeSelection = () => {
             variant="ghost"
             size="icon"
             onClick={() => {
-              pushNavHistory('/profile');
-              navigate('/profile');
+              pushNavHistory('/settings');
+              navigate('/settings');
             }}
             className="rounded-sm"
             data-testid="profile-btn"
@@ -249,7 +265,7 @@ const ModeSelection = () => {
         )}
 
         {/* Mode Selection */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 max-w-5xl w-full">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 sm:gap-5 max-w-7xl w-full">
           {/* 2D Story Mode - Text Adventure with Building */}
           <Card 
             className="bg-surface/80 border-border/50 rounded-sm hover:border-gold/50 transition-all duration-300 cursor-pointer group"
@@ -266,7 +282,7 @@ const ModeSelection = () => {
               </p>
               <div className="flex flex-wrap gap-2 justify-center mb-4">
                 <Badge className="bg-gold/10 text-gold text-xs rounded-sm">AI Narrator</Badge>
-                <Badge className="bg-gold/10 text-gold text-xs rounded-sm">All Maps Open</Badge>
+                <Badge className="bg-gold/10 text-gold text-xs rounded-sm">Testimony Discovery</Badge>
               </div>
               <Button 
                 data-testid="select-storymode-btn"
@@ -279,7 +295,7 @@ const ModeSelection = () => {
             </CardContent>
           </Card>
 
-          {/* 3D First Person Mode (Web) */}
+          {/* Primary 2.5D Isometric Mode */}
           <Card 
             className="bg-surface/80 border-border/50 rounded-sm hover:border-slate-blue/50 transition-all duration-300 cursor-pointer group"
             onClick={() => selectMode('firstperson', '/play')}
@@ -289,22 +305,32 @@ const ModeSelection = () => {
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-blue/20 border border-slate-blue/30 flex items-center justify-center group-hover:scale-110 transition-transform">
                 <Gamepad2 className="w-8 h-8 text-slate-blue" />
               </div>
-              <h3 className="font-cinzel text-lg text-foreground mb-2">First Person 3D</h3>
+              <h3 className="font-cinzel text-lg text-foreground mb-2">Isometric Settlement</h3>
               <p className="font-manrope text-sm text-muted-foreground mb-4">
-                Immersive 3D in browser. Walk through the village, interact with NPCs.
+                Build the persistent settlement in a readable 2.5D isometric world.
               </p>
               <div className="flex flex-wrap gap-2 justify-center mb-4">
-                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">Web 3D</Badge>
-                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">D-Pad</Badge>
+                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">2.5D Alpha</Badge>
+                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">Spatial Discovery</Badge>
               </div>
               <Button 
                 data-testid="select-firstperson-btn"
                 className="w-full bg-slate-blue text-white hover:bg-slate-blue-light font-cinzel rounded-sm"
               >
                 <Gamepad2 className="w-5 h-5 mr-2" />
-                Enter 3D Web
+                Enter Settlement
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* First-person is withheld until camera control and authored models meet the playability bar. */}
+          <Card className="bg-surface/50 border-dashed border-border/50 rounded-sm opacity-75">
+            <CardContent className="p-6 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-cyan-500/10 border border-cyan-400/20 flex items-center justify-center"><ScanEye className="w-8 h-8 text-cyan-300" /></div>
+              <h3 className="font-cinzel text-lg text-foreground mb-2">First-Person Rebuild</h3>
+              <p className="font-manrope text-sm text-muted-foreground mb-4">Withheld until the camera controls the player's perception and usable character models exist.</p>
+              <Button disabled className="w-full font-cinzel rounded-sm"><ScanEye className="w-5 h-5 mr-2" />Unavailable · Camera rebuild</Button>
             </CardContent>
           </Card>
 
@@ -334,6 +360,16 @@ const ModeSelection = () => {
                 Unity Offload
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* VR backlog keeps the same authoritative world and adds embodied sensing later. */}
+          <Card className="bg-surface/50 border-dashed border-border/50 rounded-sm opacity-75">
+            <CardContent className="p-6 text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-purple-500/10 border border-purple-400/20 flex items-center justify-center"><Glasses className="w-8 h-8 text-purple-300" /></div>
+              <h3 className="font-cinzel text-lg text-foreground mb-2">VR Embodiment</h3>
+              <p className="font-manrope text-sm text-muted-foreground mb-4">Future stereo depth, gesture, dexterity, body position, and tool handling.</p>
+              <Button disabled className="w-full font-cinzel rounded-sm">Backlog · Input research</Button>
             </CardContent>
           </Card>
         </div>
@@ -432,7 +468,7 @@ const ModeSelection = () => {
       {/* Footer */}
       <footer className="relative z-10 p-4 text-center border-t border-border/30">
         <p className="font-mono text-xs text-muted-foreground/50">
-          Story Mode = 2D Chat + Building | First Person = 3D Models
+          Primary Client = 2.5D Isometric | Legacy views remain available during integration
         </p>
       </footer>
     </div>

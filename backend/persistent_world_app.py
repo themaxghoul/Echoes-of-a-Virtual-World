@@ -15,14 +15,18 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from auth_security import SessionTokenError, verify_session_token
+from economy.compute_settlement import evaluate_compute_settlement
+from economy.public_ledger import project_public_cu_ledger
 from owner_policy import is_owner_session_subject
 from persistent_world import DEFAULT_WORLD_ID, PersistentWorldStore, RevisionConflict, actor_event_view, actor_world_view
+from world_status import build_health_status
 
 
 DATABASE_PATH = Path(os.environ.get("EOV_WORLD_DATABASE", Path(__file__).parent / "data" / "persistent-world.sqlite3"))
 SESSION_SECRET = os.environ.get("EOV_SESSION_SECRET", "")
 OWNER_USER_ID = os.environ.get("EOV_OWNER_USER_ID", "").strip()
 RUNNER_ID = f"runclock-{uuid.uuid4()}"
+SERVER_STARTED_AT_MS = int(time.time() * 1000)
 store = PersistentWorldStore(DATABASE_PATH)
 
 
@@ -106,7 +110,32 @@ app.add_middleware(
 @app.get("/health")
 def health() -> Dict[str, Any]:
     snapshot = store.snapshot(DEFAULT_WORLD_ID)
-    return {"ok": True, "world_id": snapshot["world_id"], "revision": snapshot["revision"], "tick": snapshot["tick"], "writes_enabled": len(SESSION_SECRET.encode()) >= 32}
+    return build_health_status(
+        snapshot,
+        writes_enabled=len(SESSION_SECRET.encode()) >= 32,
+        started_at_ms=SERVER_STARTED_AT_MS,
+        now_ms=int(time.time() * 1000),
+    )
+
+
+@app.get("/worlds/{world_id}/public-cu-ledger")
+def get_public_cu_ledger(world_id: str) -> Dict[str, Any]:
+    """Publish verified CU evidence without identities, memories, or hidden world state."""
+    try:
+        return project_public_cu_ledger(store.snapshot(world_id))
+    except KeyError:
+        raise HTTPException(status_code=404, detail="World not found")
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=f"Public ledger integrity failure: {exc}")
+
+
+@app.get("/compute-settlement/readiness")
+def compute_settlement_readiness() -> Dict[str, Any]:
+    """Report the real external boundary; this endpoint cannot activate settlement."""
+    return evaluate_compute_settlement({
+        "provider": "openai-codex-plan",
+        "provider_purchase_capability": False,
+    })
 
 
 @app.get("/worlds/{world_id}")

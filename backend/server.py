@@ -1,19 +1,31 @@
-from fastapi import FastAPI, APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, APIRouter, Depends, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import DuplicateKeyError
 import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any, Set
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import httpx
 import asyncio
 import json
 import bcrypt
+import hashlib
+import re
+import secrets
+import time
+
+from auth_security import SessionTokenError, issue_session_token, validate_secret, verify_session_token
+from economy import EconomyPolicy
+from mail import internal_mailbox, normalize_custom_domain
+from owner_policy import OWNER_ABILITIES, OWNER_ROLE, is_bound_owner
+from security import RateLimitExceeded, consume_rate_limit
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -39,6 +51,99 @@ location_connections: Dict[str, Dict[str, WebSocket]] = {}
 # Create the main app
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
+
+SESSION_SECRET = os.environ.get("EOV_SESSION_SECRET", "")
+SESSION_TTL_SECONDS = int(os.environ.get("EOV_SESSION_TTL_SECONDS", "900"))
+OWNER_USERNAME = os.environ.get("EOV_OWNER_USERNAME", "luciferous").strip().lower()
+ECONOMY_POLICY = EconomyPolicy(os.environ.get("EOV_ECONOMY_MODE", "simulation"))
+PUBLIC_API_PATHS = {"/api/", "/api/auth/login", "/api/auth/register"}
+AUDITED_MUTATIONS = [
+    re.compile(r"^/api/auth/(logout|ws-ticket)$"),
+    re.compile(r"^/api/users/track-login$"),
+    re.compile(r"^/api/characters$"),
+    re.compile(r"^/api/mailbox/send$"),
+    re.compile(r"^/api/mail/domains/claim$"),
+]
+
+
+async def authenticate_bearer(authorization: Optional[str]) -> Dict[str, Any]:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authenticated session required")
+    try:
+        claims = verify_session_token(authorization[7:], SESSION_SECRET)
+    except SessionTokenError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
+    session = await db.user_sessions.find_one({"sid": claims["sid"], "user_id": claims["sub"], "revoked": {"$ne": True}})
+    if not session or session.get("expires_at_epoch", session.get("expires_at", 0)) <= int(time.time()):
+        raise HTTPException(status_code=401, detail="Session is expired or revoked")
+    user = await db.user_profiles.find_one({"id": claims["sub"]}, {"_id": 0})
+    if not user or user.get("disabled") or int(user.get("token_version", 0)) != int(claims.get("ver", -1)):
+        raise HTTPException(status_code=401, detail="Session is no longer valid")
+    user.pop("hashed_password", None)
+    return user
+
+
+async def current_actor(request: Request) -> Dict[str, Any]:
+    actor = getattr(request.state, "actor", None)
+    if not actor:
+        raise HTTPException(status_code=401, detail="Authenticated session required")
+    return actor
+
+
+def request_origin(request: Request) -> str:
+    # Do not trust forwarding headers unless a deployment configures trusted
+    # proxy middleware. The direct peer is the only authoritative default.
+    return request.client.host if request.client else "unknown"
+
+
+async def enforce_rate_limit(scope: str, identity: str, limit: int, window_seconds: int) -> None:
+    try:
+        await consume_rate_limit(
+            db.security_rate_limits,
+            scope=scope,
+            identity=identity,
+            limit=limit,
+            window_seconds=window_seconds,
+            now_epoch=int(time.time()),
+        )
+    except RateLimitExceeded as exc:
+        raise HTTPException(
+            status_code=429,
+            detail=f"{scope.replace('_', ' ').title()} rate limit exceeded",
+            headers={"Retry-After": str(exc.retry_after)},
+        )
+
+
+def actor_can_access(actor: Dict[str, Any], user_id: str) -> bool:
+    return actor.get("id") == user_id or actor.get("is_owner") is True or actor.get("permission_level") == "admin"
+
+
+async def require_character_owner(actor: Dict[str, Any], character_id: str) -> Dict[str, Any]:
+    character = await db.characters.find_one({"id": character_id}, {"_id": 0})
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    if not actor_can_access(actor, character.get("user_id")):
+        raise HTTPException(status_code=403, detail="Character is not owned by this session")
+    return character
+
+
+@app.middleware("http")
+async def authenticated_api_boundary(request: Request, call_next):
+    path = request.url.path
+    if request.method == "OPTIONS" or not path.startswith("/api") or path in PUBLIC_API_PATHS:
+        return await call_next(request)
+    if ECONOMY_POLICY.blocks_path(path):
+        return JSONResponse(status_code=503, content={
+            "detail": "Real-value deposits, withdrawals, wallets, conversions, and earnings are disabled in this alpha",
+            "code": "SIMULATION_ECONOMY_ONLY", "economy_mode": ECONOMY_POLICY.mode,
+        })
+    try:
+        request.state.actor = await authenticate_bearer(request.headers.get("Authorization"))
+    except HTTPException as exc:
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    if request.method in {"POST", "PUT", "PATCH", "DELETE"} and not any(pattern.match(path) for pattern in AUDITED_MUTATIONS):
+        return JSONResponse(status_code=403, content={"detail": "Legacy mutation quarantined until it derives actor identity from the authenticated session", "code": "LEGACY_MUTATION_QUARANTINED"})
+    return await call_next(request)
 
 # Configure logging
 logging.basicConfig(
@@ -69,8 +174,10 @@ PERMISSION_LEVELS = {
     },
     "sirix_1": {
         "level": 999,
-        "abilities": ["all", "immutable", "supreme_override"],
-        "description": "Supreme authority - cannot be overwritten",
+        # The private owner is a superset of every administrative and creator
+        # capability. `all` keeps future capabilities from silently excluding it.
+        "abilities": list(OWNER_ABILITIES),
+        "description": "Private owner operations (not an in-world rank)",
         "chat_access": ["local", "city", "state", "country", "global"]
     }
 }
@@ -2174,74 +2281,106 @@ async def fetch_world_news() -> List[str]:
     
     return news_cache.get("headlines", ["The world beyond stirs with change"])
 
-async def initialize_sirix_1():
-    """Initialize the Sirix-1 supreme account - update password if exists"""
-    sirix_password = "HCLynnTV04"
-    hashed_password = bcrypt.hashpw(sirix_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
-    
-    # Sirix-1 has immeasurable, infinite values - stored as None/special markers
-    # When displayed, these become cryptic/distorted
-    sirix_stats = {
-        "hashed_password": hashed_password,
-        "official_rank": "sovereign",
-        "reputation": None,  # Immeasurable
-        "contribution_points": None,  # Immeasurable
-        "resources": {"gold": None, "essence": None, "artifacts": None},  # Infinite
-        "materials": {"wood": None, "stone": None, "iron": None, "crystal": None, "obsidian": None},
-        "unlocked_schematics": ["*ALL*"],  # Has access to everything
-        "xp": None,  # Beyond measurement
-        "is_immutable": True,
-        "is_transcendent": True,  # Special flag for scan protection
-        "cannot_degenerate": True,  # Values never decrease
+async def initialize_owner_account():
+    """Provision and immutably bind the owner without trusting a username alone."""
+    configured_password = os.environ.get("EOV_OWNER_PASSWORD")
+    configured_owner_id = os.environ.get("EOV_OWNER_USER_ID", "").strip() or None
+    owner_stats = {
+        "official_rank": "citizen",
+        "reputation": 0,
+        "contribution_points": 0,
+        "resources": {"gold": 0, "essence": 0, "artifacts": 0},
+        "materials": {"wood": 0, "stone": 0, "iron": 0, "crystal": 0, "obsidian": 0},
+        "unlocked_schematics": [],
+        "xp": 0,
+        "is_immutable": False,
+        "is_transcendent": False,
+        "cannot_degenerate": False,
+        "is_owner": True,
+        "inspection_policy": "null_read",
+        "mailbox_address": internal_mailbox(OWNER_USERNAME),
+        "email_verified": False,
+        "token_version": 0,
     }
     
-    existing = await db.user_profiles.find_one({"username": "sirix_1"})
+    await db.user_profiles.update_many(
+        {"username": "sirix_1", "is_owner": True},
+        {"$set": {"is_owner": False, "permission_level": "basic"}, "$inc": {"token_version": 1}},
+    )
+    binding = await db.system_settings.find_one({"_id": "owner_identity"})
+    persisted_owner_id = (binding or {}).get("user_id")
+    if persisted_owner_id and configured_owner_id and persisted_owner_id != configured_owner_id:
+        logger.error("EOV_OWNER_USER_ID conflicts with the persisted owner binding; ownership was not changed")
+        return
+    bound_owner_id = persisted_owner_id or configured_owner_id
+    existing = await db.user_profiles.find_one({"id": bound_owner_id}) if bound_owner_id else None
+    if bound_owner_id and not existing:
+        logger.error("Configured owner ID does not identify an existing account; ownership was not reassigned")
+        return
+
+    # The initial claim requires the private bootstrap password. Afterward the
+    # persisted UUID, rather than a mutable or publicly guessable name, is authoritative.
+    if not existing and configured_password:
+        existing = await db.user_profiles.find_one({"username": OWNER_USERNAME})
+
     if existing:
-        # Update existing Sirix-1
+        if configured_password:
+            owner_stats["hashed_password"] = bcrypt.hashpw(configured_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
         await db.user_profiles.update_one(
-            {"username": "sirix_1"},
-            {"$set": sirix_stats}
+            {"id": existing["id"]},
+            {"$set": {**owner_stats, "permission_level": OWNER_ROLE}}
         )
-        logger.info("Sirix-1 supreme account updated with transcendent stats")
+        await db.system_settings.update_one(
+            {"_id": "owner_identity"},
+            {"$set": {"user_id": existing["id"], "username_hint": OWNER_USERNAME}},
+            upsert=True,
+        )
+        await db.user_profiles.update_many(
+            {"id": {"$ne": existing["id"]}, "is_owner": True},
+            {"$set": {"is_owner": False, "permission_level": "basic"}, "$inc": {"token_version": 1}},
+        )
+        logger.info("Configured owner UUID promoted with null-read privacy")
     else:
-        sirix_profile = {
-            "id": "sirix_1_supreme",
-            "username": "sirix_1",
-            "display_name": "Sirix-1",
-            "permission_level": "sirix_1",
+        if not configured_password:
+            logger.warning("Configured owner account is absent; set EOV_OWNER_PASSWORD privately for first initialization")
+            return
+        owner_stats["hashed_password"] = bcrypt.hashpw(configured_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        owner_profile = {
+            "id": str(uuid.uuid4()),
+            "username": OWNER_USERNAME,
+            "display_name": "Luciferous" if OWNER_USERNAME == "luciferous" else OWNER_USERNAME,
+            "permission_level": OWNER_ROLE,
             "characters": [],
             "character_model": {
                 "body_color": "#FFD700",
                 "accent_color": "#8B0000",
                 "eye_color": "#FF4500",
-                "body_type": "transcendent"
+                "body_type": "standard"
             },
             "created_at": datetime.now(timezone.utc).isoformat(),
             "last_active": datetime.now(timezone.utc).isoformat(),
-            **sirix_stats
+            **owner_stats
         }
-        await db.user_profiles.insert_one(sirix_profile)
-        logger.info("Sirix-1 supreme account initialized with transcendent stats")
+        await db.user_profiles.insert_one(owner_profile)
+        await db.system_settings.update_one(
+            {"_id": "owner_identity"},
+            {"$set": {"user_id": owner_profile["id"], "username_hint": OWNER_USERNAME}},
+            upsert=True,
+        )
+        logger.info("Configured owner account initialized with null-read privacy")
 
-# Cryptic display values for Sirix-1's immeasurable stats
+# Null-read values reveal no rank, explanation, or supernatural implication.
 TRANSCENDENT_DISPLAYS = {
-    "values": ["∞", "???", "█████", "▓▓▓▓▓", "◈◈◈", "∿∿∿", "≋≋≋", "⧫⧫⧫", "░░░░░"],
+    "values": ["████", "▓▓▓▓", "∅", "NULL", "—"],
     "messages": [
-        "Your vision blurs...",
-        "The numbers shift and writhe...",
-        "Reality refuses to quantify this being...",
-        "Your mind cannot grasp what you see...",
-        "The value exists beyond mortal comprehension...",
-        "Static fills your perception...",
-        "The void stares back...",
-        "Attempting to measure the immeasurable causes pain...",
+        "No readable result.",
+        "Inspection returned null.",
+        "Record unavailable.",
     ],
     "scan_failures": [
-        {"error": "CRITICAL_OVERFLOW", "message": "Scan terminated - values exceed dimensional bounds"},
-        {"error": "PERCEPTION_NULLIFIED", "message": "Target exists outside scannable parameters"},
-        {"error": "REALITY_DISTORTION", "message": "Warning: Continued observation may cause permanent damage"},
-        {"error": "TRANSCENDENT_ENTITY", "message": "This being cannot be measured by mortal means"},
-        {"error": "VOID_INTERFERENCE", "message": "Connection to target severed by unknown force"},
+        {"error": "NULL_READ", "message": "Inspection returned no readable characters."},
+        {"error": "RECORD_BLOCKED", "message": "This record is unavailable to investigators."},
+        {"error": "NO_RESULT", "message": "No usable measurement was produced."},
     ]
 }
 
@@ -2259,30 +2398,21 @@ def get_scan_failure() -> dict:
         "distorted": True,
         "error_code": failure["error"],
         "message": failure["message"],
-        "visual_corruption": "".join(random.choices("░▒▓█◈⧫∿≋", k=20))
+        "visual_corruption": "".join(random.choices("█▓░∅", k=20))
     }
 
 def mask_sirix_profile(profile: dict, viewer_is_sirix: bool = False) -> dict:
-    """Mask Sirix-1's profile with transcendent/immeasurable values for external viewers"""
+    """Return real values to the owner and null-read characters to everyone else."""
     if viewer_is_sirix:
-        # Sirix-1 viewing themselves sees special infinite symbols
-        return {
-            **profile,
-            "xp": "∞",
-            "reputation": "∞", 
-            "contribution_points": "∞",
-            "resources": {"gold": "∞", "essence": "∞", "artifacts": "∞"},
-            "materials": {"wood": "∞", "stone": "∞", "iron": "∞", "crystal": "∞", "obsidian": "∞"},
-            "display_note": "Your power is beyond all measurement"
-        }
+        return profile
     
     # Others viewing Sirix-1 get distorted data
     import random
     return {
         "id": profile.get("id"),
         "username": profile.get("username"),
-        "display_name": "█▓░" + profile.get("display_name", "???") + "░▓█",
-        "permission_level": "▓▓▓ERROR▓▓▓",
+        "display_name": profile.get("display_name", "sirix_1"),
+        "permission_level": "████",
         "official_rank": get_transcendent_display(),
         "xp": get_transcendent_display(),
         "reputation": get_transcendent_display(),
@@ -2293,9 +2423,9 @@ def mask_sirix_profile(profile: dict, viewer_is_sirix: bool = False) -> dict:
             "artifacts": get_transcendent_display()
         },
         "materials": {k: get_transcendent_display() for k in ["wood", "stone", "iron", "crystal", "obsidian"]},
-        "warning": random.choice(TRANSCENDENT_DISPLAYS["messages"]),
-        "visual_corruption": "".join(random.choices("░▒▓█◈⧫∿≋▀▄", k=30)),
-        "is_transcendent": True
+        "notice": random.choice(TRANSCENDENT_DISPLAYS["messages"]),
+        "visual_corruption": "".join(random.choices("█▓░∅", k=30)),
+        "inspection_policy": "null_read"
     }
 
 async def initialize_npcs():
@@ -2457,10 +2587,20 @@ async def broadcast_to_location(location_id: str, message: dict, exclude_user: s
 
 @app.on_event("startup")
 async def startup_event():
-    await initialize_sirix_1()
+    await db.user_sessions.create_index("expires_at", expireAfterSeconds=0)
+    await db.websocket_tickets.create_index("expires_at", expireAfterSeconds=0)
+    await db.user_profiles.create_index("username", unique=True)
+    await db.user_profiles.create_index("email", unique=True, partialFilterExpression={"email": {"$type": "string"}})
+    await db.user_profiles.create_index("mailbox_address", unique=True, partialFilterExpression={"mailbox_address": {"$type": "string"}})
+    await db.mail_domains.create_index("domain", unique=True)
+    await db.mail_messages.create_index([("recipient_user_id", 1), ("created_at_epoch", -1)])
+    await db.mail_messages.create_index([("sender_user_id", 1), ("idempotency_key", 1)], unique=True)
+    await db.security_rate_limits.create_index("key", unique=True)
+    await db.security_rate_limits.create_index("expires_at", expireAfterSeconds=0)
+    await initialize_owner_account()
     await initialize_npcs()
     await initialize_ai_villagers()
-    logger.info("AI Village initialized with Sirix-1, NPCs, and AI Villagers")
+    logger.info("AI Village initialized with configured owner, NPCs, and AI Villagers")
 
 # ============ API Routes ============
 
@@ -2470,13 +2610,31 @@ async def root():
 
 # User Profile Routes
 class LoginRequest(BaseModel):
-    username: str
+    identifier: Optional[str] = None
+    username: Optional[str] = None
     password: str
 
+async def create_authenticated_session(user: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        token, claims = issue_session_token(user["id"], int(user.get("token_version", 0)), SESSION_SECRET, ttl_seconds=SESSION_TTL_SECONDS)
+    except SessionTokenError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    await db.user_sessions.insert_one({
+        "sid": claims["sid"], "user_id": user["id"], "issued_at": claims["iat"],
+        "expires_at_epoch": claims["exp"],
+        "expires_at": datetime.fromtimestamp(claims["exp"], timezone.utc),
+        "revoked": False,
+    })
+    return {"access_token": token, "token_type": "Bearer", "expires_in": SESSION_TTL_SECONDS}
+
 @api_router.post("/auth/login")
-async def login(request: LoginRequest):
+async def login(input: LoginRequest, request: Request):
     """Login with username and password"""
-    user = await db.user_profiles.find_one({"username": request.username.lower()}, {"_id": 0})
+    identifier = (input.identifier or input.username or "").strip().lower()
+    if not identifier:
+        raise HTTPException(status_code=422, detail="Username or email is required")
+    await enforce_rate_limit("login", f"{request_origin(request)}:{identifier}", 10, 300)
+    user = await db.user_profiles.find_one({"$or": [{"username": identifier}, {"email": identifier}]}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid username or password")
     
@@ -2484,44 +2642,66 @@ async def login(request: LoginRequest):
     if not stored_hash:
         raise HTTPException(status_code=401, detail="Account has no password set")
     
-    if not bcrypt.checkpw(request.password.encode('utf-8'), stored_hash.encode('utf-8')):
+    if not bcrypt.checkpw(input.password.encode('utf-8'), stored_hash.encode('utf-8')):
         raise HTTPException(status_code=401, detail="Invalid username or password")
     
     # Update last active
     await db.user_profiles.update_one(
-        {"username": request.username.lower()},
+        {"id": user["id"]},
         {"$set": {"last_active": datetime.now(timezone.utc).isoformat()}}
     )
     
     # Return user without password hash
     user.pop("hashed_password", None)
-    return {"status": "success", "user": user}
+    session = await create_authenticated_session(user)
+    return {"status": "success", "user": user, "session": session}
 
 class RegisterRequest(BaseModel):
     username: str
+    email: Optional[str] = None
     password: str
     display_name: str
 
 @api_router.post("/auth/register")
-async def register(request: RegisterRequest):
+async def register(input: RegisterRequest, request: Request):
     """Register a new user with username and password"""
-    # Check if username exists
-    existing = await db.user_profiles.find_one({"username": request.username.lower()})
+    try:
+        validate_secret(SESSION_SECRET)
+    except SessionTokenError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    await enforce_rate_limit("registration", request_origin(request), 5, 3600)
+    normalized_username = input.username.strip().lower()
+    if not re.fullmatch(r"[a-z0-9_]{3,32}", normalized_username):
+        raise HTTPException(status_code=422, detail="Username must be 3-32 letters, numbers, or underscores")
+    if not input.display_name.strip() or len(input.display_name.strip()) > 64:
+        raise HTTPException(status_code=422, detail="Display name must be 1-64 characters")
+    if len(input.password) < 12:
+        raise HTTPException(status_code=422, detail="Password must contain at least 12 characters")
+    normalized_email = input.email.strip().lower() if input.email else None
+    if normalized_email and not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", normalized_email):
+        raise HTTPException(status_code=422, detail="Email address is invalid")
+    existing = await db.user_profiles.find_one({"$or": [
+        {"username": normalized_username},
+        *([{"email": normalized_email}] if normalized_email else [])
+    ]})
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
     
-    # Prevent creating sirix_1 accounts
-    if request.username.lower() == "sirix_1":
+    # Retired and configured owner identities are provisioned server-side only.
+    if normalized_username in {"sirix_1", OWNER_USERNAME}:
         raise HTTPException(status_code=403, detail="Reserved username")
     
     # Hash password
-    hashed_password = bcrypt.hashpw(request.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    hashed_password = bcrypt.hashpw(input.password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
     
     user_id = str(uuid.uuid4())
     user_doc = {
         "id": user_id,
-        "username": request.username.lower(),
-        "display_name": request.display_name,
+        "username": normalized_username,
+        "email": normalized_email,
+        "display_name": input.display_name.strip(),
+        "mailbox_address": internal_mailbox(normalized_username),
+        "email_verified": False,
         "hashed_password": hashed_password,
         "permission_level": "basic",
         "official_rank": "citizen",
@@ -2540,14 +2720,133 @@ async def register(request: RegisterRequest):
         },
         "created_at": datetime.now(timezone.utc).isoformat(),
         "last_active": datetime.now(timezone.utc).isoformat(),
-        "is_immutable": False
+        "is_immutable": False,
+        "token_version": 0
     }
     
-    await db.user_profiles.insert_one(user_doc)
+    try:
+        await db.user_profiles.insert_one(user_doc)
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail="Username or email already exists")
     
     # Return user without password hash
-    user_doc.pop("hashed_password", None)
-    return {"status": "success", "user": user_doc}
+    public_user = {key: value for key, value in user_doc.items() if key not in {"_id", "hashed_password"}}
+    try:
+        session = await create_authenticated_session(public_user)
+    except Exception:
+        await db.user_profiles.delete_one({"id": user_id, "username": normalized_username})
+        raise
+    return {"status": "success", "user": public_user, "session": session}
+
+class WebSocketTicketRequest(BaseModel):
+    location_id: str
+
+@api_router.post("/auth/logout")
+async def logout(request: Request, actor: Dict[str, Any] = Depends(current_actor)):
+    authorization = request.headers.get("Authorization", "")
+    claims = verify_session_token(authorization[7:], SESSION_SECRET)
+    await db.user_sessions.update_one({"sid": claims["sid"], "user_id": actor["id"]}, {"$set": {"revoked": True, "revoked_at": int(time.time())}})
+    return {"status": "success"}
+
+@api_router.post("/auth/ws-ticket")
+async def create_websocket_ticket(input: WebSocketTicketRequest, actor: Dict[str, Any] = Depends(current_actor)):
+    await enforce_rate_limit("websocket_ticket", actor["id"], 30, 60)
+    raw_ticket = secrets.token_urlsafe(32)
+    ticket_hash = hashlib.sha256(raw_ticket.encode()).hexdigest()
+    expires_at_epoch = int(time.time()) + 60
+    await db.websocket_tickets.insert_one({
+        "ticket_hash": ticket_hash,
+        "user_id": actor["id"],
+        "location_id": input.location_id,
+        "expires_at_epoch": expires_at_epoch,
+        "expires_at": datetime.fromtimestamp(expires_at_epoch, timezone.utc),
+    })
+    return {"ticket": raw_ticket, "expires_in": 60}
+
+@api_router.get("/auth/session")
+async def get_authenticated_session(actor: Dict[str, Any] = Depends(current_actor)):
+    return {"user": actor}
+
+@api_router.get("/economy/status")
+async def get_economy_safety_status(actor: Dict[str, Any] = Depends(current_actor)):
+    return ECONOMY_POLICY.status(actor["id"])
+
+class MailSendRequest(BaseModel):
+    recipient: str = Field(min_length=5, max_length=320)
+    subject: str = Field(min_length=1, max_length=160)
+    body: str = Field(min_length=1, max_length=10000)
+    idempotency_key: str = Field(min_length=8, max_length=128)
+
+class DomainClaimRequest(BaseModel):
+    domain: str = Field(min_length=4, max_length=253)
+
+@api_router.get("/mailbox")
+async def get_mailbox(limit: int = 50, actor: Dict[str, Any] = Depends(current_actor)):
+    messages = await db.mail_messages.find({"recipient_user_id": actor["id"]}, {"_id": 0}).sort("created_at_epoch", -1).limit(min(max(limit, 1), 100)).to_list(100)
+    return {"address": actor.get("mailbox_address") or internal_mailbox(actor["username"]), "scope": "in_world_only", "messages": messages}
+
+@api_router.post("/mailbox/send")
+async def send_in_world_mail(input: MailSendRequest, actor: Dict[str, Any] = Depends(current_actor)):
+    now_epoch = int(time.time())
+    recipient_address = input.recipient.strip().lower()
+    prior = await db.mail_messages.find_one(
+        {"sender_user_id": actor["id"], "idempotency_key": input.idempotency_key},
+        {"_id": 0},
+    )
+    if prior:
+        if any(prior.get(field) != value for field, value in (
+            ("recipient", recipient_address), ("subject", input.subject.strip()), ("body", input.body)
+        )):
+            raise HTTPException(status_code=409, detail="Idempotency key was already used for different mail")
+        return {"status": "delivered", "message": prior, "replayed": True}
+    await enforce_rate_limit("in_world_mail", actor["id"], 10, 60)
+    recipient = await db.user_profiles.find_one({"mailbox_address": recipient_address}, {"_id": 0, "id": 1, "mailbox_address": 1})
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Recipient mailbox is not active in this world")
+    message = {
+        "id": str(uuid.uuid4()), "sender_user_id": actor["id"],
+        "sender": actor.get("mailbox_address") or internal_mailbox(actor["username"]),
+        "recipient_user_id": recipient["id"], "recipient": recipient_address,
+        "subject": input.subject.strip(), "body": input.body,
+        "idempotency_key": input.idempotency_key, "created_at_epoch": now_epoch,
+        "created_at": datetime.now(timezone.utc).isoformat(), "delivery_scope": "in_world_only",
+    }
+    try:
+        await db.mail_messages.insert_one(message)
+    except DuplicateKeyError:
+        prior = await db.mail_messages.find_one({"sender_user_id": actor["id"], "idempotency_key": input.idempotency_key}, {"_id": 0})
+        if not prior or any(prior.get(field) != message.get(field) for field in ("recipient", "subject", "body")):
+            raise HTTPException(status_code=409, detail="Idempotency key was already used for different mail")
+        return {"status": "delivered", "message": prior, "replayed": True}
+    message.pop("_id", None)
+    return {"status": "delivered", "message": message, "replayed": False}
+
+@api_router.get("/mail/domains")
+async def get_mail_domains(actor: Dict[str, Any] = Depends(current_actor)):
+    claims = await db.mail_domains.find({"owner_user_id": actor["id"]}, {"_id": 0, "verification_hash": 0}).to_list(100)
+    return {"domains": claims, "external_delivery_enabled": False}
+
+@api_router.post("/mail/domains/claim")
+async def claim_mail_domain(input: DomainClaimRequest, actor: Dict[str, Any] = Depends(current_actor)):
+    await enforce_rate_limit("mail_domain_claim", actor["id"], 5, 3600)
+    try:
+        domain = normalize_custom_domain(input.domain)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    verification_secret = secrets.token_urlsafe(24)
+    record = {
+        "id": str(uuid.uuid4()), "domain": domain, "owner_user_id": actor["id"],
+        "status": "pending_dns_verification", "verification_name": f"_eov-mail.{domain}",
+        "verification_hash": hashlib.sha256(verification_secret.encode()).hexdigest(),
+        "provider_adapter": None, "external_delivery_enabled": False,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        await db.mail_domains.insert_one(record)
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail="Domain is already claimed or pending verification")
+    public_record = {key: value for key, value in record.items() if key not in {"_id", "verification_hash"}}
+    return {"domain": public_record, "dns_txt_value": f"eov-verification={verification_secret}", "external_delivery_enabled": False}
 
 @api_router.post("/users", response_model=UserProfile)
 async def create_user(input: UserProfileCreate):
@@ -2569,26 +2868,32 @@ async def create_user(input: UserProfileCreate):
     return user
 
 @api_router.get("/users/{username}")
-async def get_user(username: str):
+async def get_user(username: str, actor: Dict[str, Any] = Depends(current_actor)):
     user = await db.user_profiles.find_one({"username": username.lower()}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    user.pop("hashed_password", None)
+    if not actor_can_access(actor, user["id"]):
+        return {key: user.get(key) for key in ["id", "username", "display_name", "official_rank", "reputation"]}
     return user
 
 @api_router.get("/users/id/{user_id}")
-async def get_user_by_id(user_id: str):
+async def get_user_by_id(user_id: str, actor: Dict[str, Any] = Depends(current_actor)):
+    if not actor_can_access(actor, user_id):
+        raise HTTPException(status_code=403, detail="Profile is not owned by this session")
     user = await db.user_profiles.find_one({"id": user_id}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    user.pop("hashed_password", None)
     return user
 
 # User Stats Tracking
 @api_router.post("/users/track-login")
-async def track_login(data: Dict[str, str]):
+async def track_login(data: Dict[str, str], actor: Dict[str, Any] = Depends(current_actor)):
     """Track user login for stats"""
-    user_id = data.get("user_id")
-    if not user_id:
-        raise HTTPException(status_code=400, detail="user_id required")
+    user_id = actor["id"]
+    if data.get("user_id") and data.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Supplied user_id does not match authenticated session")
     
     await db.user_profiles.update_one(
         {"id": user_id},
@@ -2608,8 +2913,10 @@ async def track_login(data: Dict[str, str]):
     return {"tracked": True}
 
 @api_router.get("/users/stats/{user_id}")
-async def get_user_stats(user_id: str):
+async def get_user_stats(user_id: str, actor: Dict[str, Any] = Depends(current_actor)):
     """Get user gameplay statistics"""
+    if not actor_can_access(actor, user_id):
+        raise HTTPException(status_code=403, detail="Stats are not owned by this session")
     user = await db.user_profiles.find_one({"id": user_id}, {"_id": 0, "stats": 1})
     
     # Get additional stats from other collections
@@ -2631,7 +2938,9 @@ async def get_user_stats(user_id: str):
     }
 
 @api_router.put("/users/{user_id}/resources")
-async def update_user_resources(user_id: str, resources: Dict[str, int]):
+async def update_user_resources(user_id: str, resources: Dict[str, int], actor: Dict[str, Any] = Depends(current_actor)):
+    if not actor_can_access(actor, user_id):
+        raise HTTPException(status_code=403, detail="Resources are not owned by this session")
     user = await db.user_profiles.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -2646,7 +2955,9 @@ async def update_user_resources(user_id: str, resources: Dict[str, int]):
 
 # Character Routes
 @api_router.post("/characters", response_model=Character)
-async def create_character(input: CharacterCreate):
+async def create_character(input: CharacterCreate, actor: Dict[str, Any] = Depends(current_actor)):
+    if input.user_id != actor["id"]:
+        raise HTTPException(status_code=403, detail="Character owner must match authenticated session")
     char_data = input.model_dump()
     # If model is provided, merge with defaults
     if char_data.get("model"):
@@ -2683,7 +2994,9 @@ async def create_character(input: CharacterCreate):
     return character
 
 @api_router.get("/characters/{user_id}", response_model=List[Character])
-async def get_user_characters(user_id: str):
+async def get_user_characters(user_id: str, actor: Dict[str, Any] = Depends(current_actor)):
+    if not actor_can_access(actor, user_id):
+        raise HTTPException(status_code=403, detail="Characters are not owned by this session")
     characters = await db.characters.find({"user_id": user_id}, {"_id": 0}).to_list(100)
     for char in characters:
         if isinstance(char.get('created_at'), str):
@@ -2691,11 +3004,8 @@ async def get_user_characters(user_id: str):
     return characters
 
 @api_router.get("/character/{character_id}")
-async def get_character(character_id: str):
-    character = await db.characters.find_one({"id": character_id}, {"_id": 0})
-    if not character:
-        raise HTTPException(status_code=404, detail="Character not found")
-    return character
+async def get_character(character_id: str, actor: Dict[str, Any] = Depends(current_actor)):
+    return await require_character_owner(actor, character_id)
 
 @api_router.put("/character/{character_id}")
 async def update_character(character_id: str, update_data: dict):
@@ -5658,22 +5968,20 @@ async def get_villager_dialogue(villager_id: str, player_id: str, dialogue_type:
 
 # ============ AI Helper Device Access Routes (Test Feature - Sirix-1 Mobile Only) ============
 
-async def verify_sirix_access(user_id: str) -> bool:
-    """Verify the user is Sirix-1 for test features"""
-    if user_id != "sirix_1_supreme":
-        return False
-    user = await db.user_profiles.find_one({"id": user_id}, {"_id": 0})
-    return user and user.get("is_transcendent", False)
+async def verify_owner_access(actor: Dict[str, Any]) -> bool:
+    """Owner capabilities are derived from the authenticated server session."""
+    binding = await db.system_settings.find_one({"_id": "owner_identity"}, {"user_id": 1})
+    return is_bound_owner(actor, (binding or {}).get("user_id"))
 
 @api_router.get("/ai-helper/capabilities")
-async def get_ai_helper_capabilities(user_id: str, is_mobile: bool = False):
-    """Get available AI helper capabilities - returns full list for Sirix-1, limited for others"""
-    is_sirix = await verify_sirix_access(user_id)
+async def get_ai_helper_capabilities(is_mobile: bool = False, actor: Dict[str, Any] = Depends(current_actor)):
+    """Get private owner helper capabilities from the authenticated session."""
+    is_sirix = await verify_owner_access(actor)
     
     if not is_sirix:
         return {
             "available": False,
-            "reason": "AI Helper device access is a test feature currently restricted to Sirix-1",
+            "reason": "AI Helper device access is restricted to the configured owner account",
             "capabilities": {}
         }
     
@@ -5693,14 +6001,16 @@ async def get_ai_helper_capabilities(user_id: str, is_mobile: bool = False):
     }
 
 @api_router.post("/ai-helper/request-access")
-async def request_device_access(request: DeviceAccessRequest):
+async def request_device_access(request: DeviceAccessRequest, actor: Dict[str, Any] = Depends(current_actor)):
     """Request AI helper access to a device capability - Sirix-1 mobile only"""
-    is_sirix = await verify_sirix_access(request.user_id)
+    if request.user_id and request.user_id != actor["id"]:
+        raise HTTPException(status_code=403, detail="Supplied user ID does not match the authenticated session")
+    is_sirix = await verify_owner_access(actor)
     
     if not is_sirix:
         raise HTTPException(
             status_code=403, 
-            detail="AI Helper device access is a test feature restricted to Sirix-1"
+            detail="AI Helper device access is restricted to the configured owner account"
         )
     
     capability = AI_HELPER_CAPABILITIES.get(request.capability)
@@ -5729,14 +6039,16 @@ async def request_device_access(request: DeviceAccessRequest):
     }
 
 @api_router.post("/ai-helper/execute")
-async def execute_ai_helper_command(command: AIHelperCommand):
+async def execute_ai_helper_command(command: AIHelperCommand, actor: Dict[str, Any] = Depends(current_actor)):
     """Execute an AI helper command - Sirix-1 only"""
-    is_sirix = await verify_sirix_access(command.user_id)
+    if command.user_id and command.user_id != actor["id"]:
+        raise HTTPException(status_code=403, detail="Supplied user ID does not match the authenticated session")
+    is_sirix = await verify_owner_access(actor)
     
     if not is_sirix:
         raise HTTPException(
             status_code=403,
-            detail="AI Helper commands are restricted to Sirix-1"
+            detail="AI Helper commands are restricted to the configured owner account"
         )
     
     # Handle different command types
@@ -5806,9 +6118,9 @@ async def execute_ai_helper_command(command: AIHelperCommand):
         raise HTTPException(status_code=400, detail=f"Unknown command type: {command.command_type}")
 
 @api_router.get("/ai-helper/status")
-async def get_ai_helper_status(user_id: str):
+async def get_ai_helper_status(actor: Dict[str, Any] = Depends(current_actor)):
     """Check AI helper availability and current status"""
-    is_sirix = await verify_sirix_access(user_id)
+    is_sirix = await verify_owner_access(actor)
     
     return {
         "enabled": is_sirix,
@@ -5822,14 +6134,14 @@ async def get_ai_helper_status(user_id: str):
 # ============ Scan/View Profile Routes (with Sirix-1 Protection) ============
 
 @api_router.get("/scan/{target_id}")
-async def scan_entity(target_id: str, scanner_id: str):
+async def scan_entity(target_id: str, actor: Dict[str, Any] = Depends(current_actor)):
     """Scan/view another player or NPC - Sirix-1 causes distortion"""
     import random
     
     # Check if target is Sirix-1
     target = await db.user_profiles.find_one({"id": target_id}, {"_id": 0})
     
-    if target and target.get("is_transcendent"):
+    if target and target.get("inspection_policy") == "null_read":
         # Scanning Sirix-1 returns distorted data
         return get_scan_failure()
     
@@ -5874,7 +6186,7 @@ async def scan_entity(target_id: str, scanner_id: str):
     raise HTTPException(status_code=404, detail="Entity not found")
 
 @api_router.get("/profile/view/{user_id}")
-async def view_profile(user_id: str, viewer_id: Optional[str] = None):
+async def view_profile(user_id: str, actor: Dict[str, Any] = Depends(current_actor)):
     """View a user's profile - Sirix-1 appears distorted to others"""
     user = await db.user_profiles.find_one({"id": user_id}, {"_id": 0})
     if not user:
@@ -5883,8 +6195,8 @@ async def view_profile(user_id: str, viewer_id: Optional[str] = None):
     user.pop("hashed_password", None)
     
     # Check if viewing Sirix-1
-    if user.get("is_transcendent"):
-        viewer_is_sirix = viewer_id == "sirix_1_supreme"
+    if user.get("inspection_policy") == "null_read":
+        viewer_is_sirix = actor["id"] == user["id"] and actor.get("is_owner") is True
         return mask_sirix_profile(user, viewer_is_sirix)
     
     return user
@@ -6527,14 +6839,6 @@ async def check_location_discovery(request: LocationDiscoveryRequest):
         }
     
     # Check if Sirix-1 (has access to all)
-    if user.get("is_transcendent") or user.get("permission_level") == "sirix_1":
-        return {
-            "discovered": False,
-            "all_accessible": True,
-            "accessible_locations": all_locations,
-            "message": "Transcendent being - all areas accessible"
-        }
-    
     discovery_chance = 0.0
     discovery_method = ""
     
@@ -6625,26 +6929,34 @@ async def get_discovered_locations(user_id: str):
     ]
     
     discovered = user.get("discovered_locations", ["village_square"])
-    is_transcendent = user.get("is_transcendent") or user.get("permission_level") == "sirix_1"
+    has_discovery_bypass = False
     
     result = []
     for loc in all_locations:
         result.append({
             **loc,
-            "discovered": loc["id"] in discovered or is_transcendent,
-            "accessible": loc["id"] in discovered or is_transcendent
+            "discovered": loc["id"] in discovered,
+            "accessible": loc["id"] in discovered
         })
     
     return {
         "locations": result,
-        "discovered_count": len(discovered) if not is_transcendent else len(all_locations),
+        "discovered_count": len(discovered),
         "total_count": len(all_locations),
-        "all_accessible": is_transcendent
+        "all_accessible": has_discovery_bypass
     }
 
 # WebSocket for real-time multiplayer
 @app.websocket("/ws/{location_id}/{user_id}")
-async def websocket_endpoint(websocket: WebSocket, location_id: str, user_id: str):
+async def websocket_endpoint(websocket: WebSocket, location_id: str, user_id: str, ticket: Optional[str] = None):
+    if not ticket:
+        await websocket.close(code=4401)
+        return
+    ticket_hash = hashlib.sha256(ticket.encode()).hexdigest()
+    authenticated_ticket = await db.websocket_tickets.find_one_and_delete({"ticket_hash": ticket_hash, "user_id": user_id, "location_id": location_id, "expires_at_epoch": {"$gt": int(time.time())}})
+    if not authenticated_ticket:
+        await websocket.close(code=4401)
+        return
     await websocket.accept()
     
     if location_id not in location_connections:
@@ -6728,7 +7040,7 @@ async def websocket_endpoint(websocket: WebSocket, location_id: str, user_id: st
                         "id": str(uuid.uuid4()),
                         "location_id": location_id,
                         "sender_id": user_id,
-                        "sender_name": data.get("sender_name", username),
+                        "sender_name": username,
                         "sender_type": "player",
                         "content": content,
                         "message_type": data.get("message_type", "chat"),
@@ -6901,9 +7213,9 @@ except ImportError as e:
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=[origin.strip() for origin in os.environ.get('CORS_ORIGINS', 'http://localhost:3000,null').split(',') if origin.strip() and origin.strip() != '*'],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 @app.on_event("shutdown")

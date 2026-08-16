@@ -12,10 +12,9 @@ import {
   Crown, Shield, Flame, Eye, Moon, Star, Globe, ArrowLeft, History
 } from 'lucide-react';
 import { toast } from 'sonner';
-import axios from 'axios';
 import { pushNavHistory } from '@/components/GameNavigation';
-
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+import BuildWatermark from '@/components/BuildWatermark';
+import { fetchWorldHealth, fetchWorldSnapshot, submitWorldAction, worldServerConfigured, worldServerUrl } from '@/lib/worldServer';
 
 // NPC Avatar configurations with visual appearances
 const NPC_AVATARS = {
@@ -55,10 +54,48 @@ const MILESTONES = [
 // All locations are always open in Story/Chat mode
 const ALL_LOCATIONS_OPEN = true;
 
+const STORY_SPEECH_RULE = 'Speech may influence memory, trust, rumor, coordination, and later decisions. Physical terrain changes require physical action.';
+
+function formatUptime(totalSeconds = 0) {
+  const seconds = Math.max(0, Number(totalSeconds) || 0);
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  return [days ? `${days}d` : null, (days || hours) ? `${hours}h` : null, `${minutes}m`].filter(Boolean).join(' ');
+}
+
+function residentsNearActor(snapshot, actorId, radius = 4) {
+  const actor = snapshot?.state?.players?.[actorId];
+  if (!Array.isArray(actor?.location)) return [];
+  return Object.values(snapshot.state?.npcs || {})
+    .filter((resident) => Array.isArray(resident.location)
+      && Math.abs(resident.location[0] - actor.location[0]) + Math.abs(resident.location[1] - actor.location[1]) <= radius)
+    .sort((left, right) => {
+      const leftDistance = Math.abs(left.location[0] - actor.location[0]) + Math.abs(left.location[1] - actor.location[1]);
+      const rightDistance = Math.abs(right.location[0] - actor.location[0]) + Math.abs(right.location[1] - actor.location[1]);
+      return leftDistance - rightDistance || left.id.localeCompare(right.id);
+    });
+}
+
+const STORY_LOCATIONS = [
+  { id: 'village_square', name: 'Village Square', description: 'The civic heart of the settlement.', atmosphere: 'Footsteps, tools, and low conversation cross the square.', npcs: ['Elder Morvain', 'Lyra the Wanderer'], available_actions: ['Observe the square', 'Inspect the notice board', 'Ask who needs help'] },
+  { id: 'oracle_sanctum', name: 'Oracle Sanctum', description: 'A quiet chamber built for difficult questions.', atmosphere: 'Reflected light shifts across old instruments.', npcs: ['Oracle Veythra'], available_actions: ['Inspect the instruments', 'Record an observation', 'Ask about a hypothesis'] },
+  { id: 'the_forge', name: 'The Forge', description: 'Heat and repeated work give raw material a useful form.', atmosphere: 'Measured hammer blows answer the furnace.', npcs: ['Kael Ironbrand'], available_actions: ['Inspect the work order', 'Check the material stock', 'Offer verified labor'] },
+  { id: 'ancient_library', name: 'Ancient Library', description: 'Research and testimony are kept for later verification.', atmosphere: 'Paper, dust, and cooling machinery mute the room.', npcs: ['Archivist Nyx'], available_actions: ['Review a record', 'Compare two sources', 'Submit a finding'] },
+  { id: 'wanderers_rest', name: "Wanderer's Rest", description: 'Travelers exchange news without guaranteeing its truth.', atmosphere: 'Conversation rises and fades around the common tables.', npcs: ['Innkeeper Mara'], available_actions: ['Listen', 'Ask for local work', 'Check the public ledger'] },
+  { id: 'shadow_grove', name: 'Shadow Grove', description: 'An unmanaged edge where observation matters more than rumor.', atmosphere: 'Branches move above tracks pressed into damp earth.', npcs: ['The Grove Keeper'], available_actions: ['Study the tracks', 'Collect a sample', 'Return without disturbing it'] },
+  { id: 'watchtower', name: 'Watchtower', description: 'Guards record what can be witnessed from the settlement boundary.', atmosphere: 'Wind crosses stone and the distant road remains visible.', npcs: ['Sentinel Vex'], available_actions: ['Survey the road', 'Read the guard log', 'Report an incident'] },
+  { id: 'outer_realms', name: 'Outer Realms', description: 'Unsettled territory beyond reliable civic coverage.', atmosphere: 'No report from here is trusted without a surviving witness or record.', npcs: ['The Hooded Stranger'], available_actions: ['Observe from cover', 'Mark a route', 'Turn back'] },
+];
+
 const VillageExplorer = () => {
   const navigate = useNavigate();
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const seenWorldMessageIds = useRef(new Set());
+  const storyInitialized = useRef(false);
+  const storageOwner = localStorage.getItem('userId') || 'anonymous';
+  const authorityActorId = localStorage.getItem('eovNetworkUserId') || storageOwner;
   
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [character, setCharacter] = useState(null);
@@ -67,7 +104,6 @@ const VillageExplorer = () => {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [conversationId, setConversationId] = useState(null);
   const [isThinking, setIsThinking] = useState(false);
   const [activeConversationId, setActiveConversationId] = useState(null);  // For conversation history
   
@@ -78,11 +114,17 @@ const VillageExplorer = () => {
   const [conversationCount, setConversationCount] = useState(0);
   const [visitedLocations, setVisitedLocations] = useState(new Set(['village_square']));
   const [worldNews, setWorldNews] = useState([]);
+  const [serverSnapshot, setServerSnapshot] = useState(null);
+  const [serverStatus, setServerStatus] = useState(null);
+  const [serverError, setServerError] = useState(null);
+  const [selectedResidentId, setSelectedResidentId] = useState('');
 
   // Track navigation
   useEffect(() => {
     pushNavHistory('/village');
     localStorage.setItem('gameMode', 'story');
+    const userId = localStorage.getItem('userId');
+    if (userId) localStorage.setItem(`eovLastRoute:${userId}`, '/village');
     
     // Check for resume conversation
     const resumeData = localStorage.getItem('resumeConversation');
@@ -162,43 +204,69 @@ const VillageExplorer = () => {
     saveProgression(newXP, conversationCount, visitedLocations);
   };
 
-  // Load character and locations on mount
+  // Story Mode is another perspective on the authoritative persistent world.
   useEffect(() => {
-    const loadData = async () => {
-      const charId = localStorage.getItem('currentCharacterId');
-      if (!charId) {
-        toast.error('No character found. Please create one first.');
-        navigate('/create-character');
-        return;
-      }
+    const charId = localStorage.getItem('currentCharacterId');
+    if (!charId) {
+      toast.error('No character found. Please create one first.');
+      navigate('/create-character');
+      return undefined;
+    }
 
+    const startLoc = STORY_LOCATIONS[0];
+    setCharacter({ id: charId, name: localStorage.getItem('characterName') || 'Traveler', current_location: 'village_square', health: 100, max_health: 100, traits: ['Witness', 'Builder'] });
+    setLocations(STORY_LOCATIONS);
+    setCurrentLocation(startLoc);
+
+    if (!worldServerConfigured) {
+      setServerError('Persistent world server is not configured. Set its address in Game Settings.');
+      setMessages([{ role: 'narrator', content: 'The story perspective is waiting for the persistent world. No offline conversation has been substituted.' }]);
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    let active = true;
+
+    const appendAudibleWorldMessages = (snapshot) => {
+      const incoming = (snapshot.state?.communications?.messages || [])
+        .filter((message) => message.kind !== 'player' && !seenWorldMessageIds.current.has(message.id))
+        .map((message) => {
+          seenWorldMessageIds.current.add(message.id);
+          return { role: message.kind === 'autonomous' ? 'ambient' : 'assistant', speaker: message.speaker, content: message.content, eventId: message.id };
+        });
+      if (incoming.length) setMessages((current) => [...current, ...incoming]);
+    };
+
+    const synchronize = async () => {
       try {
-        const [charRes, locRes, newsRes] = await Promise.all([
-          axios.get(`${API}/character/${charId}`),
-          axios.get(`${API}/locations`),
-          axios.get(`${API}/news`).catch(() => ({ data: { headlines: [] } }))
+        let [snapshot, health] = await Promise.all([
+          fetchWorldSnapshot(undefined, controller.signal),
+          fetchWorldHealth(controller.signal),
         ]);
-        
-        setCharacter(charRes.data);
-        setLocations(locRes.data);
-        setWorldNews(newsRes.data.headlines || []);
-        
-        const startLoc = locRes.data.find(l => l.id === charRes.data.current_location) || locRes.data[0];
-        setCurrentLocation(startLoc);
-        
-        // Initial narrative
-        setMessages([{
-          role: 'narrator',
-          content: `You find yourself in ${startLoc.name}. ${startLoc.description}\n\n${startLoc.atmosphere}`
-        }]);
+        if (!snapshot.state?.players?.[authorityActorId]) {
+          await submitWorldAction({ type: 'join', location: [8, 5] }, snapshot.revision);
+          snapshot = await fetchWorldSnapshot(undefined, controller.signal);
+        }
+        if (!active) return;
+        setServerSnapshot(snapshot);
+        setServerStatus(health);
+        setServerError(null);
+        if (!storyInitialized.current) {
+          storyInitialized.current = true;
+          setMessages([{ role: 'narrator', content: `You enter ${startLoc.name} in ${snapshot.state?.name || "Founders' Settlement"}. ${startLoc.description}\n\n${startLoc.atmosphere}` }]);
+        }
+        appendAudibleWorldMessages(snapshot);
       } catch (error) {
-        console.error('Failed to load data:', error);
-        toast.error('Failed to connect to The Echoes');
+        if (!active || error.name === 'AbortError') return;
+        setServerSnapshot(null);
+        setServerError(error.message);
       }
     };
 
-    loadData();
-  }, [navigate]);
+    synchronize();
+    const timer = window.setInterval(synchronize, 3000);
+    return () => { active = false; controller.abort(); window.clearInterval(timer); };
+  }, [authorityActorId, navigate]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -218,25 +286,14 @@ const VillageExplorer = () => {
     }
     
     setCurrentLocation(location);
-    setConversationId(null);
     
     // Track visited locations
     if (!visitedLocations.has(location.id)) {
       const newVisited = new Set([...visitedLocations, location.id]);
       setVisitedLocations(newVisited);
-      awardXP(20, 'New location discovered');
-      saveProgression(playerXP + 20, conversationCount, newVisited);
+      saveProgression(playerXP, conversationCount, newVisited);
     }
     
-    // Update character location
-    if (character) {
-      try {
-        await axios.put(`${API}/character/${character.id}/location?location_id=${location.id}`);
-      } catch (error) {
-        console.error('Failed to update location:', error);
-      }
-    }
-
     // Add transition narrative
     setMessages(prev => [...prev, {
       role: 'narrator',
@@ -248,6 +305,10 @@ const VillageExplorer = () => {
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading || !character || !currentLocation) return;
+    if (Number(character.health) <= 0) {
+      toast.error('Dead men tell no tales. This point of view is archived.');
+      return;
+    }
 
     const userMsg = inputMessage.trim();
     setInputMessage('');
@@ -255,66 +316,29 @@ const VillageExplorer = () => {
     setIsThinking(true);
     setIsLoading(true);
 
-    const userId = localStorage.getItem('userId');
-
     try {
-      // Create conversation history entry if not exists
-      if (!activeConversationId) {
-        try {
-          const convRes = await axios.post(`${API}/conversations/create`, {
-            player_id: userId,
-            character_id: character.id,
-            npc_id: currentLocation.npcs?.[0] || null,
-            npc_name: currentLocation.npcs?.[0] || 'Village',
-            location_id: currentLocation.id,
-            location_name: currentLocation.name
-          });
-          if (convRes.data.conversation_id) {
-            setActiveConversationId(convRes.data.conversation_id);
-          }
-        } catch (convErr) {
-          console.log('Could not create conversation history:', convErr);
-        }
+      if (!worldServerConfigured || !serverSnapshot) throw new Error('Persistent world is not connected');
+      const response = await submitWorldAction({ type: 'speak', content: userMsg, ...(selectedResidentId ? { target_id: selectedResidentId } : {}) }, serverSnapshot.revision);
+      const result = response.result || response;
+      if (!result.accepted) throw new Error(result.reason || 'Speech was not accepted by the persistent world');
+      const replies = result.replies || [];
+      replies.forEach((reply) => seenWorldMessageIds.current.add(reply.id));
+      if (replies.length) {
+        setMessages((current) => [...current, ...replies.map((reply) => ({ role: 'assistant', speaker: reply.speaker, content: reply.content, eventId: reply.id }))]);
+      } else {
+        setMessages((current) => [...current, { role: 'narrator', content: 'Your words are audible, but no nearby resident answers at this moment.' }]);
       }
-
-      const response = await axios.post(`${API}/chat`, {
-        character_id: character.id,
-        location_id: currentLocation.id,
-        message: userMsg,
-        conversation_id: conversationId
-      });
-
-      setConversationId(response.data.conversation_id);
-      const assistantMsg = response.data.response;
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: assistantMsg 
-      }]);
+      setServerSnapshot(await fetchWorldSnapshot());
       
-      // Save messages to conversation history
-      if (activeConversationId) {
-        try {
-          await axios.post(`${API}/conversations/${activeConversationId}/messages/bulk`, [
-            { role: 'user', content: userMsg },
-            { role: 'assistant', content: assistantMsg }
-          ]);
-        } catch (historyErr) {
-          console.log('Could not save to history:', historyErr);
-        }
-      }
-      
-      // Award XP for conversation
+      // Conversation accumulates social influence but cannot directly mutate geography.
       const newConvCount = conversationCount + 1;
       setConversationCount(newConvCount);
-      awardXP(10, 'Conversation');
-      saveProgression(playerXP + 10, newConvCount, visitedLocations);
+      saveProgression(playerXP, newConvCount, visitedLocations);
     } catch (error) {
       console.error('Chat error:', error);
-      toast.error('The mists interfere with your words...');
-      setMessages(prev => [...prev, { 
-        role: 'narrator', 
-        content: '*The air shimmers, your words lost in the ethereal void. Try speaking again.*' 
-      }]);
+      setServerError(error.message);
+      toast.error('The persistent world did not receive your words.');
+      setMessages((current) => [...current, { role: 'narrator', content: `Connection interrupted: ${error.message}. No reply was invented.` }]);
     } finally {
       setIsThinking(false);
       setIsLoading(false);
@@ -329,12 +353,16 @@ const VillageExplorer = () => {
     }
   };
 
+  const audibleResidents = residentsNearActor(serverSnapshot, authorityActorId);
+  const displayedResidents = serverSnapshot ? audibleResidents.map((resident) => resident.name) : [];
+
   if (!character || !currentLocation) {
     return (
       <div className="min-h-screen bg-obsidian flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-8 h-8 text-gold animate-spin mx-auto mb-4" />
           <p className="font-manrope text-muted-foreground">Entering The Echoes...</p>
+          <BuildWatermark />
         </div>
       </div>
     );
@@ -413,6 +441,7 @@ const VillageExplorer = () => {
                   // All locations are unlocked in Story/Chat mode
                   const isUnlocked = ALL_LOCATIONS_OPEN || unlockedLocations.includes(location.id);
                   const isCurrentLocation = currentLocation?.id === location.id;
+                  const residents = isCurrentLocation ? displayedResidents : [];
                   
                   return (
                     <button
@@ -443,9 +472,9 @@ const VillageExplorer = () => {
                               </Badge>
                             )}
                           </div>
-                          {isUnlocked && location.npcs.length > 0 && (
+                          {isUnlocked && residents.length > 0 && (
                             <div className="flex items-center gap-1 mt-2">
-                              {location.npcs.slice(0, 3).map((npc, i) => {
+                              {residents.slice(0, 3).map((npc, i) => {
                                 const avatar = NPC_AVATARS[npc];
                                 const Icon = avatar?.icon || User;
                                 return (
@@ -463,7 +492,7 @@ const VillageExplorer = () => {
                                 );
                               })}
                               <span className="font-manrope text-xs text-muted-foreground ml-1">
-                                {location.npcs.length} present
+                                {residents.length} present
                               </span>
                             </div>
                           )}
@@ -581,7 +610,7 @@ const VillageExplorer = () => {
           <div className="text-center">
             <h1 className="font-cinzel text-lg text-gold">{currentLocation.name}</h1>
             <p className="font-mono text-xs text-muted-foreground">
-              {currentLocation.npcs.length} souls present
+              {displayedResidents.length} residents in audible range
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -604,6 +633,20 @@ const VillageExplorer = () => {
           </div>
         </header>
 
+        <div
+          role="status"
+          aria-label="Persistent world status"
+          className={`flex flex-wrap items-center justify-center gap-x-4 gap-y-1 border-b px-4 py-2 font-mono text-xs ${serverSnapshot ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-300' : 'border-amber-500/30 bg-amber-500/5 text-amber-200'}`}
+        >
+          <strong>{serverSnapshot ? 'Persistent world connected' : 'Persistent world disconnected'}</strong>
+          {serverSnapshot && <span>Tick {serverSnapshot.tick}</span>}
+          {serverStatus && <span>{serverStatus.tick_seconds}s per tick</span>}
+          {serverStatus && <span>Uptime {formatUptime(serverStatus.uptime_seconds)}</span>}
+          {serverSnapshot && <span>Revision {serverSnapshot.revision}</span>}
+          {!serverSnapshot && <span>{serverError || 'Connecting…'}</span>}
+          <span className="hidden lg:inline text-muted-foreground">{worldServerUrl}</span>
+        </div>
+
         {/* Location Image */}
         <div className="relative h-48 flex-shrink-0 overflow-hidden">
           <div 
@@ -616,9 +659,9 @@ const VillageExplorer = () => {
           </div>
           
           {/* NPCs Present Overlay */}
-          {currentLocation.npcs.length > 0 && (
+          {displayedResidents.length > 0 && (
             <div className="absolute top-4 right-4 flex flex-col gap-2">
-              {currentLocation.npcs.map((npc, i) => {
+              {displayedResidents.map((npc, i) => {
                 const avatar = NPC_AVATARS[npc];
                 const Icon = avatar?.icon || User;
                 return (
@@ -650,6 +693,9 @@ const VillageExplorer = () => {
         {/* Chat Area */}
         <ScrollArea className="flex-1 p-6 chat-scroll">
           <div className="max-w-3xl mx-auto space-y-6">
+            <div className="border-l-2 border-gold/60 bg-gold/5 p-3 text-xs text-muted-foreground">
+              {STORY_SPEECH_RULE}
+            </div>
             {messages.map((msg, i) => (
               <div 
                 key={i} 
@@ -664,6 +710,13 @@ const VillageExplorer = () => {
                       {msg.content}
                     </p>
                   </Card>
+                ) : msg.role === 'ambient' ? (
+                  <Card className="border-cyan-500/20 bg-cyan-500/5 rounded-sm p-3">
+                    <p className="font-manrope text-sm text-foreground/80"><span className="mr-2 font-cinzel text-cyan-300">{msg.speaker}:</span>{msg.content}</p>
+                    <small className="mt-1 block font-mono text-[9px] text-muted-foreground">AUDIBLE · autonomous local chatter</small>
+                  </Card>
+                ) : msg.role === 'distant' ? (
+                  <p className="px-3 font-manrope text-xs italic text-muted-foreground/60">{msg.content}</p>
                 ) : msg.role === 'user' ? (
                   <div className="max-w-[80%]">
                     <Card className="bg-gold/10 border-gold/30 rounded-sm p-4">
@@ -676,6 +729,7 @@ const VillageExplorer = () => {
                 ) : (
                   <Card className="bg-surface/80 border-border/50 rounded-sm p-4">
                     <p className="font-manrope text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
+                      {msg.speaker && <span className="mr-2 font-cinzel text-slate-blue">{msg.speaker}:</span>}
                       {msg.content}
                     </p>
                   </Card>
@@ -701,6 +755,19 @@ const VillageExplorer = () => {
         {/* Input Area */}
         <div className="flex-shrink-0 border-t border-border/30 bg-surface/50 backdrop-blur-sm p-4">
           <div className="max-w-3xl mx-auto">
+            <label className="mb-2 flex items-center gap-3 font-mono text-xs text-muted-foreground">
+              <span>Directed Samaritan</span>
+              <select
+                aria-label="Directed Samaritan"
+                value={selectedResidentId}
+                onChange={(event) => setSelectedResidentId(event.target.value)}
+                className="min-w-48 rounded-sm border border-border/50 bg-obsidian px-3 py-2 text-foreground"
+              >
+                <option value="">Speak generally</option>
+                {audibleResidents.map((resident) => <option key={resident.id} value={resident.id}>{resident.name}</option>)}
+              </select>
+              <span>{selectedResidentId ? 'They may answer according to their own circumstances.' : 'Nearby residents may hear you; nobody is being directly addressed.'}</span>
+            </label>
             {/* Main Input Row */}
             <div className="flex gap-3">
               <Input
