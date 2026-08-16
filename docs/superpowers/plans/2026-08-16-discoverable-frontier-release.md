@@ -172,8 +172,9 @@ test('frontier projection never exposes hidden substrate', () => {
 - Script produces `outputs/EoV-Alpha33-Windows-x64.zip`, `outputs/EoV-Alpha33-Persistent-Server.zip`, and `outputs/EoV-Alpha33-SHA256.txt` from tracked source plus generated builds.
 
 - [ ] **Step 1: Add a failing package-manifest verification mode asserting required client/server files and forbidden secret/database patterns**
+- [ ] **Step 1a: Add a failing version-consistency test that discovers user-visible version surfaces and rejects Alpha 32, `v0.1.0`, or any identifier not derived from `0.3.0-alpha.33`**
 - [ ] **Step 2: Run verification and confirm failure because Alpha 33 artifacts do not exist**
-- [ ] **Step 3: Set version `0.3.0-alpha.33`, document implemented/simulated/deferred behavior, and implement deterministic staging, archive creation, and checksums**
+- [ ] **Step 3: Set the single canonical version to `0.3.0-alpha.33`, update every watermarked display from that source, document implemented/simulated/deferred behavior, and implement deterministic staging, archive creation, and checksums**
 - [ ] **Step 4: Run Python action, competency, security, society, and persistent suites; run Node tests and the production build**
 - [ ] **Step 5: Package the Windows client and persistent server, verify each archive from a clean extraction, and launch the server health check**
 - [ ] **Step 6: Inspect archive manifests for secrets, credentials, saves, databases, payment activation, and stale binaries**

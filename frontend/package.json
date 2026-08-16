@@ -1,7 +1,7 @@
 {
   "name": "echoes-of-virtuality",
   "productName": "Echoes of Virtuality",
-  "version": "0.3.0-alpha.32",
+  "version": "0.3.0-alpha.33",
   "private": true,
   "homepage": ".",
   "main": "electron/main.cjs",
@@ -62,7 +62,7 @@
     "start": "craco start",
     "build": "craco build",
     "test": "craco test",
-    "test:desktop-store": "node --test electron/auth.test.cjs electron/store.test.cjs electron/world-simulation.test.cjs electron/authoritative-world-view.test.cjs electron/frontier-view.test.cjs",
+    "test:desktop-store": "node --test electron/auth.test.cjs electron/store.test.cjs electron/world-simulation.test.cjs electron/authoritative-world-view.test.cjs electron/frontier-view.test.cjs electron/version-consistency.test.cjs",
     "test:e2e": "playwright test",
     "desktop:start": "pnpm run build && electron .",
     "desktop:package": "pnpm run build && node electron/prepare-package.cjs && electron-packager desktop-stage \"Echoes of Virtuality\" --platform=win32 --arch=x64 --out=out --overwrite --asar --executable-name=EchoesOfVirtuality"
