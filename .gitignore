@@ -106,3 +106,6 @@ credentials.json
 *.pem
 *.key
 .credentials
+
+# Isolated feature worktrees
+.worktrees/
