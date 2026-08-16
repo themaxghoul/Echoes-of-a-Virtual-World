@@ -153,6 +153,7 @@ class ComputeSponsorshipStore:
                     provider_confirmed_at_ms INTEGER,
                     reconciled_at_ms INTEGER,
                     actual_cost_minor INTEGER,
+                    actual_cost_effective_at_ms INTEGER,
                     FOREIGN KEY(operation_id) REFERENCES settlement_operations(operation_id),
                     FOREIGN KEY(policy_id) REFERENCES settlement_policies(policy_id),
                     CHECK(beneficiary_class = 'eov_owner_development'),
@@ -217,12 +218,15 @@ class ComputeSponsorshipStore:
                     ON settlement_events(allocation_id, sequence);
                 CREATE TABLE IF NOT EXISTS settlement_provider_receipts (
                     provider TEXT NOT NULL,
-                    receipt_id TEXT NOT NULL,
+                    receipt_id_commitment TEXT NOT NULL,
+                    provider_transaction_id_commitment TEXT NOT NULL,
+                    provider_operation_id_commitment TEXT NOT NULL,
                     allocation_id TEXT NOT NULL,
                     receipt_json TEXT NOT NULL,
                     receipt_hash TEXT NOT NULL,
                     recorded_at_ms INTEGER NOT NULL,
-                    PRIMARY KEY(provider, receipt_id),
+                    PRIMARY KEY(provider, receipt_id_commitment),
+                    UNIQUE(provider, provider_transaction_id_commitment),
                     FOREIGN KEY(allocation_id) REFERENCES settlement_allocations(allocation_id),
                     CHECK(typeof(recorded_at_ms) = 'integer' AND recorded_at_ms >= 0)
                 );
@@ -233,6 +237,18 @@ class ComputeSponsorshipStore:
                     recorded_at_ms INTEGER NOT NULL,
                     PRIMARY KEY(allocation_id, cost_hash),
                     FOREIGN KEY(allocation_id) REFERENCES settlement_allocations(allocation_id),
+                    CHECK(typeof(recorded_at_ms) = 'integer' AND recorded_at_ms >= 0)
+                );
+                CREATE TABLE IF NOT EXISTS settlement_provider_cost_records (
+                    provider TEXT NOT NULL,
+                    record_commitment TEXT NOT NULL,
+                    allocation_id TEXT NOT NULL,
+                    cost_hash TEXT NOT NULL,
+                    effective_at_ms INTEGER NOT NULL,
+                    recorded_at_ms INTEGER NOT NULL,
+                    PRIMARY KEY(provider, record_commitment),
+                    FOREIGN KEY(allocation_id) REFERENCES settlement_allocations(allocation_id),
+                    CHECK(typeof(effective_at_ms) = 'integer' AND effective_at_ms >= 0),
                     CHECK(typeof(recorded_at_ms) = 'integer' AND recorded_at_ms >= 0)
                 );
                 """
@@ -264,6 +280,7 @@ class ComputeSponsorshipStore:
                 "held_at_ms", "approval_hash", "approved_at_ms", "expires_at_ms",
                 "cancelled_at_ms", "expired_at_ms", "provider", "provider_operation_id",
                 "provider_pending_at_ms", "provider_confirmed_at_ms", "reconciled_at_ms", "actual_cost_minor",
+                "actual_cost_effective_at_ms",
             ):
                 if column not in allocation_columns:
                     connection.execute(f"ALTER TABLE settlement_allocations ADD COLUMN {column}")
@@ -329,6 +346,59 @@ class ComputeSponsorshipStore:
                 connection.execute("INSERT INTO settlement_events SELECT * FROM settlement_events_v4")
                 connection.execute("DROP TABLE settlement_events_v4")
                 connection.execute("CREATE INDEX IF NOT EXISTS idx_settlement_events_allocation ON settlement_events(allocation_id, sequence)")
+                connection.execute("PRAGMA foreign_keys=ON")
+            receipt_columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(settlement_provider_receipts)")
+            }
+            if "receipt_id_commitment" not in receipt_columns:
+                legacy_receipts = connection.execute("SELECT * FROM settlement_provider_receipts").fetchall()
+                connection.execute("PRAGMA foreign_keys=OFF")
+                connection.execute("DROP TABLE settlement_provider_receipts")
+                connection.execute(
+                    """CREATE TABLE settlement_provider_receipts (
+                        provider TEXT NOT NULL, receipt_id_commitment TEXT NOT NULL,
+                        provider_transaction_id_commitment TEXT NOT NULL,
+                        provider_operation_id_commitment TEXT NOT NULL, allocation_id TEXT NOT NULL,
+                        receipt_json TEXT NOT NULL, receipt_hash TEXT NOT NULL, recorded_at_ms INTEGER NOT NULL,
+                        PRIMARY KEY(provider, receipt_id_commitment),
+                        UNIQUE(provider, provider_transaction_id_commitment),
+                        FOREIGN KEY(allocation_id) REFERENCES settlement_allocations(allocation_id),
+                        CHECK(typeof(recorded_at_ms) = 'integer' AND recorded_at_ms >= 0)
+                    )"""
+                )
+                for legacy in legacy_receipts:
+                    legacy_payload = json.loads(legacy["receipt_json"])
+                    operation = connection.execute(
+                        "SELECT provider_operation_id FROM settlement_allocations WHERE allocation_id = ?",
+                        (legacy["allocation_id"],),
+                    ).fetchone()
+                    if not operation or not operation["provider_operation_id"]:
+                        raise SettlementTransitionError("legacy provider receipt lacks an allocation operation binding")
+                    receipt_id_commitment = "sha256:" + hashlib.sha256(
+                        f"receipt:{legacy['receipt_id']}".encode("utf-8")
+                    ).hexdigest()
+                    transaction_commitment = "sha256:" + hashlib.sha256(
+                        f"transaction:{legacy_payload.get('provider_transaction_id', legacy['receipt_id'])}".encode("utf-8")
+                    ).hexdigest()
+                    operation_commitment = "sha256:" + hashlib.sha256(
+                        f"operation:{operation['provider_operation_id']}".encode("utf-8")
+                    ).hexdigest()
+                    receipt_json = self._canonical_json({
+                        "provider": legacy["provider"], "receipt_id_commitment": receipt_id_commitment,
+                        "provider_transaction_id_commitment": transaction_commitment,
+                        "provider_operation_id_commitment": operation_commitment,
+                        "legacy_receipt_hash": legacy["receipt_hash"],
+                    })
+                    receipt_hash = "sha256:" + hashlib.sha256(receipt_json.encode("utf-8")).hexdigest()
+                    connection.execute(
+                        """INSERT INTO settlement_provider_receipts(
+                            provider, receipt_id_commitment, provider_transaction_id_commitment,
+                            provider_operation_id_commitment, allocation_id, receipt_json, receipt_hash, recorded_at_ms
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                        (legacy["provider"], receipt_id_commitment, transaction_commitment,
+                         operation_commitment, legacy["allocation_id"], receipt_json, receipt_hash,
+                         legacy["recorded_at_ms"]),
+                    )
                 connection.execute("PRAGMA foreign_keys=ON")
         finally:
             self._release(connection)
@@ -985,6 +1055,7 @@ class ComputeSponsorshipStore:
                 "provider_confirmed_at_ms": int(row["provider_confirmed_at_ms"]) if row["provider_confirmed_at_ms"] is not None else None,
                 "reconciled_at_ms": int(row["reconciled_at_ms"]) if row["reconciled_at_ms"] is not None else None,
                 "actual_cost_minor": int(row["actual_cost_minor"]) if row["actual_cost_minor"] is not None else None,
+                "actual_cost_effective_at_ms": int(row["actual_cost_effective_at_ms"]) if row["actual_cost_effective_at_ms"] is not None else None,
             }
             events = connection.execute(
                 """SELECT sequence, operation_id, event_type, from_state, target_state, evidence_json, occurred_at_ms
@@ -1473,7 +1544,18 @@ class ComputeSponsorshipStore:
             if not row:
                 raise SettlementError("allocation does not exist")
             self._require_allocation_owner(row, values["owner_subject"])
-            existing = connection.execute("SELECT allocation_id, receipt_hash FROM settlement_provider_receipts WHERE provider = ? AND receipt_id = ?", (receipt["provider"], receipt["receipt_id"])).fetchone()
+            expected_operation_commitment = "sha256:" + hashlib.sha256(
+                f"operation:{row['provider_operation_id']}".encode("utf-8")
+            ).hexdigest()
+            if receipt.get("provider_operation_id_commitment") != expected_operation_commitment:
+                raise SettlementTransitionError("provider receipt does not match the pending allocation operation")
+            existing = connection.execute(
+                """SELECT allocation_id, receipt_hash FROM settlement_provider_receipts
+                WHERE provider = ? AND (
+                    receipt_id_commitment = ? OR provider_transaction_id_commitment = ?
+                )""",
+                (receipt["provider"], receipt["receipt_id_commitment"], receipt["provider_transaction_id_commitment"]),
+            ).fetchone()
             if existing:
                 if existing["allocation_id"] != row["allocation_id"] or existing["receipt_hash"] != receipt_hash:
                     raise SettlementIdempotencyConflict("provider receipt is already bound to another allocation or payload")
@@ -1488,7 +1570,15 @@ class ComputeSponsorshipStore:
                 raise SettlementTransitionError("provider receipt chronology is invalid")
             result = self._allocation_lifecycle_result(row, values["operation_id"], "provider_confirmed", values["now_ms"], provider=row["provider"], provider_operation_id=row["provider_operation_id"], receipt_hash=receipt_hash)
             connection.execute("INSERT INTO settlement_operations(operation_id, request_hash, result_json) VALUES (?, ?, ?)", (values["operation_id"], request_hash, self._canonical_json(result)))
-            connection.execute("INSERT INTO settlement_provider_receipts(provider, receipt_id, allocation_id, receipt_json, receipt_hash, recorded_at_ms) VALUES (?, ?, ?, ?, ?, ?)", (receipt["provider"], receipt["receipt_id"], row["allocation_id"], receipt_json, receipt_hash, values["now_ms"]))
+            connection.execute(
+                """INSERT INTO settlement_provider_receipts(
+                    provider, receipt_id_commitment, provider_transaction_id_commitment,
+                    provider_operation_id_commitment, allocation_id, receipt_json, receipt_hash, recorded_at_ms
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (receipt["provider"], receipt["receipt_id_commitment"], receipt["provider_transaction_id_commitment"],
+                 receipt["provider_operation_id_commitment"], row["allocation_id"], receipt_json, receipt_hash,
+                 values["now_ms"]),
+            )
             connection.execute("UPDATE settlement_allocations SET state = 'provider_confirmed', provider_confirmed_at_ms = ? WHERE allocation_id = ?", (values["now_ms"], row["allocation_id"]))
             self._append_lifecycle_event(connection, values["operation_id"], row["allocation_id"], "provider_confirmed", "provider_pending", "provider_confirmed", {"receipt_hash": receipt_hash, "provider": row["provider"]}, values["now_ms"])
             connection.execute("COMMIT")
@@ -1524,35 +1614,61 @@ class ComputeSponsorshipStore:
             self._require_lifecycle_transition(row["state"], "reconcile_start")
             currency = self._allocation_currency(row)
             total = 0
+            effective_at_ms = 0
+            record_commitments = set()
             for cost in costs:
                 if not isinstance(cost, dict) or cost.get("provider_operation_id") != row["provider_operation_id"] or cost.get("currency") != currency:
                     raise SettlementTransitionError("provider cost cannot be attributed to this allocation")
                 amount = cost.get("amount_minor")
                 if isinstance(amount, bool) or not isinstance(amount, int) or amount < 0:
                     raise ValueError("provider cost amount_minor must be a non-negative integer")
+                record_commitment = cost.get("record_commitment")
+                if not isinstance(record_commitment, str) or not _EVIDENCE_HASH.fullmatch(record_commitment):
+                    raise ValueError("provider cost requires a stable record commitment")
+                if record_commitment in record_commitments:
+                    raise SettlementIdempotencyConflict("provider cost record is duplicated in one reconciliation")
+                record_commitments.add(record_commitment)
                 if cost.get("start_time_ms") < int(row["provider_pending_at_ms"]) or cost.get("end_time_ms") < cost.get("start_time_ms") or cost.get("end_time_ms") > values["now_ms"]:
                     raise SettlementTransitionError("provider cost chronology is invalid")
+                existing_record = connection.execute(
+                    "SELECT allocation_id FROM settlement_provider_cost_records WHERE provider = ? AND record_commitment = ?",
+                    (row["provider"], record_commitment),
+                ).fetchone()
+                if existing_record:
+                    raise SettlementIdempotencyConflict("provider cost record is already bound to an allocation")
                 total += amount
+                effective_at_ms = max(effective_at_ms, int(cost["end_time_ms"]))
             connection.execute("INSERT INTO settlement_operations(operation_id, request_hash, result_json) VALUES (?, ?, ?)", (values["operation_id"], request_hash, "{}"))
             connection.execute("INSERT INTO settlement_provider_costs(allocation_id, cost_hash, cost_json, recorded_at_ms) VALUES (?, ?, ?, ?)", (row["allocation_id"], cost_hash, cost_json, values["now_ms"]))
+            connection.executemany(
+                """INSERT INTO settlement_provider_cost_records(
+                    provider, record_commitment, allocation_id, cost_hash, effective_at_ms, recorded_at_ms
+                ) VALUES (?, ?, ?, ?, ?, ?)""",
+                [(row["provider"], cost["record_commitment"], row["allocation_id"], cost_hash,
+                  cost["end_time_ms"], values["now_ms"]) for cost in costs],
+            )
             self._append_lifecycle_event(connection, values["operation_id"], row["allocation_id"], "reconciliation_started", "provider_confirmed", "reconciling", {"cost_hash": cost_hash}, values["now_ms"])
             held = int(row["quoted_funding_minor"])
             if total > held:
-                result = self._allocation_lifecycle_result(row, values["operation_id"], "reconciliation_exception", values["now_ms"], provider=row["provider"], actual_cost_minor=total, cost_hash=cost_hash)
-                connection.execute("UPDATE settlement_allocations SET state = 'reconciliation_exception', actual_cost_minor = ? WHERE allocation_id = ?", (total, row["allocation_id"]))
-                self._append_lifecycle_event(connection, values["operation_id"], row["allocation_id"], "reconciliation_exception", "reconciling", "reconciliation_exception", {"cost_hash": cost_hash, "actual_cost_minor": total}, values["now_ms"])
+                result = self._allocation_lifecycle_result(row, values["operation_id"], "reconciliation_exception", values["now_ms"], provider=row["provider"], actual_cost_minor=total, actual_cost_effective_at_ms=effective_at_ms, cost_hash=cost_hash)
+                connection.execute("UPDATE settlement_allocations SET state = 'reconciliation_exception', actual_cost_minor = ?, actual_cost_effective_at_ms = ? WHERE allocation_id = ?", (total, effective_at_ms, row["allocation_id"]))
+                self._append_lifecycle_event(connection, values["operation_id"], row["allocation_id"], "reconciliation_exception", "reconciling", "reconciliation_exception", {"cost_hash": cost_hash, "actual_cost_minor": total, "actual_cost_effective_at_ms": effective_at_ms}, values["now_ms"])
             else:
                 held_account = self._account_id(f"reserve:held:{row['allocation_id']}", currency)
                 expense = self._account_id(f"expense:provider:{row['provider']}", currency)
                 available = self._account_id("reserve:available", currency)
                 evidence_hash = cost_hash
-                if total:
-                    self._move_reserve(connection, values["operation_id"], held_account, expense, currency, total, evidence_hash, values["now_ms"])
+                for cost in costs:
+                    if cost["amount_minor"]:
+                        self._move_reserve(
+                            connection, values["operation_id"], held_account, expense, currency,
+                            cost["amount_minor"], evidence_hash, cost["end_time_ms"],
+                        )
                 if held - total:
                     self._move_reserve(connection, values["operation_id"], held_account, available, currency, held - total, evidence_hash, values["now_ms"])
-                result = self._allocation_lifecycle_result(row, values["operation_id"], "reconciled", values["now_ms"], provider=row["provider"], actual_cost_minor=total, cost_hash=cost_hash)
-                connection.execute("UPDATE settlement_allocations SET state = 'reconciled', actual_cost_minor = ?, reconciled_at_ms = ? WHERE allocation_id = ?", (total, values["now_ms"], row["allocation_id"]))
-                self._append_lifecycle_event(connection, values["operation_id"], row["allocation_id"], "allocation_reconciled", "reconciling", "reconciled", {"cost_hash": cost_hash, "actual_cost_minor": total}, values["now_ms"])
+                result = self._allocation_lifecycle_result(row, values["operation_id"], "reconciled", values["now_ms"], provider=row["provider"], actual_cost_minor=total, actual_cost_effective_at_ms=effective_at_ms, cost_hash=cost_hash)
+                connection.execute("UPDATE settlement_allocations SET state = 'reconciled', actual_cost_minor = ?, actual_cost_effective_at_ms = ?, reconciled_at_ms = ? WHERE allocation_id = ?", (total, effective_at_ms, values["now_ms"], row["allocation_id"]))
+                self._append_lifecycle_event(connection, values["operation_id"], row["allocation_id"], "allocation_reconciled", "reconciling", "reconciled", {"cost_hash": cost_hash, "actual_cost_minor": total, "actual_cost_effective_at_ms": effective_at_ms}, values["now_ms"])
             connection.execute("UPDATE settlement_operations SET result_json = ? WHERE operation_id = ?", (self._canonical_json(result), values["operation_id"]))
             connection.execute("COMMIT")
             return result

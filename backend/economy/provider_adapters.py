@@ -21,6 +21,19 @@ class ProviderCapabilityError(RuntimeError):
 
 _HASH = re.compile(r"^sha256:[0-9a-f]{64}$")
 _SECRET_FIELD = re.compile(r"(?:api[_-]?key|secret|token|authorization|credential|password)", re.I)
+_EXTERNAL_IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+_INTERNAL_OPERATION = re.compile(r"^eov:allocation:[0-9a-f]{32}$")
+_SECRET_IDENTIFIER = re.compile(r"^(?:sk-|bearer[._:-]|basic[._:-]|eyJ)", re.I)
+
+
+def _commit(domain: str, value: str) -> str:
+    return "sha256:" + hashlib.sha256(f"{domain}:{value}".encode("utf-8")).hexdigest()
+
+
+def _external_identifier(value: Any, field: str) -> str:
+    if not isinstance(value, str) or not _EXTERNAL_IDENTIFIER.fullmatch(value) or _SECRET_IDENTIFIER.match(value):
+        raise ValueError(f"{field} must be a non-secret identifier")
+    return value
 
 
 @dataclass(frozen=True)
@@ -67,7 +80,7 @@ class RecordedOfficialBillingAdapter:
 
     _FIELDS = frozenset({
         "provider", "receipt_id", "provider_transaction_id", "amount_minor",
-        "currency", "completed_at_ms", "evidence_hash", "human_completed",
+        "currency", "completed_at_ms", "evidence_hash", "human_completed", "provider_operation_id",
     })
 
     def normalize_receipt(self, payload: dict) -> dict:
@@ -82,12 +95,18 @@ class RecordedOfficialBillingAdapter:
             raise ValueError("receipt payload is incomplete")
         if payload["human_completed"] is not True:
             raise ValueError("receipt must evidence a human-completed billing action")
-        normalized = {}
-        for key in ("provider", "receipt_id", "provider_transaction_id"):
-            value = payload[key]
-            if not isinstance(value, str) or not value.strip():
-                raise ValueError(f"{key} is required")
-            normalized[key] = value.strip()
+        provider = _external_identifier(payload["provider"], "provider")
+        receipt_id = _external_identifier(payload["receipt_id"], "receipt_id")
+        transaction_id = _external_identifier(payload["provider_transaction_id"], "provider_transaction_id")
+        provider_operation_id = payload["provider_operation_id"]
+        if not isinstance(provider_operation_id, str) or not _INTERNAL_OPERATION.fullmatch(provider_operation_id):
+            raise ValueError("provider_operation_id must be an attributed internal operation identifier")
+        normalized = {
+            "provider": provider,
+            "receipt_id_commitment": _commit("receipt", receipt_id),
+            "provider_transaction_id_commitment": _commit("transaction", transaction_id),
+            "provider_operation_id_commitment": _commit("operation", provider_operation_id),
+        }
         amount = payload["amount_minor"]
         if isinstance(amount, bool) or not isinstance(amount, int) or amount <= 0:
             raise ValueError("amount_minor must be a positive integer")
@@ -137,12 +156,28 @@ class OpenAICostsNormalizer:
                 currency = amount.get("currency")
                 if not isinstance(currency, str) or currency.lower() != "usd":
                     raise ValueError("cost currency must be usd")
-                records.append({
+                record_identity = item.get("id")
+                if record_identity is not None:
+                    source = {"official_id_commitment": _commit("cost", _external_identifier(record_identity, "cost id"))}
+                else:
+                    line_item = item.get("line_item")
+                    if line_item is not None and not isinstance(line_item, str):
+                        raise ValueError("cost line_item must be text")
+                    source = {
+                        "provider_operation_id": operation_id.strip(),
+                        "amount_minor": cls._minor_units(amount.get("value")), "currency": "usd",
+                        "start_time_ms": start_ms, "end_time_ms": end_ms,
+                        "line_item_commitment": _commit("line-item", line_item) if line_item else None,
+                    }
+                normalized = {
                     "provider_operation_id": operation_id.strip(),
                     "amount_minor": cls._minor_units(amount.get("value")),
                     "currency": "usd", "start_time_ms": start_ms, "end_time_ms": end_ms,
-                    "line_item": item.get("line_item") if isinstance(item.get("line_item"), str) else None,
-                })
+                    "record_commitment": _commit("cost-record", json.dumps(source, sort_keys=True, separators=(",", ":"))),
+                }
+                if normalized["record_commitment"] in {record["record_commitment"] for record in records}:
+                    raise ValueError("official costs payload contains a duplicate cost record")
+                records.append(normalized)
         if not records:
             raise ValueError("official costs payload contains no cost records")
         return records

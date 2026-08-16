@@ -10,6 +10,7 @@ from .provider_adapters import (
     ProviderCapabilityError,
     RecordedOfficialBillingAdapter,
 )
+import hashlib
 from .public_ledger import project_public_cu_ledger, verify_public_chain
 
 
@@ -136,7 +137,12 @@ class SettlementService:
         # The provider identity comes from persisted pending state.  The payload
         # may provide evidence but cannot select an enabled capability.
         allocation = self.store.get_allocation(allocation_id)
-        if receipt["provider"] != allocation.get("provider"):
+        operation = allocation.get("provider_operation_id")
+        expected_operation = "sha256:" + hashlib.sha256(f"operation:{operation}".encode("utf-8")).hexdigest()
+        if (
+            receipt["provider"] != allocation.get("provider")
+            or receipt["provider_operation_id_commitment"] != expected_operation
+        ):
             raise SettlementError("provider receipt does not match the pending allocation")
         return self.store.confirm_provider_receipt(operation_id, allocation_id, self.owner_subject, receipt, now_ms)
 
