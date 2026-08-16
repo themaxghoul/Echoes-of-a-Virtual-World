@@ -88,10 +88,62 @@ class ComputeSponsorshipStore:
                     CHECK(typeof(amount_minor) = 'integer' AND amount_minor > 0),
                     CHECK(typeof(received_at_ms) = 'integer')
                 );
+                CREATE TABLE IF NOT EXISTS settlement_policies (
+                    policy_id TEXT PRIMARY KEY,
+                    version INTEGER NOT NULL UNIQUE,
+                    owner_subject TEXT NOT NULL,
+                    policy_json TEXT NOT NULL,
+                    policy_hash TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    approved_at_ms INTEGER NOT NULL,
+                    activation_evidence_json TEXT,
+                    activated_at_ms INTEGER,
+                    FOREIGN KEY(policy_id) REFERENCES settlement_policies(policy_id),
+                    CHECK(state IN ('draft', 'allocation_active', 'settlement_active')),
+                    CHECK(typeof(version) = 'integer' AND version > 0),
+                    CHECK(typeof(approved_at_ms) = 'integer' AND approved_at_ms >= 0),
+                    CHECK(activated_at_ms IS NULL OR (typeof(activated_at_ms) = 'integer' AND activated_at_ms >= 0))
+                );
+                CREATE TABLE IF NOT EXISTS settlement_allocations (
+                    allocation_id TEXT PRIMARY KEY,
+                    operation_id TEXT NOT NULL UNIQUE,
+                    owner_subject TEXT NOT NULL,
+                    beneficiary_class TEXT NOT NULL,
+                    policy_id TEXT NOT NULL,
+                    policy_version INTEGER NOT NULL,
+                    policy_snapshot_json TEXT NOT NULL,
+                    world_id TEXT NOT NULL,
+                    public_claim_ids_json TEXT NOT NULL,
+                    eligible_cu_milli INTEGER NOT NULL,
+                    quoted_funding_minor INTEGER NOT NULL,
+                    state TEXT NOT NULL,
+                    created_at_ms INTEGER NOT NULL,
+                    FOREIGN KEY(operation_id) REFERENCES settlement_operations(operation_id),
+                    FOREIGN KEY(policy_id) REFERENCES settlement_policies(policy_id),
+                    CHECK(beneficiary_class = 'eov_owner_development'),
+                    CHECK(state = 'proposed'),
+                    CHECK(typeof(policy_version) = 'integer' AND policy_version > 0),
+                    CHECK(typeof(eligible_cu_milli) = 'integer' AND eligible_cu_milli > 0),
+                    CHECK(typeof(quoted_funding_minor) = 'integer' AND quoted_funding_minor > 0),
+                    CHECK(typeof(created_at_ms) = 'integer' AND created_at_ms >= 0)
+                );
+                CREATE TABLE IF NOT EXISTS settlement_claim_commitments (
+                    claim_id TEXT PRIMARY KEY,
+                    allocation_id TEXT NOT NULL,
+                    policy_id TEXT NOT NULL,
+                    committed_at_ms INTEGER NOT NULL,
+                    FOREIGN KEY(allocation_id) REFERENCES settlement_allocations(allocation_id),
+                    FOREIGN KEY(policy_id) REFERENCES settlement_policies(policy_id),
+                    CHECK(typeof(committed_at_ms) = 'integer' AND committed_at_ms >= 0)
+                );
                 CREATE INDEX IF NOT EXISTS idx_settlement_postings_operation
                     ON settlement_postings(operation_id);
                 CREATE INDEX IF NOT EXISTS idx_settlement_postings_account
                     ON settlement_postings(account_id);
+                CREATE INDEX IF NOT EXISTS idx_settlement_allocations_policy
+                    ON settlement_allocations(policy_id);
+                CREATE INDEX IF NOT EXISTS idx_settlement_claim_commitments_allocation
+                    ON settlement_claim_commitments(allocation_id);
                 """
             )
         finally:
@@ -170,6 +222,428 @@ class ComputeSponsorshipStore:
     def _hash_request(values: Dict[str, Any]) -> str:
         canonical = json.dumps(values, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    @staticmethod
+    def _canonical_json(value: Any) -> str:
+        return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+    @classmethod
+    def _require_non_negative_integer(cls, value: int, field: str) -> int:
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            raise ValueError(f"{field} must be a non-negative integer")
+        return value
+
+    @classmethod
+    def _require_positive_integer(cls, value: int, field: str) -> int:
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise ValueError(f"{field} must be a positive integer")
+        return value
+
+    @classmethod
+    def _require_evidence_hash(cls, value: str, field: str) -> str:
+        value = cls._require_text(value, field)
+        if not _EVIDENCE_HASH.fullmatch(value):
+            raise ValueError(f"{field} must be sha256 followed by 64 lowercase hexadecimal characters")
+        return value
+
+    @classmethod
+    def _normalize_policy(cls, policy: dict) -> Dict[str, Any]:
+        if not isinstance(policy, dict):
+            raise ValueError("policy must be an object")
+        normalized = {
+            "policy_id": cls._require_text(policy.get("policy_id"), "policy_id"),
+            "version": cls._require_positive_integer(policy.get("version"), "version"),
+            "effective_from_ms": cls._require_non_negative_integer(policy.get("effective_from_ms"), "effective_from_ms"),
+            "effective_to_ms": policy.get("effective_to_ms"),
+            "eligible_action_types": policy.get("eligible_action_types"),
+            "evidence_requirements": policy.get("evidence_requirements"),
+            "cu_milli_per_funding_minor": cls._require_positive_integer(
+                policy.get("cu_milli_per_funding_minor"), "cu_milli_per_funding_minor"
+            ),
+            "min_claim_cu_milli": cls._require_positive_integer(policy.get("min_claim_cu_milli"), "min_claim_cu_milli"),
+            "max_claim_cu_milli": cls._require_positive_integer(policy.get("max_claim_cu_milli"), "max_claim_cu_milli"),
+            "program_cap_minor": cls._require_positive_integer(policy.get("program_cap_minor"), "program_cap_minor"),
+            "period_cap_minor": cls._require_positive_integer(policy.get("period_cap_minor"), "period_cap_minor"),
+            "beneficiary_class": cls._require_text(policy.get("beneficiary_class"), "beneficiary_class"),
+            "funding_source_class": cls._require_text(policy.get("funding_source_class"), "funding_source_class"),
+            "compliance_manifest_hash": cls._require_evidence_hash(
+                policy.get("compliance_manifest_hash"), "compliance_manifest_hash"
+            ),
+        }
+        if normalized["effective_to_ms"] is not None:
+            normalized["effective_to_ms"] = cls._require_non_negative_integer(
+                normalized["effective_to_ms"], "effective_to_ms"
+            )
+            if normalized["effective_to_ms"] < normalized["effective_from_ms"]:
+                raise ValueError("effective_to_ms must not precede effective_from_ms")
+        for field in ("eligible_action_types", "evidence_requirements"):
+            values = normalized[field]
+            if not isinstance(values, list) or not values:
+                raise ValueError(f"{field} must be a non-empty list")
+            normalized[field] = [cls._require_text(value, field) for value in values]
+            if len(set(normalized[field])) != len(normalized[field]):
+                raise ValueError(f"{field} must not contain duplicates")
+        if normalized["min_claim_cu_milli"] > normalized["max_claim_cu_milli"]:
+            raise ValueError("min_claim_cu_milli must not exceed max_claim_cu_milli")
+        if normalized["period_cap_minor"] > normalized["program_cap_minor"]:
+            raise ValueError("period_cap_minor must not exceed program_cap_minor")
+        if normalized["beneficiary_class"] != "eov_owner_development":
+            raise ValueError("beneficiary_class must be eov_owner_development")
+        source_class = normalized["funding_source_class"].lower()
+        if _CU_SOURCE.search(source_class) or "compute unit" in source_class or "compute_unit" in source_class or "compute-unit" in source_class:
+            raise ValueError("CU cannot fund the external settlement reserve")
+        return normalized
+
+    @classmethod
+    def _policy_from_row(cls, row: sqlite3.Row) -> Dict[str, Any]:
+        return {
+            "policy_id": row["policy_id"],
+            "version": int(row["version"]),
+            "owner_subject": row["owner_subject"],
+            "policy": json.loads(row["policy_json"]),
+            "policy_hash": row["policy_hash"],
+            "state": row["state"],
+            "approved_at_ms": int(row["approved_at_ms"]),
+            "activation_evidence": json.loads(row["activation_evidence_json"])
+            if row["activation_evidence_json"] else None,
+            "activated_at_ms": int(row["activated_at_ms"])
+            if row["activated_at_ms"] is not None else None,
+        }
+
+    def create_policy(
+        self,
+        operation_id: str,
+        owner_subject: str,
+        policy: dict,
+        approved_at_ms: int,
+    ) -> Dict[str, Any]:
+        """Persist one immutable, owner-authorized conversion-policy version."""
+        values = {
+            "operation_id": self._require_text(operation_id, "operation_id"),
+            "owner_subject": self._require_text(owner_subject, "owner_subject"),
+            "policy": self._normalize_policy(policy),
+            "approved_at_ms": self._require_non_negative_integer(approved_at_ms, "approved_at_ms"),
+        }
+        request_hash = self._hash_request(values)
+        policy_json = self._canonical_json(values["policy"])
+        policy_hash = hashlib.sha256(policy_json.encode("utf-8")).hexdigest()
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            prior = connection.execute(
+                "SELECT request_hash, result_json FROM settlement_operations WHERE operation_id = ?",
+                (values["operation_id"],),
+            ).fetchone()
+            if prior:
+                if prior["request_hash"] != request_hash:
+                    raise SettlementIdempotencyConflict("operation_id was already used for different settlement intent")
+                connection.execute("COMMIT")
+                return json.loads(prior["result_json"])
+            existing = connection.execute(
+                "SELECT policy_id FROM settlement_policies WHERE policy_id = ? OR version = ?",
+                (values["policy"]["policy_id"], values["policy"]["version"]),
+            ).fetchone()
+            if existing:
+                raise SettlementTransitionError("policy id and version are immutable")
+            result = {
+                "operation_id": values["operation_id"],
+                "policy_id": values["policy"]["policy_id"],
+                "version": values["policy"]["version"],
+                "owner_subject": values["owner_subject"],
+                "policy": values["policy"],
+                "policy_hash": policy_hash,
+                "state": "draft",
+                "approved_at_ms": values["approved_at_ms"],
+            }
+            connection.execute(
+                "INSERT INTO settlement_operations(operation_id, request_hash, result_json) VALUES (?, ?, ?)",
+                (values["operation_id"], request_hash, self._canonical_json(result)),
+            )
+            connection.execute(
+                """INSERT INTO settlement_policies(
+                    policy_id, version, owner_subject, policy_json, policy_hash, state, approved_at_ms
+                ) VALUES (?, ?, ?, ?, ?, 'draft', ?)""",
+                (
+                    values["policy"]["policy_id"], values["policy"]["version"], values["owner_subject"],
+                    policy_json, policy_hash, values["approved_at_ms"],
+                ),
+            )
+            connection.execute("COMMIT")
+            return result
+        except Exception:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise
+        finally:
+            self._release(connection)
+
+    def get_policy(self, policy_id: str) -> Dict[str, Any]:
+        policy_id = self._require_text(policy_id, "policy_id")
+        connection = self._connect()
+        try:
+            row = connection.execute(
+                "SELECT * FROM settlement_policies WHERE policy_id = ?", (policy_id,)
+            ).fetchone()
+            if not row:
+                raise SettlementError("policy does not exist")
+            return self._policy_from_row(row)
+        finally:
+            self._release(connection)
+
+    def activate_policy(
+        self,
+        operation_id: str,
+        owner_subject: str,
+        policy_id: str,
+        target_state: str,
+        evidence: dict,
+        activated_at_ms: int,
+    ) -> Dict[str, Any]:
+        if not isinstance(evidence, dict):
+            raise ValueError("evidence must be an object")
+        values = {
+            "operation_id": self._require_text(operation_id, "operation_id"),
+            "owner_subject": self._require_text(owner_subject, "owner_subject"),
+            "policy_id": self._require_text(policy_id, "policy_id"),
+            "target_state": self._require_text(target_state, "target_state"),
+            "evidence": json.loads(self._canonical_json(evidence)),
+            "activated_at_ms": self._require_non_negative_integer(activated_at_ms, "activated_at_ms"),
+        }
+        if values["target_state"] not in {"allocation_active", "settlement_active"}:
+            raise SettlementTransitionError("policy target state is invalid")
+        request_hash = self._hash_request(values)
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            prior = connection.execute(
+                "SELECT request_hash, result_json FROM settlement_operations WHERE operation_id = ?",
+                (values["operation_id"],),
+            ).fetchone()
+            if prior:
+                if prior["request_hash"] != request_hash:
+                    raise SettlementIdempotencyConflict("operation_id was already used for different settlement intent")
+                connection.execute("COMMIT")
+                return json.loads(prior["result_json"])
+            row = connection.execute(
+                "SELECT * FROM settlement_policies WHERE policy_id = ?", (values["policy_id"],)
+            ).fetchone()
+            if not row:
+                raise SettlementError("policy does not exist")
+            stored = self._policy_from_row(row)
+            if stored["owner_subject"] != values["owner_subject"]:
+                raise SettlementTransitionError("policy owner subject does not match")
+            policy = stored["policy"]
+            evidence = values["evidence"]
+            activation_evidence = dict(stored["activation_evidence"] or {})
+            if stored["state"] == "draft" and values["target_state"] == "allocation_active":
+                if policy["cu_milli_per_funding_minor"] <= 0 or policy["program_cap_minor"] <= 0:
+                    raise SettlementTransitionError("policy requires a positive rate and funded program cap")
+                if evidence.get("compliance_manifest_hash") != policy["compliance_manifest_hash"]:
+                    raise SettlementTransitionError("policy requires the approved compliance manifest")
+                self._require_evidence_hash(evidence.get("compliance_manifest_hash"), "compliance_manifest_hash")
+                self._require_evidence_hash(evidence.get("owner_signature"), "owner_signature")
+                funded_cap = self._require_positive_integer(
+                    evidence.get("funded_program_cap_minor"), "funded_program_cap_minor"
+                )
+                if funded_cap < policy["program_cap_minor"]:
+                    raise SettlementTransitionError("policy requires a funded program cap")
+            elif stored["state"] == "allocation_active" and values["target_state"] == "settlement_active":
+                try:
+                    self._require_evidence_hash(
+                        evidence.get("provider_capability_hash"), "provider_capability_hash"
+                    )
+                except ValueError as error:
+                    raise SettlementTransitionError(
+                        "policy requires provider capability evidence"
+                    ) from error
+                activation_evidence.update(evidence)
+            else:
+                raise SettlementTransitionError("invalid policy lifecycle transition")
+            result = {
+                "operation_id": values["operation_id"],
+                "policy_id": stored["policy_id"],
+                "version": stored["version"],
+                "owner_subject": stored["owner_subject"],
+                "state": values["target_state"],
+                "evidence": activation_evidence if values["target_state"] == "settlement_active" else evidence,
+                "activated_at_ms": values["activated_at_ms"],
+            }
+            connection.execute(
+                "INSERT INTO settlement_operations(operation_id, request_hash, result_json) VALUES (?, ?, ?)",
+                (values["operation_id"], request_hash, self._canonical_json(result)),
+            )
+            connection.execute(
+                """UPDATE settlement_policies
+                SET state = ?, activation_evidence_json = ?, activated_at_ms = ?
+                WHERE policy_id = ?""",
+                (
+                    values["target_state"], self._canonical_json(result["evidence"]),
+                    values["activated_at_ms"], stored["policy_id"],
+                ),
+            )
+            connection.execute("COMMIT")
+            return result
+        except Exception:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise
+        finally:
+            self._release(connection)
+
+    def create_allocation(
+        self,
+        operation_id: str,
+        owner_subject: str,
+        world_id: str,
+        policy_id: str,
+        public_claims: list[dict],
+        now_ms: int,
+    ) -> Dict[str, Any]:
+        """Commit server-resolved public CU claims to an immutable proposed quote."""
+        if not isinstance(public_claims, list) or not public_claims:
+            raise SettlementError("at least one public claim is required")
+        values = {
+            "operation_id": self._require_text(operation_id, "operation_id"),
+            "owner_subject": self._require_text(owner_subject, "owner_subject"),
+            "world_id": self._require_text(world_id, "world_id"),
+            "policy_id": self._require_text(policy_id, "policy_id"),
+            "public_claims": json.loads(self._canonical_json(public_claims)),
+            "now_ms": self._require_non_negative_integer(now_ms, "now_ms"),
+        }
+        request_hash = self._hash_request(values)
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            prior = connection.execute(
+                "SELECT request_hash, result_json FROM settlement_operations WHERE operation_id = ?",
+                (values["operation_id"],),
+            ).fetchone()
+            if prior:
+                if prior["request_hash"] != request_hash:
+                    raise SettlementIdempotencyConflict("operation_id was already used for different settlement intent")
+                connection.execute("COMMIT")
+                return json.loads(prior["result_json"])
+            row = connection.execute(
+                "SELECT * FROM settlement_policies WHERE policy_id = ?", (values["policy_id"],)
+            ).fetchone()
+            if not row:
+                raise SettlementError("policy does not exist")
+            stored = self._policy_from_row(row)
+            policy = stored["policy"]
+            if stored["owner_subject"] != values["owner_subject"]:
+                raise SettlementTransitionError("policy owner subject does not match")
+            if stored["state"] not in {"allocation_active", "settlement_active"}:
+                raise SettlementTransitionError("policy is not active for allocations")
+            if values["now_ms"] < policy["effective_from_ms"] or (
+                policy["effective_to_ms"] is not None and values["now_ms"] > policy["effective_to_ms"]
+            ):
+                raise SettlementTransitionError("policy is not effective at the proposal time")
+            claim_ids = []
+            eligible_cu_milli = 0
+            for claim in values["public_claims"]:
+                if not isinstance(claim, dict):
+                    raise SettlementError("public claim is not eligible")
+                claim_id = self._require_text(claim.get("entry_id"), "public claim id")
+                amount = self._require_positive_integer(claim.get("amount_milli"), "public claim amount_milli")
+                if claim_id in claim_ids:
+                    raise SettlementError("public claim is duplicated")
+                if claim.get("status") != "verified_provisional" or claim.get("spendable") is not False:
+                    raise SettlementError("public claim is not eligible")
+                if claim.get("unit") != "CU-placeholder" or claim.get("action_type") not in policy["eligible_action_types"]:
+                    raise SettlementError("public claim is not eligible")
+                if not claim.get("evidence_hash") or not claim.get("commission_hash"):
+                    raise SettlementError("public claim is not eligible")
+                if amount < policy["min_claim_cu_milli"] or amount > policy["max_claim_cu_milli"]:
+                    raise SettlementError("public claim is outside the policy allocation range")
+                committed = connection.execute(
+                    "SELECT allocation_id FROM settlement_claim_commitments WHERE claim_id = ?", (claim_id,)
+                ).fetchone()
+                if committed:
+                    raise SettlementError("public claim is already committed")
+                claim_ids.append(claim_id)
+                eligible_cu_milli += amount
+            quoted_funding_minor = eligible_cu_milli // policy["cu_milli_per_funding_minor"]
+            if quoted_funding_minor <= 0:
+                raise SettlementError("public claims do not quote a positive funding amount")
+            committed_total = connection.execute(
+                "SELECT COALESCE(SUM(quoted_funding_minor), 0) AS total FROM settlement_allocations WHERE policy_id = ?",
+                (stored["policy_id"],),
+            ).fetchone()["total"]
+            if int(committed_total) + quoted_funding_minor > min(policy["program_cap_minor"], policy["period_cap_minor"]):
+                raise SettlementError("policy program cap would be exceeded")
+            allocation_id = "allocation:" + hashlib.sha256(
+                f"{values['operation_id']}|{stored['policy_id']}|{values['world_id']}".encode("utf-8")
+            ).hexdigest()[:32]
+            result = {
+                "allocation_id": allocation_id,
+                "operation_id": values["operation_id"],
+                "owner_subject": values["owner_subject"],
+                "beneficiary_class": "eov_owner_development",
+                "policy_id": stored["policy_id"],
+                "policy_version": stored["version"],
+                "policy_snapshot": policy,
+                "world_id": values["world_id"],
+                "public_claim_ids": claim_ids,
+                "eligible_cu_milli": eligible_cu_milli,
+                "quoted_funding_minor": quoted_funding_minor,
+                "state": "proposed",
+                "created_at_ms": values["now_ms"],
+            }
+            connection.execute(
+                "INSERT INTO settlement_operations(operation_id, request_hash, result_json) VALUES (?, ?, ?)",
+                (values["operation_id"], request_hash, self._canonical_json(result)),
+            )
+            connection.execute(
+                """INSERT INTO settlement_allocations(
+                    allocation_id, operation_id, owner_subject, beneficiary_class, policy_id, policy_version,
+                    policy_snapshot_json, world_id, public_claim_ids_json, eligible_cu_milli,
+                    quoted_funding_minor, state, created_at_ms
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?)""",
+                (
+                    allocation_id, values["operation_id"], values["owner_subject"], "eov_owner_development",
+                    stored["policy_id"], stored["version"], self._canonical_json(policy), values["world_id"],
+                    self._canonical_json(claim_ids), eligible_cu_milli, quoted_funding_minor, values["now_ms"],
+                ),
+            )
+            connection.executemany(
+                "INSERT INTO settlement_claim_commitments(claim_id, allocation_id, policy_id, committed_at_ms) VALUES (?, ?, ?, ?)",
+                [(claim_id, allocation_id, stored["policy_id"], values["now_ms"]) for claim_id in claim_ids],
+            )
+            connection.execute("COMMIT")
+            return result
+        except Exception:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise
+        finally:
+            self._release(connection)
+
+    def get_allocation(self, allocation_id: str) -> Dict[str, Any]:
+        allocation_id = self._require_text(allocation_id, "allocation_id")
+        connection = self._connect()
+        try:
+            row = connection.execute(
+                "SELECT * FROM settlement_allocations WHERE allocation_id = ?", (allocation_id,)
+            ).fetchone()
+            if not row:
+                raise SettlementError("allocation does not exist")
+            return {
+                "allocation_id": row["allocation_id"],
+                "operation_id": row["operation_id"],
+                "owner_subject": row["owner_subject"],
+                "beneficiary_class": row["beneficiary_class"],
+                "policy_id": row["policy_id"],
+                "policy_version": int(row["policy_version"]),
+                "policy_snapshot": json.loads(row["policy_snapshot_json"]),
+                "world_id": row["world_id"],
+                "public_claim_ids": json.loads(row["public_claim_ids_json"]),
+                "eligible_cu_milli": int(row["eligible_cu_milli"]),
+                "quoted_funding_minor": int(row["quoted_funding_minor"]),
+                "state": row["state"],
+                "created_at_ms": int(row["created_at_ms"]),
+            }
+        finally:
+            self._release(connection)
 
     def record_funding(
         self,
