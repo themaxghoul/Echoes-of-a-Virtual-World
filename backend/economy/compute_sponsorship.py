@@ -353,19 +353,21 @@ class ComputeSponsorshipStore:
         connection: sqlite3.Connection,
         owner_subject: str,
         policy: Dict[str, Any],
+        as_of_ms: int,
     ) -> Dict[str, Any]:
         currency = policy["funding_currency"]
         available = connection.execute(
-            "SELECT balance_minor FROM settlement_accounts WHERE account_id = ?",
-            (self._account_id("reserve:available", currency),),
+            """SELECT COALESCE(SUM(amount_minor), 0) AS balance_minor
+            FROM funding_receipts WHERE currency = ? AND received_at_ms <= ?""",
+            (currency, as_of_ms),
         ).fetchone()
-        available_balance = int(available["balance_minor"]) if available else 0
+        available_balance = int(available["balance_minor"])
         receipts = connection.execute(
             """SELECT operation_id, amount_minor, evidence_hash, received_at_ms
             FROM funding_receipts
-            WHERE owner_subject = ? AND currency = ? AND source_class = ?
+            WHERE owner_subject = ? AND currency = ? AND source_class = ? AND received_at_ms <= ?
             ORDER BY received_at_ms, operation_id""",
-            (owner_subject, currency, policy["funding_source_class"]),
+            (owner_subject, currency, policy["funding_source_class"], as_of_ms),
         ).fetchall()
         receipt_rows = [
             {
@@ -378,11 +380,26 @@ class ComputeSponsorshipStore:
         ]
         return {
             "currency": currency,
+            "as_of_ms": as_of_ms,
             "available_balance_minor": available_balance,
             "receipted_minor": sum(item["amount_minor"] for item in receipt_rows),
             "required_program_cap_minor": policy["program_cap_minor"],
             "receipts": receipt_rows,
         }
+
+    @classmethod
+    def _require_current_policy_runtime_fields(cls, policy: Dict[str, Any]) -> None:
+        period_ms = policy.get("period_ms")
+        if (
+            not isinstance(policy.get("funding_currency"), str)
+            or not policy["funding_currency"].strip()
+            or isinstance(period_ms, bool)
+            or not isinstance(period_ms, int)
+            or period_ms <= 0
+        ):
+            raise SettlementTransitionError(
+                "legacy policy lacks required authorization facts; create a new policy version"
+            )
 
     @classmethod
     def _policy_from_row(cls, row: sqlite3.Row) -> Dict[str, Any]:
@@ -543,6 +560,14 @@ class ComputeSponsorshipStore:
             if stored["owner_subject"] != values["owner_subject"]:
                 raise SettlementTransitionError("policy owner subject does not match")
             policy = stored["policy"]
+            self._require_current_policy_runtime_fields(policy)
+            if values["activated_at_ms"] < stored["approved_at_ms"]:
+                raise SettlementTransitionError("policy activation cannot precede approval")
+            if values["activated_at_ms"] < policy["effective_from_ms"] or (
+                policy["effective_to_ms"] is not None
+                and values["activated_at_ms"] > policy["effective_to_ms"]
+            ):
+                raise SettlementTransitionError("policy is not effective at the activation time")
             evidence = values["evidence"]
             reserve_snapshot = None
             if stored["state"] == "draft" and values["target_state"] == "allocation_active":
@@ -558,13 +583,17 @@ class ComputeSponsorshipStore:
                         evidence.get("owner_signature"), "owner_signature"
                     ),
                 }
-                reserve_snapshot = self._reserve_snapshot(connection, values["owner_subject"], policy)
+                reserve_snapshot = self._reserve_snapshot(
+                    connection, values["owner_subject"], policy, values["activated_at_ms"]
+                )
                 if (
                     reserve_snapshot["available_balance_minor"] < policy["program_cap_minor"]
                     or reserve_snapshot["receipted_minor"] < policy["program_cap_minor"]
                 ):
                     raise SettlementInsufficientFunds("receipted reserve cannot fund the policy program cap")
             elif stored["state"] == "allocation_active" and values["target_state"] == "settlement_active":
+                if values["activated_at_ms"] < stored["activated_at_ms"]:
+                    raise SettlementTransitionError("policy activation chronology is invalid")
                 try:
                     activation_evidence = {"provider_capability_hash": self._require_evidence_hash(
                         evidence.get("provider_capability_hash"), "provider_capability_hash"
@@ -662,6 +691,7 @@ class ComputeSponsorshipStore:
                 raise SettlementError("policy does not exist")
             stored = self._policy_from_row(row)
             policy = stored["policy"]
+            self._require_current_policy_runtime_fields(policy)
             if stored["owner_subject"] != values["owner_subject"]:
                 raise SettlementTransitionError("policy owner subject does not match")
             if stored["state"] not in {"allocation_active", "settlement_active"}:

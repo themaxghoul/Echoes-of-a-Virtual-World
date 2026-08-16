@@ -1,3 +1,5 @@
+import json
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -136,6 +138,65 @@ class ComputeSponsorshipFundingTests(unittest.TestCase):
         self.assertEqual("usd", activated["reserve_snapshot"]["currency"])
         self.assertEqual(500, activated["reserve_snapshot"]["available_balance_minor"])
         self.assertEqual(["fund-usd"], [item["operation_id"] for item in activated["reserve_snapshot"]["receipts"]])
+
+    def test_activation_reconstructs_reserve_as_of_its_timestamp_and_replays_exactly(self):
+        policy = self._policy("as-of-reserve-v1", 1, program_cap_minor=500, period_cap_minor=500)
+        created = self.store.create_policy("policy-as-of-create", "owner-uuid", policy, 1_500)
+        evidence = {
+            "owner_signature": self.VALID_OWNER_SIGNATURE,
+            "compliance_manifest_hash": self.VALID_COMPLIANCE_MANIFEST,
+        }
+        self.store.record_funding("fund-future", "owner-uuid", 500, "usd", "owner_capital", self.VALID_EVIDENCE_HASH, 3_000)
+        with self.assertRaises(SettlementInsufficientFunds):
+            self.store.activate_policy("policy-as-of-too-early", "owner-uuid", created["policy_id"], "allocation_active", evidence, 2_000)
+        self.store.record_funding("fund-early", "owner-uuid", 500, "usd", "owner_capital", self.VALID_EVIDENCE_HASH, 1_900)
+        activated = self.store.activate_policy("policy-as-of-active", "owner-uuid", created["policy_id"], "allocation_active", evidence, 2_000)
+        self.assertEqual(500, activated["reserve_snapshot"]["available_balance_minor"])
+        self.assertEqual(["fund-early"], [item["operation_id"] for item in activated["reserve_snapshot"]["receipts"]])
+        self.assertEqual(
+            activated,
+            self.store.activate_policy("policy-as-of-active", "owner-uuid", created["policy_id"], "allocation_active", evidence, 2_000),
+        )
+
+    def test_activation_time_must_follow_policy_approval_and_prior_transition(self):
+        policy = self._policy("ordered-activation-v1", 1)
+        policy["effective_from_ms"] = 2_000
+        created = self.store.create_policy("policy-ordered-create", "owner-uuid", policy, 2_100)
+        self.store.record_funding("fund-ordered", "owner-uuid", 1_000, "usd", "owner_capital", self.VALID_EVIDENCE_HASH, 2_000)
+        evidence = {
+            "owner_signature": self.VALID_OWNER_SIGNATURE,
+            "compliance_manifest_hash": self.VALID_COMPLIANCE_MANIFEST,
+        }
+        with self.assertRaisesRegex(SettlementTransitionError, "approval"):
+            self.store.activate_policy("policy-before-approval", "owner-uuid", created["policy_id"], "allocation_active", evidence, 2_050)
+        self.store.activate_policy("policy-ordered-active", "owner-uuid", created["policy_id"], "allocation_active", evidence, 2_200)
+        with self.assertRaisesRegex(SettlementTransitionError, "chronology"):
+            self.store.activate_policy("policy-out-of-order-settlement", "owner-uuid", created["policy_id"], "settlement_active", {
+                "provider_capability_hash": self.VALID_PROVIDER_CAPABILITY,
+            }, 2_100)
+
+    def test_legacy_active_policy_without_new_authorization_fields_fails_closed_for_quotes(self):
+        policy = self._policy("legacy-active-v1", 1)
+        created = self.store.create_policy("policy-legacy-create", "owner-uuid", policy, 1_000)
+        self.store.record_funding("fund-legacy", "owner-uuid", 1_000, "usd", "owner_capital", self.VALID_EVIDENCE_HASH, 1_100)
+        self.store.activate_policy("policy-legacy-active", "owner-uuid", created["policy_id"], "allocation_active", {
+            "owner_signature": self.VALID_OWNER_SIGNATURE,
+            "compliance_manifest_hash": self.VALID_COMPLIANCE_MANIFEST,
+        }, 1_200)
+        legacy_policy = self.store.get_policy(created["policy_id"])["policy"]
+        legacy_policy.pop("funding_currency")
+        legacy_policy.pop("period_ms")
+        connection = sqlite3.connect(self.store.database_path)
+        try:
+            connection.execute(
+                "UPDATE settlement_policies SET policy_json = ? WHERE policy_id = ?",
+                (json.dumps(legacy_policy, sort_keys=True, separators=(",", ":")), created["policy_id"]),
+            )
+            connection.commit()
+        finally:
+            connection.close()
+        with self.assertRaisesRegex(SettlementTransitionError, "new policy version"):
+            self.store.create_allocation("legacy-quote", "owner-uuid", "world-1", created["policy_id"], [self._public_claim("claim:legacy")], 2_100)
 
     def test_policy_rejects_unknown_evidence_requirements(self):
         policy = self._policy("unknown-evidence-v1", 1)
