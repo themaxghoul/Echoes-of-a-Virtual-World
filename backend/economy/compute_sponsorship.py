@@ -38,6 +38,16 @@ _SUPPORTED_EVIDENCE_REQUIREMENTS = frozenset({
     "commissioned_action",
     "independent_verifier",
 })
+_ALLOCATION_TRANSITIONS = {
+    "hold": {"proposed": "funding_held"},
+    "approve": {"funding_held": "owner_approved"},
+    "cancel": {
+        "proposed": "cancelled",
+        "funding_held": "cancelled",
+        "owner_approved": "cancelled",
+    },
+    "expire": {"owner_approved": "expired"},
+}
 
 
 class ComputeSponsorshipStore:
@@ -77,9 +87,11 @@ class ComputeSponsorshipStore:
                     currency TEXT NOT NULL,
                     delta_minor INTEGER NOT NULL,
                     evidence_hash TEXT NOT NULL,
+                    occurred_at_ms INTEGER NOT NULL DEFAULT 0,
                     FOREIGN KEY(operation_id) REFERENCES settlement_operations(operation_id),
                     FOREIGN KEY(account_id) REFERENCES settlement_accounts(account_id),
-                    CHECK(typeof(delta_minor) = 'integer')
+                    CHECK(typeof(delta_minor) = 'integer'),
+                    CHECK(typeof(occurred_at_ms) = 'integer' AND occurred_at_ms >= 0)
                 );
                 CREATE TABLE IF NOT EXISTS funding_receipts (
                     operation_id TEXT PRIMARY KEY,
@@ -124,10 +136,16 @@ class ComputeSponsorshipStore:
                     period_start_ms INTEGER NOT NULL DEFAULT 0,
                     state TEXT NOT NULL,
                     created_at_ms INTEGER NOT NULL,
+                    held_at_ms INTEGER,
+                    approval_hash TEXT,
+                    approved_at_ms INTEGER,
+                    expires_at_ms INTEGER,
+                    cancelled_at_ms INTEGER,
+                    expired_at_ms INTEGER,
                     FOREIGN KEY(operation_id) REFERENCES settlement_operations(operation_id),
                     FOREIGN KEY(policy_id) REFERENCES settlement_policies(policy_id),
                     CHECK(beneficiary_class = 'eov_owner_development'),
-                    CHECK(state = 'proposed'),
+                    CHECK(state IN ('proposed', 'funding_held', 'owner_approved', 'cancelled', 'expired')),
                     CHECK(typeof(policy_version) = 'integer' AND policy_version > 0),
                     CHECK(typeof(eligible_cu_milli) = 'integer' AND eligible_cu_milli > 0),
                     CHECK(typeof(quoted_funding_minor) = 'integer' AND quoted_funding_minor > 0),
@@ -158,17 +176,51 @@ class ComputeSponsorshipStore:
                     CHECK(target_state IN ('allocation_active', 'settlement_active')),
                     CHECK(typeof(activated_at_ms) = 'integer' AND activated_at_ms >= 0)
                 );
+                CREATE TABLE IF NOT EXISTS settlement_events (
+                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                    operation_id TEXT NOT NULL,
+                    allocation_id TEXT NOT NULL,
+                    event_type TEXT NOT NULL,
+                    from_state TEXT NOT NULL,
+                    target_state TEXT NOT NULL,
+                    evidence_json TEXT NOT NULL,
+                    occurred_at_ms INTEGER NOT NULL,
+                    FOREIGN KEY(operation_id) REFERENCES settlement_operations(operation_id),
+                    FOREIGN KEY(allocation_id) REFERENCES settlement_allocations(allocation_id),
+                    CHECK(event_type IN ('allocation_held', 'owner_approved', 'allocation_cancelled', 'allocation_expired')),
+                    CHECK(typeof(occurred_at_ms) = 'integer' AND occurred_at_ms >= 0)
+                );
                 CREATE INDEX IF NOT EXISTS idx_settlement_postings_operation
                     ON settlement_postings(operation_id);
                 CREATE INDEX IF NOT EXISTS idx_settlement_postings_account
                     ON settlement_postings(account_id);
+                CREATE INDEX IF NOT EXISTS idx_settlement_postings_as_of
+                    ON settlement_postings(account_id, occurred_at_ms);
                 CREATE INDEX IF NOT EXISTS idx_settlement_allocations_policy
                     ON settlement_allocations(policy_id);
                 CREATE INDEX IF NOT EXISTS idx_settlement_claim_commitments_allocation
                     ON settlement_claim_commitments(allocation_id);
                 CREATE INDEX IF NOT EXISTS idx_settlement_policy_activation_events_policy
                     ON settlement_policy_activation_events(policy_id, sequence);
+                CREATE INDEX IF NOT EXISTS idx_settlement_events_allocation
+                    ON settlement_events(allocation_id, sequence);
                 """
+            )
+            posting_columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(settlement_postings)")
+            }
+            if "occurred_at_ms" not in posting_columns:
+                connection.execute(
+                    "ALTER TABLE settlement_postings ADD COLUMN occurred_at_ms INTEGER NOT NULL DEFAULT 0"
+                )
+            connection.execute(
+                """UPDATE settlement_postings
+                SET occurred_at_ms = (
+                    SELECT received_at_ms FROM funding_receipts
+                    WHERE funding_receipts.operation_id = settlement_postings.operation_id
+                )
+                WHERE occurred_at_ms = 0
+                  AND operation_id IN (SELECT operation_id FROM funding_receipts)"""
             )
             allocation_columns = {
                 row["name"] for row in connection.execute("PRAGMA table_info(settlement_allocations)")
@@ -177,6 +229,46 @@ class ComputeSponsorshipStore:
                 connection.execute(
                     "ALTER TABLE settlement_allocations ADD COLUMN period_start_ms INTEGER NOT NULL DEFAULT 0"
                 )
+            for column in (
+                "held_at_ms", "approval_hash", "approved_at_ms", "expires_at_ms",
+                "cancelled_at_ms", "expired_at_ms",
+            ):
+                if column not in allocation_columns:
+                    connection.execute(f"ALTER TABLE settlement_allocations ADD COLUMN {column}")
+            allocation_sql = connection.execute(
+                "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'settlement_allocations'"
+            ).fetchone()["sql"]
+            if "CHECK(state = 'proposed')" in allocation_sql:
+                connection.execute("PRAGMA foreign_keys=OFF")
+                connection.execute(
+                    """CREATE TABLE settlement_allocations_v3 AS
+                    SELECT * FROM settlement_allocations"""
+                )
+                connection.execute("DROP TABLE settlement_allocations")
+                connection.execute(
+                    """CREATE TABLE settlement_allocations (
+                        allocation_id TEXT PRIMARY KEY, operation_id TEXT NOT NULL UNIQUE,
+                        owner_subject TEXT NOT NULL, beneficiary_class TEXT NOT NULL, policy_id TEXT NOT NULL,
+                        policy_version INTEGER NOT NULL, policy_snapshot_json TEXT NOT NULL, world_id TEXT NOT NULL,
+                        public_claim_ids_json TEXT NOT NULL, eligible_cu_milli INTEGER NOT NULL,
+                        quoted_funding_minor INTEGER NOT NULL, period_start_ms INTEGER NOT NULL DEFAULT 0,
+                        state TEXT NOT NULL, created_at_ms INTEGER NOT NULL, held_at_ms INTEGER,
+                        approval_hash TEXT, approved_at_ms INTEGER, expires_at_ms INTEGER,
+                        cancelled_at_ms INTEGER, expired_at_ms INTEGER,
+                        FOREIGN KEY(operation_id) REFERENCES settlement_operations(operation_id),
+                        FOREIGN KEY(policy_id) REFERENCES settlement_policies(policy_id),
+                        CHECK(beneficiary_class = 'eov_owner_development'),
+                        CHECK(state IN ('proposed', 'funding_held', 'owner_approved', 'cancelled', 'expired')),
+                        CHECK(typeof(policy_version) = 'integer' AND policy_version > 0),
+                        CHECK(typeof(eligible_cu_milli) = 'integer' AND eligible_cu_milli > 0),
+                        CHECK(typeof(quoted_funding_minor) = 'integer' AND quoted_funding_minor > 0),
+                        CHECK(typeof(period_start_ms) = 'integer' AND period_start_ms >= 0),
+                        CHECK(typeof(created_at_ms) = 'integer' AND created_at_ms >= 0)
+                    )"""
+                )
+                connection.execute("INSERT INTO settlement_allocations SELECT * FROM settlement_allocations_v3")
+                connection.execute("DROP TABLE settlement_allocations_v3")
+                connection.execute("PRAGMA foreign_keys=ON")
         finally:
             self._release(connection)
 
@@ -357,9 +449,9 @@ class ComputeSponsorshipStore:
     ) -> Dict[str, Any]:
         currency = policy["funding_currency"]
         available = connection.execute(
-            """SELECT COALESCE(SUM(amount_minor), 0) AS balance_minor
-            FROM funding_receipts WHERE currency = ? AND received_at_ms <= ?""",
-            (currency, as_of_ms),
+            """SELECT COALESCE(SUM(delta_minor), 0) AS balance_minor
+            FROM settlement_postings WHERE account_id = ? AND occurred_at_ms <= ?""",
+            (self._account_id("reserve:available", currency), as_of_ms),
         ).fetchone()
         available_balance = int(available["balance_minor"])
         receipts = connection.execute(
@@ -805,7 +897,7 @@ class ComputeSponsorshipStore:
             ).fetchone()
             if not row:
                 raise SettlementError("allocation does not exist")
-            return {
+            allocation = {
                 "allocation_id": row["allocation_id"],
                 "operation_id": row["operation_id"],
                 "owner_subject": row["owner_subject"],
@@ -820,7 +912,421 @@ class ComputeSponsorshipStore:
                 "period_start_ms": int(row["period_start_ms"]),
                 "state": row["state"],
                 "created_at_ms": int(row["created_at_ms"]),
+                "held_at_ms": int(row["held_at_ms"]) if row["held_at_ms"] is not None else None,
+                "approval_hash": row["approval_hash"],
+                "approved_at_ms": int(row["approved_at_ms"]) if row["approved_at_ms"] is not None else None,
+                "expires_at_ms": int(row["expires_at_ms"]) if row["expires_at_ms"] is not None else None,
+                "cancelled_at_ms": int(row["cancelled_at_ms"]) if row["cancelled_at_ms"] is not None else None,
+                "expired_at_ms": int(row["expired_at_ms"]) if row["expired_at_ms"] is not None else None,
             }
+            events = connection.execute(
+                """SELECT sequence, operation_id, event_type, from_state, target_state, evidence_json, occurred_at_ms
+                FROM settlement_events WHERE allocation_id = ? ORDER BY sequence""",
+                (allocation_id,),
+            ).fetchall()
+            allocation["events"] = [
+                {
+                    "sequence": int(event["sequence"]),
+                    "operation_id": event["operation_id"],
+                    "event_type": event["event_type"],
+                    "from_state": event["from_state"],
+                    "target_state": event["target_state"],
+                    "evidence": json.loads(event["evidence_json"]),
+                    "occurred_at_ms": int(event["occurred_at_ms"]),
+                }
+                for event in events
+            ]
+            return allocation
+        finally:
+            self._release(connection)
+
+    @staticmethod
+    def _allocation_lifecycle_result(
+        row: sqlite3.Row,
+        operation_id: str,
+        state: str,
+        now_ms: int,
+        **extra: Any,
+    ) -> Dict[str, Any]:
+        result = {
+            "operation_id": operation_id,
+            "allocation_id": row["allocation_id"],
+            "owner_subject": row["owner_subject"],
+            "beneficiary_class": "eov_owner_development",
+            "quoted_funding_minor": int(row["quoted_funding_minor"]),
+            "state": state,
+            "occurred_at_ms": now_ms,
+        }
+        result.update(extra)
+        return result
+
+    @classmethod
+    def _require_allocation_owner(cls, row: sqlite3.Row, owner_subject: str) -> None:
+        if row["owner_subject"] != owner_subject:
+            raise SettlementTransitionError("allocation owner subject does not match")
+
+    @classmethod
+    def _allocation_currency(cls, row: sqlite3.Row) -> str:
+        policy = json.loads(row["policy_snapshot_json"])
+        cls._require_current_policy_runtime_fields(policy)
+        return policy["funding_currency"]
+
+    @classmethod
+    def _append_lifecycle_event(
+        cls,
+        connection: sqlite3.Connection,
+        operation_id: str,
+        allocation_id: str,
+        event_type: str,
+        from_state: str,
+        target_state: str,
+        evidence: Dict[str, Any],
+        now_ms: int,
+    ) -> None:
+        connection.execute(
+            """INSERT INTO settlement_events(
+                operation_id, allocation_id, event_type, from_state, target_state, evidence_json, occurred_at_ms
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                operation_id, allocation_id, event_type, from_state, target_state,
+                cls._canonical_json(evidence), now_ms,
+            ),
+        )
+
+    @staticmethod
+    def _require_lifecycle_transition(current_state: str, action: str) -> str:
+        target = _ALLOCATION_TRANSITIONS[action].get(current_state)
+        if target is None:
+            raise SettlementTransitionError(
+                f"allocation transition to {_ALLOCATION_TRANSITIONS[action].values()} is invalid"
+            )
+        return target
+
+    @classmethod
+    def _move_reserve(
+        cls,
+        connection: sqlite3.Connection,
+        operation_id: str,
+        source_account: str,
+        destination_account: str,
+        currency: str,
+        amount_minor: int,
+        evidence_hash: str,
+        now_ms: int,
+    ) -> None:
+        source = connection.execute(
+            "SELECT balance_minor FROM settlement_accounts WHERE account_id = ?", (source_account,)
+        ).fetchone()
+        as_of = connection.execute(
+            """SELECT COALESCE(SUM(delta_minor), 0) AS balance_minor
+            FROM settlement_postings WHERE account_id = ? AND occurred_at_ms <= ?""",
+            (source_account, now_ms),
+        ).fetchone()
+        if (
+            source is None
+            or int(source["balance_minor"]) < amount_minor
+            or int(as_of["balance_minor"]) < amount_minor
+        ):
+            raise SettlementInsufficientFunds("reserve:available cannot cover the allocation hold")
+        connection.executemany(
+            "INSERT OR IGNORE INTO settlement_accounts(account_id, currency) VALUES (?, ?)",
+            [(source_account, currency), (destination_account, currency)],
+        )
+        connection.execute(
+            "UPDATE settlement_accounts SET balance_minor = balance_minor - ? WHERE account_id = ?",
+            (amount_minor, source_account),
+        )
+        connection.execute(
+            "UPDATE settlement_accounts SET balance_minor = balance_minor + ? WHERE account_id = ?",
+            (amount_minor, destination_account),
+        )
+        connection.executemany(
+            """INSERT INTO settlement_postings(
+                operation_id, account_id, currency, delta_minor, evidence_hash, occurred_at_ms
+            ) VALUES (?, ?, ?, ?, ?, ?)""",
+            [
+                (operation_id, source_account, currency, -amount_minor, evidence_hash, now_ms),
+                (operation_id, destination_account, currency, amount_minor, evidence_hash, now_ms),
+            ],
+        )
+
+    def hold_allocation(
+        self, operation_id: str, allocation_id: str, owner_subject: str, now_ms: int,
+    ) -> Dict[str, Any]:
+        """Move a quoted allocation into a same-currency, allocation-specific reserve hold."""
+        values = {
+            "operation_id": self._require_text(operation_id, "operation_id"),
+            "allocation_id": self._require_text(allocation_id, "allocation_id"),
+            "owner_subject": self._require_text(owner_subject, "owner_subject"),
+            "now_ms": self._require_non_negative_integer(now_ms, "now_ms"),
+        }
+        request_hash = self._hash_request(values)
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            prior = connection.execute(
+                "SELECT request_hash, result_json FROM settlement_operations WHERE operation_id = ?",
+                (values["operation_id"],),
+            ).fetchone()
+            if prior:
+                if prior["request_hash"] != request_hash:
+                    raise SettlementIdempotencyConflict("operation_id was already used for different settlement intent")
+                connection.execute("COMMIT")
+                return json.loads(prior["result_json"])
+            row = connection.execute(
+                "SELECT * FROM settlement_allocations WHERE allocation_id = ?", (values["allocation_id"],)
+            ).fetchone()
+            if not row:
+                raise SettlementError("allocation does not exist")
+            self._require_allocation_owner(row, values["owner_subject"])
+            self._require_lifecycle_transition(row["state"], "hold")
+            if values["now_ms"] < int(row["created_at_ms"]):
+                raise SettlementTransitionError("allocation hold chronology is invalid")
+            currency = self._allocation_currency(row)
+            available = self._account_id("reserve:available", currency)
+            held = self._account_id(f"reserve:held:{row['allocation_id']}", currency)
+            amount = int(row["quoted_funding_minor"])
+            evidence_hash = json.loads(row["policy_snapshot_json"])["compliance_manifest_hash"]
+            result = self._allocation_lifecycle_result(
+                row, values["operation_id"], "funding_held", values["now_ms"],
+                currency=currency, source_account=available, destination_account=held,
+            )
+            connection.execute(
+                "INSERT INTO settlement_operations(operation_id, request_hash, result_json) VALUES (?, ?, ?)",
+                (values["operation_id"], request_hash, self._canonical_json(result)),
+            )
+            self._move_reserve(
+                connection, values["operation_id"], available, held, currency, amount,
+                evidence_hash, values["now_ms"],
+            )
+            connection.execute(
+                "UPDATE settlement_allocations SET state = 'funding_held', held_at_ms = ? WHERE allocation_id = ?",
+                (values["now_ms"], row["allocation_id"]),
+            )
+            self._append_lifecycle_event(
+                connection, values["operation_id"], row["allocation_id"], "allocation_held",
+                "proposed", "funding_held", {"funding_evidence_hash": evidence_hash}, values["now_ms"],
+            )
+            connection.execute("COMMIT")
+            return result
+        except Exception:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise
+        finally:
+            self._release(connection)
+
+    def approve_allocation(
+        self,
+        operation_id: str,
+        allocation_id: str,
+        owner_subject: str,
+        approval_hash: str,
+        expires_at_ms: int,
+        now_ms: int,
+    ) -> Dict[str, Any]:
+        """Record the owner's explicit approval of an already-held exact quote."""
+        values = {
+            "operation_id": self._require_text(operation_id, "operation_id"),
+            "allocation_id": self._require_text(allocation_id, "allocation_id"),
+            "owner_subject": self._require_text(owner_subject, "owner_subject"),
+            "approval_hash": self._require_evidence_hash(approval_hash, "approval_hash"),
+            "expires_at_ms": self._require_non_negative_integer(expires_at_ms, "expires_at_ms"),
+            "now_ms": self._require_non_negative_integer(now_ms, "now_ms"),
+        }
+        if values["expires_at_ms"] <= values["now_ms"]:
+            raise ValueError("expires_at_ms must be later than now_ms")
+        request_hash = self._hash_request(values)
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            prior = connection.execute(
+                "SELECT request_hash, result_json FROM settlement_operations WHERE operation_id = ?",
+                (values["operation_id"],),
+            ).fetchone()
+            if prior:
+                if prior["request_hash"] != request_hash:
+                    raise SettlementIdempotencyConflict("operation_id was already used for different settlement intent")
+                connection.execute("COMMIT")
+                return json.loads(prior["result_json"])
+            row = connection.execute(
+                "SELECT * FROM settlement_allocations WHERE allocation_id = ?", (values["allocation_id"],)
+            ).fetchone()
+            if not row:
+                raise SettlementError("allocation does not exist")
+            self._require_allocation_owner(row, values["owner_subject"])
+            self._require_lifecycle_transition(row["state"], "approve")
+            if values["now_ms"] < int(row["held_at_ms"]):
+                raise SettlementTransitionError("allocation approval chronology is invalid")
+            result = self._allocation_lifecycle_result(
+                row, values["operation_id"], "owner_approved", values["now_ms"],
+                approval_hash=values["approval_hash"], expires_at_ms=values["expires_at_ms"],
+            )
+            connection.execute(
+                "INSERT INTO settlement_operations(operation_id, request_hash, result_json) VALUES (?, ?, ?)",
+                (values["operation_id"], request_hash, self._canonical_json(result)),
+            )
+            connection.execute(
+                """UPDATE settlement_allocations
+                SET state = 'owner_approved', approval_hash = ?, approved_at_ms = ?, expires_at_ms = ?
+                WHERE allocation_id = ?""",
+                (values["approval_hash"], values["now_ms"], values["expires_at_ms"], row["allocation_id"]),
+            )
+            self._append_lifecycle_event(
+                connection, values["operation_id"], row["allocation_id"], "owner_approved",
+                "funding_held", "owner_approved", {
+                    "approval_hash": values["approval_hash"], "expires_at_ms": values["expires_at_ms"],
+                }, values["now_ms"],
+            )
+            connection.execute("COMMIT")
+            return result
+        except Exception:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise
+        finally:
+            self._release(connection)
+
+    def cancel_allocation(
+        self, operation_id: str, allocation_id: str, owner_subject: str, reason: str, now_ms: int,
+    ) -> Dict[str, Any]:
+        """Cancel a pre-provider allocation and release any held reserve exactly once."""
+        values = {
+            "operation_id": self._require_text(operation_id, "operation_id"),
+            "allocation_id": self._require_text(allocation_id, "allocation_id"),
+            "owner_subject": self._require_text(owner_subject, "owner_subject"),
+            "reason": self._require_text(reason, "reason"),
+            "now_ms": self._require_non_negative_integer(now_ms, "now_ms"),
+        }
+        request_hash = self._hash_request(values)
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            prior = connection.execute(
+                "SELECT request_hash, result_json FROM settlement_operations WHERE operation_id = ?",
+                (values["operation_id"],),
+            ).fetchone()
+            if prior:
+                if prior["request_hash"] != request_hash:
+                    raise SettlementIdempotencyConflict("operation_id was already used for different settlement intent")
+                connection.execute("COMMIT")
+                return json.loads(prior["result_json"])
+            row = connection.execute(
+                "SELECT * FROM settlement_allocations WHERE allocation_id = ?", (values["allocation_id"],)
+            ).fetchone()
+            if not row:
+                raise SettlementError("allocation does not exist")
+            self._require_allocation_owner(row, values["owner_subject"])
+            self._require_lifecycle_transition(row["state"], "cancel")
+            if values["now_ms"] < int(row["created_at_ms"]):
+                raise SettlementTransitionError("allocation cancellation chronology is invalid")
+            if row["state"] == "funding_held" and values["now_ms"] < int(row["held_at_ms"]):
+                raise SettlementTransitionError("allocation cancellation chronology is invalid")
+            if row["state"] == "owner_approved":
+                if values["now_ms"] < int(row["approved_at_ms"]):
+                    raise SettlementTransitionError("allocation cancellation chronology is invalid")
+                if values["now_ms"] >= int(row["expires_at_ms"]):
+                    raise SettlementTransitionError("allocation approval is expired; use expire_due")
+            currency = self._allocation_currency(row)
+            result = self._allocation_lifecycle_result(
+                row, values["operation_id"], "cancelled", values["now_ms"], reason=values["reason"],
+            )
+            connection.execute(
+                "INSERT INTO settlement_operations(operation_id, request_hash, result_json) VALUES (?, ?, ?)",
+                (values["operation_id"], request_hash, self._canonical_json(result)),
+            )
+            if row["state"] in {"funding_held", "owner_approved"}:
+                held = self._account_id(f"reserve:held:{row['allocation_id']}", currency)
+                available = self._account_id("reserve:available", currency)
+                self._move_reserve(
+                    connection, values["operation_id"], held, available, currency,
+                    int(row["quoted_funding_minor"]), row["approval_hash"] or json.loads(row["policy_snapshot_json"])["compliance_manifest_hash"],
+                    values["now_ms"],
+                )
+            connection.execute(
+                "DELETE FROM settlement_claim_commitments WHERE allocation_id = ?", (row["allocation_id"],)
+            )
+            connection.execute(
+                "UPDATE settlement_allocations SET state = 'cancelled', cancelled_at_ms = ? WHERE allocation_id = ?",
+                (values["now_ms"], row["allocation_id"]),
+            )
+            self._append_lifecycle_event(
+                connection, values["operation_id"], row["allocation_id"], "allocation_cancelled",
+                row["state"], "cancelled", {"reason": values["reason"]}, values["now_ms"],
+            )
+            connection.execute("COMMIT")
+            return result
+        except Exception:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise
+        finally:
+            self._release(connection)
+
+    def expire_due(self, operation_id: str, now_ms: int) -> list[Dict[str, Any]]:
+        """Deterministically expire all due owner approvals in one transaction."""
+        values = {
+            "operation_id": self._require_text(operation_id, "operation_id"),
+            "now_ms": self._require_non_negative_integer(now_ms, "now_ms"),
+        }
+        request_hash = self._hash_request(values)
+        connection = self._connect()
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            prior = connection.execute(
+                "SELECT request_hash, result_json FROM settlement_operations WHERE operation_id = ?",
+                (values["operation_id"],),
+            ).fetchone()
+            if prior:
+                if prior["request_hash"] != request_hash:
+                    raise SettlementIdempotencyConflict("operation_id was already used for different settlement intent")
+                connection.execute("COMMIT")
+                return json.loads(prior["result_json"])
+            rows = connection.execute(
+                """SELECT * FROM settlement_allocations
+                WHERE state = 'owner_approved' AND expires_at_ms <= ?
+                ORDER BY allocation_id""",
+                (values["now_ms"],),
+            ).fetchall()
+            results = []
+            connection.execute(
+                "INSERT INTO settlement_operations(operation_id, request_hash, result_json) VALUES (?, ?, ?)",
+                (values["operation_id"], request_hash, self._canonical_json(results)),
+            )
+            for row in rows:
+                self._require_lifecycle_transition(row["state"], "expire")
+                currency = self._allocation_currency(row)
+                held = self._account_id(f"reserve:held:{row['allocation_id']}", currency)
+                available = self._account_id("reserve:available", currency)
+                self._move_reserve(
+                    connection, values["operation_id"], held, available, currency,
+                    int(row["quoted_funding_minor"]), row["approval_hash"], values["now_ms"],
+                )
+                connection.execute(
+                    "DELETE FROM settlement_claim_commitments WHERE allocation_id = ?", (row["allocation_id"],)
+                )
+                connection.execute(
+                    "UPDATE settlement_allocations SET state = 'expired', expired_at_ms = ? WHERE allocation_id = ?",
+                    (values["now_ms"], row["allocation_id"]),
+                )
+                self._append_lifecycle_event(
+                    connection, values["operation_id"], row["allocation_id"], "allocation_expired",
+                    "owner_approved", "expired", {"approval_hash": row["approval_hash"]}, values["now_ms"],
+                )
+                results.append(self._allocation_lifecycle_result(
+                    row, values["operation_id"], "expired", values["now_ms"],
+                    approval_hash=row["approval_hash"], expires_at_ms=int(row["expires_at_ms"]),
+                ))
+            connection.execute(
+                "UPDATE settlement_operations SET result_json = ? WHERE operation_id = ?",
+                (self._canonical_json(results), values["operation_id"]),
+            )
+            connection.execute("COMMIT")
+            return results
+        except Exception:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            raise
         finally:
             self._release(connection)
 
@@ -893,10 +1399,12 @@ class ComputeSponsorshipStore:
                 (values["operation_id"], values["owner_subject"], values["amount_minor"], currency, values["source_class"], values["evidence_hash"], values["received_at_ms"]),
             )
             connection.executemany(
-                "INSERT INTO settlement_postings(operation_id, account_id, currency, delta_minor, evidence_hash) VALUES (?, ?, ?, ?, ?)",
+                """INSERT INTO settlement_postings(
+                    operation_id, account_id, currency, delta_minor, evidence_hash, occurred_at_ms
+                ) VALUES (?, ?, ?, ?, ?, ?)""",
                 [
-                    (values["operation_id"], contra, currency, -values["amount_minor"], values["evidence_hash"]),
-                    (values["operation_id"], reserve, currency, values["amount_minor"], values["evidence_hash"]),
+                    (values["operation_id"], contra, currency, -values["amount_minor"], values["evidence_hash"], values["received_at_ms"]),
+                    (values["operation_id"], reserve, currency, values["amount_minor"], values["evidence_hash"], values["received_at_ms"]),
                 ],
             )
             connection.execute("COMMIT")

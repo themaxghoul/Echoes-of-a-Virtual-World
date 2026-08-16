@@ -103,6 +103,19 @@ class SettlementServiceTests(unittest.TestCase):
         with self.assertRaisesRegex(SettlementError, "already committed"):
             self.service.propose_allocation("quote-2", self.world_id, self.policy_id, [self.claim_id], 2_101)
 
+    def test_lifecycle_wrappers_derive_the_configured_owner_subject(self):
+        allocation = self.service.propose_allocation("quote-lifecycle", self.world_id, self.policy_id, [self.claim_id], 2_100)
+        held = self.service.hold_allocation("hold-lifecycle", allocation["allocation_id"], 2_200)
+        self.assertEqual("funding_held", held["state"])
+        approved = self.service.approve_allocation(
+            "approve-lifecycle", allocation["allocation_id"], "sha256:" + ("e" * 64), 9_000, 2_300,
+        )
+        self.assertEqual("owner_approved", approved["state"])
+        cancelled = self.service.cancel_allocation(
+            "cancel-lifecycle", allocation["allocation_id"], "provider unavailable", 2_400,
+        )
+        self.assertEqual("cancelled", cancelled["state"])
+
 
 if __name__ == "__main__":
     unittest.main()

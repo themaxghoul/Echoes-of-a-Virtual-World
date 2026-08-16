@@ -67,3 +67,28 @@ class SettlementService:
             public_claims=claims,
             now_ms=now_ms,
         )
+
+    def hold_allocation(self, operation_id: str, allocation_id: str, now_ms: int) -> dict:
+        """Hold a server-resolved quote using the service-configured owner identity."""
+        return self.store.hold_allocation(operation_id, allocation_id, self.owner_subject, now_ms)
+
+    def approve_allocation(
+        self,
+        operation_id: str,
+        allocation_id: str,
+        approval_hash: str,
+        expires_at_ms: int,
+        now_ms: int,
+    ) -> dict:
+        """Record an explicit owner approval without accepting a caller-supplied subject."""
+        return self.store.approve_allocation(
+            operation_id, allocation_id, self.owner_subject, approval_hash, expires_at_ms, now_ms,
+        )
+
+    def cancel_allocation(self, operation_id: str, allocation_id: str, reason: str, now_ms: int) -> dict:
+        """Cancel a pre-provider allocation as the configured owner."""
+        return self.store.cancel_allocation(operation_id, allocation_id, self.owner_subject, reason, now_ms)
+
+    def expire_due(self, operation_id: str, now_ms: int) -> list[dict]:
+        """Expire due approvals; this has no caller-controlled identity."""
+        return self.store.expire_due(operation_id, now_ms)

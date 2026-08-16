@@ -2,6 +2,7 @@ import json
 import sqlite3
 import tempfile
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from economy import (
@@ -254,6 +255,176 @@ class ComputeSponsorshipFundingTests(unittest.TestCase):
         with self.assertRaisesRegex(SettlementError, "evidence requirements"):
             self.store.create_allocation("independent-quote", "owner-uuid", "world-1", created["policy_id"], [claim], 2_100)
 
+    def test_hold_approval_and_cancel_conserve_funds_and_are_exactly_replayable(self):
+        allocation = self._proposed_allocation("lifecycle-quote", quoted_funding_minor=200)
+
+        held = self.store.hold_allocation("hold-1", allocation["allocation_id"], "owner-uuid", 2_200)
+        self.assertEqual("funding_held", held["state"])
+        self.assertEqual(800, self.store.funding_balance("reserve:available"))
+        self.assertEqual(200, self.store.funding_balance(f"reserve:held:{allocation['allocation_id']}"))
+        self.assertEqual(held, self.store.hold_allocation("hold-1", allocation["allocation_id"], "owner-uuid", 2_200))
+        with self.assertRaises(SettlementIdempotencyConflict):
+            self.store.hold_allocation("hold-1", allocation["allocation_id"], "owner-uuid", 2_201)
+
+        approval_hash = "sha256:" + ("e" * 64)
+        approved = self.store.approve_allocation(
+            "approve-1", allocation["allocation_id"], "owner-uuid", approval_hash, 9_000, 2_300,
+        )
+        self.assertEqual("owner_approved", approved["state"])
+        self.assertEqual(approval_hash, approved["approval_hash"])
+        self.assertEqual(
+            approved,
+            self.store.approve_allocation(
+                "approve-1", allocation["allocation_id"], "owner-uuid", approval_hash, 9_000, 2_300,
+            ),
+        )
+        cancelled = self.store.cancel_allocation(
+            "cancel-1", allocation["allocation_id"], "owner-uuid", "provider unavailable", 2_400,
+        )
+        self.assertEqual("cancelled", cancelled["state"])
+        self.assertEqual(1_000, self.store.funding_balance("reserve:available"))
+        self.assertEqual(0, self.store.funding_balance(f"reserve:held:{allocation['allocation_id']}"))
+        self.assertTrue(self.store.audit_funding()["balanced"])
+        self.assertEqual(
+            cancelled,
+            self.store.cancel_allocation(
+                "cancel-1", allocation["allocation_id"], "owner-uuid", "provider unavailable", 2_400,
+            ),
+        )
+        self.assertEqual(
+            ["allocation_held", "owner_approved", "allocation_cancelled"],
+            [event["event_type"] for event in self.store.get_allocation(allocation["allocation_id"])["events"]],
+        )
+
+    def test_hold_rejects_insufficient_shared_reserve_without_partial_postings(self):
+        self.store.record_funding("shared-fund", "owner-uuid", 1_000, "usd", "owner_capital", self.VALID_EVIDENCE_HASH, 1_900)
+        first = self._proposed_allocation("first-quote", quoted_funding_minor=600, fund_reserve=False, version=1)
+        second = self._proposed_allocation("second-quote", quoted_funding_minor=600, fund_reserve=False, version=2)
+        self.store.hold_allocation("first-hold", first["allocation_id"], "owner-uuid", 2_200)
+
+        with self.assertRaises(SettlementInsufficientFunds):
+            self.store.hold_allocation("second-hold", second["allocation_id"], "owner-uuid", 2_201)
+
+        self.assertEqual("proposed", self.store.get_allocation(second["allocation_id"])["state"])
+        self.assertEqual(400, self.store.funding_balance("reserve:available"))
+        self.assertEqual(0, self.store.funding_balance(f"reserve:held:{second['allocation_id']}"))
+        self.assertTrue(self.store.audit_funding()["balanced"])
+
+    def test_hold_uses_only_the_allocation_policy_currency(self):
+        self.store.record_funding("eur-fund", "owner-uuid", 1_000, "eur", "owner_capital", self.VALID_EVIDENCE_HASH, 1_900)
+        self.store.record_funding("usd-fund", "owner-uuid", 200, "usd", "owner_capital", self.VALID_EVIDENCE_HASH, 1_900)
+        allocation = self._proposed_allocation(
+            "currency-quote", quoted_funding_minor=200, fund_reserve=False, version=1,
+        )
+
+        self.store.hold_allocation("currency-hold", allocation["allocation_id"], "owner-uuid", 2_200)
+
+        self.assertEqual(0, self.store.funding_balance("reserve:available", "usd"))
+        self.assertEqual(200, self.store.funding_balance(f"reserve:held:{allocation['allocation_id']}", "usd"))
+        self.assertEqual(1_000, self.store.funding_balance("reserve:available", "eur"))
+
+    def test_owner_approval_validates_hash_expiry_owner_and_transition(self):
+        allocation = self._proposed_allocation("approval-quote", quoted_funding_minor=200)
+        with self.assertRaisesRegex(SettlementTransitionError, "owner subject"):
+            self.store.hold_allocation("wrong-owner", allocation["allocation_id"], "not-owner", 2_200)
+        with self.assertRaisesRegex(SettlementTransitionError, "transition"):
+            self.store.approve_allocation(
+                "approve-proposed", allocation["allocation_id"], "owner-uuid", self.VALID_EVIDENCE_HASH, 9_000, 2_200,
+            )
+        self.store.hold_allocation("approval-hold", allocation["allocation_id"], "owner-uuid", 2_200)
+        with self.assertRaisesRegex(ValueError, "approval_hash"):
+            self.store.approve_allocation("bad-hash", allocation["allocation_id"], "owner-uuid", "sha256:approval", 9_000, 2_201)
+        with self.assertRaisesRegex(ValueError, "expires_at_ms"):
+            self.store.approve_allocation(
+                "bad-expiry", allocation["allocation_id"], "owner-uuid", self.VALID_EVIDENCE_HASH, 2_201, 2_201,
+            )
+        approved = self.store.approve_allocation(
+            "approve-ok", allocation["allocation_id"], "owner-uuid", self.VALID_EVIDENCE_HASH, 9_000, 2_202,
+        )
+        with self.assertRaisesRegex(SettlementTransitionError, "transition"):
+            self.store.hold_allocation("reversed-hold", allocation["allocation_id"], "owner-uuid", 2_203)
+        self.assertEqual("owner_approved", approved["state"])
+
+    def test_cancellation_cannot_reverse_hold_or_approval_chronology(self):
+        allocation = self._proposed_allocation("cancel-chronology", quoted_funding_minor=200)
+        self.store.hold_allocation("cancel-chronology-hold", allocation["allocation_id"], "owner-uuid", 2_200)
+        self.store.approve_allocation(
+            "cancel-chronology-approve", allocation["allocation_id"], "owner-uuid", self.VALID_EVIDENCE_HASH, 2_500, 2_300,
+        )
+
+        with self.assertRaisesRegex(SettlementTransitionError, "chronology"):
+            self.store.cancel_allocation("cancel-before-approval", allocation["allocation_id"], "owner-uuid", "late decision", 2_250)
+        with self.assertRaisesRegex(SettlementTransitionError, "expired"):
+            self.store.cancel_allocation("cancel-after-expiry", allocation["allocation_id"], "owner-uuid", "late decision", 2_500)
+
+        cancelled = self.store.cancel_allocation(
+            "cancel-in-window", allocation["allocation_id"], "owner-uuid", "provider unavailable", 2_400,
+        )
+        self.assertEqual("cancelled", cancelled["state"])
+
+    def test_hold_cannot_spend_a_future_dated_reserve_receipt(self):
+        self.store.record_funding("temporal-fund", "owner-uuid", 200, "usd", "owner_capital", self.VALID_EVIDENCE_HASH, 1_900)
+        first = self._proposed_allocation("temporal-first", quoted_funding_minor=200, fund_reserve=False, version=1)
+        second = self._proposed_allocation("temporal-second", quoted_funding_minor=200, fund_reserve=False, version=2)
+        self.store.hold_allocation("temporal-first-hold", first["allocation_id"], "owner-uuid", 2_200)
+        self.store.record_funding("temporal-future-fund", "owner-uuid", 200, "usd", "owner_capital", self.VALID_EVIDENCE_HASH, 3_000)
+
+        with self.assertRaises(SettlementInsufficientFunds):
+            self.store.hold_allocation("temporal-second-hold", second["allocation_id"], "owner-uuid", 2_300)
+
+        self.assertEqual("proposed", self.store.get_allocation(second["allocation_id"])["state"])
+
+    def test_expiry_releases_claims_once_and_reserve_as_of_respects_hold_and_release(self):
+        claim = self._public_claim("claim:expires")
+        claim["amount_milli"] = 200
+        allocation = self._proposed_allocation(
+            "expiry-quote", quoted_funding_minor=200, claim=claim, program_cap_minor=400,
+        )
+        self.store.hold_allocation("expiry-hold", allocation["allocation_id"], "owner-uuid", 2_200)
+        self.store.approve_allocation(
+            "expiry-approve", allocation["allocation_id"], "owner-uuid", self.VALID_EVIDENCE_HASH, 2_300, 2_201,
+        )
+        expired = self.store.expire_due("expiry-sweep", 2_300)
+        self.assertEqual(["expired"], [item["state"] for item in expired])
+        self.assertEqual(1_000, self.store.funding_balance("reserve:available"))
+        self.assertEqual(expired, self.store.expire_due("expiry-sweep", 2_300))
+        with self.assertRaises(SettlementIdempotencyConflict):
+            self.store.expire_due("expiry-sweep", 2_301)
+        reallocated = self.store.create_allocation(
+            "expiry-requote", "owner-uuid", "world-1", allocation["policy_id"], [claim], 2_301,
+        )
+        self.assertEqual("proposed", reallocated["state"])
+
+        policy = self.store.get_policy(allocation["policy_id"])["policy"]
+        connection = self.store._connect()
+        try:
+            held_snapshot = self.store._reserve_snapshot(connection, "owner-uuid", policy, 2_250)
+            released_snapshot = self.store._reserve_snapshot(connection, "owner-uuid", policy, 2_300)
+        finally:
+            self.store._release(connection)
+        self.assertEqual(800, held_snapshot["available_balance_minor"])
+        self.assertEqual(1_000, released_snapshot["available_balance_minor"])
+
+    def test_concurrent_holds_against_one_reserve_allow_only_one_winner(self):
+        self.store.record_funding("concurrent-fund", "owner-uuid", 1_000, "usd", "owner_capital", self.VALID_EVIDENCE_HASH, 1_900)
+        first = self._proposed_allocation("concurrent-first", quoted_funding_minor=600, fund_reserve=False, version=1)
+        second = self._proposed_allocation("concurrent-second", quoted_funding_minor=600, fund_reserve=False, version=2)
+
+        def hold(operation_id, allocation_id):
+            try:
+                return self.store.hold_allocation(operation_id, allocation_id, "owner-uuid", 2_200)["state"]
+            except SettlementInsufficientFunds:
+                return "insufficient"
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            outcomes = list(executor.map(
+                lambda item: hold(*item),
+                [("concurrent-hold-1", first["allocation_id"]), ("concurrent-hold-2", second["allocation_id"])],
+            ))
+        self.assertEqual(["funding_held", "insufficient"], sorted(outcomes))
+        self.assertEqual(400, self.store.funding_balance("reserve:available"))
+        self.assertTrue(self.store.audit_funding()["balanced"])
+
     def _policy(self, policy_id, version, program_cap_minor=1_000, period_cap_minor=1_000):
         return {
             "policy_id": policy_id,
@@ -273,6 +444,44 @@ class ComputeSponsorshipFundingTests(unittest.TestCase):
             "funding_currency": "usd",
             "compliance_manifest_hash": self.VALID_COMPLIANCE_MANIFEST,
         }
+
+    def _proposed_allocation(
+        self,
+        operation_id,
+        quoted_funding_minor,
+        *,
+        fund_reserve=True,
+        version=1,
+        claim=None,
+        program_cap_minor=None,
+    ):
+        program_cap_minor = program_cap_minor or max(quoted_funding_minor, 1)
+        policy = self._policy(
+            f"hold-policy-{operation_id}", version,
+            program_cap_minor=program_cap_minor,
+            period_cap_minor=program_cap_minor,
+        )
+        policy["cu_milli_per_funding_minor"] = 1
+        policy["max_claim_cu_milli"] = max(quoted_funding_minor, 1)
+        created = self.store.create_policy(f"{operation_id}-policy", "owner-uuid", policy, 1_500)
+        if fund_reserve:
+            self.store.record_funding(
+                f"{operation_id}-fund", "owner-uuid", 1_000, "usd", "owner_capital", self.VALID_EVIDENCE_HASH, 1_900,
+            )
+        self.store.activate_policy(
+            f"{operation_id}-activate", "owner-uuid", created["policy_id"], "allocation_active",
+            {
+                "owner_signature": self.VALID_OWNER_SIGNATURE,
+                "compliance_manifest_hash": self.VALID_COMPLIANCE_MANIFEST,
+                "funded_program_cap_minor": program_cap_minor,
+            },
+            2_000,
+        )
+        claim = dict(claim or self._public_claim(f"claim:{operation_id}"))
+        claim["amount_milli"] = quoted_funding_minor
+        return self.store.create_allocation(
+            operation_id, "owner-uuid", "world-1", created["policy_id"], [claim], 2_100,
+        )
 
     @staticmethod
     def _public_claim(claim_id):
