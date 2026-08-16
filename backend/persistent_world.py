@@ -396,6 +396,8 @@ def _serialize_observed_tile(state: Dict[str, Any], key: str, evidence: Dict[str
         observed["surface"] = {"kind": tile.surface.kind, "material": tile.surface.material, "stock": modification.get("surface_stock", tile.surface.stock)}
     if modification.get("excavation_depth_cm"):
         observed["excavation_depth_cm"] = modification["excavation_depth_cm"]
+    if modification.get("prepared_foundation"):
+        observed["prepared_foundation"] = True
     if evidence.get("level") in {"surveyed", "prospected"}:
         observed["survey"] = copy.deepcopy(evidence.get("survey", {}))
     if evidence.get("level") == "prospected":
