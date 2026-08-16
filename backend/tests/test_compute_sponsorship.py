@@ -4,7 +4,9 @@ from pathlib import Path
 
 from economy import (
     ComputeSponsorshipStore,
+    SettlementError,
     SettlementIdempotencyConflict,
+    SettlementInsufficientFunds,
     SettlementTransitionError,
 )
 
@@ -78,13 +80,16 @@ class ComputeSponsorshipFundingTests(unittest.TestCase):
             "max_claim_cu_milli": 10_000,
             "program_cap_minor": 1_000,
             "period_cap_minor": 1_000,
+            "period_ms": 1_000,
             "beneficiary_class": "eov_owner_development",
             "funding_source_class": "owner_capital",
+            "funding_currency": "usd",
             "compliance_manifest_hash": self.VALID_COMPLIANCE_MANIFEST,
         }
         created = self.store.create_policy("policy-create-1", "owner-uuid", policy, 1_500)
         policy["cu_milli_per_funding_minor"] = 500
         self.assertEqual(1_000, self.store.get_policy(created["policy_id"])["policy"]["cu_milli_per_funding_minor"])
+        self.store.record_funding("fund-policy-1", "owner-uuid", 1_000, "usd", "owner_capital", self.VALID_EVIDENCE_HASH, 1_900)
 
         allocation_evidence = {
             "owner_signature": self.VALID_OWNER_SIGNATURE,
@@ -112,6 +117,116 @@ class ComputeSponsorshipFundingTests(unittest.TestCase):
                 "settlement_active", settlement_evidence, 2_002,
             )["state"],
         )
+
+    def test_allocation_activation_requires_receipted_same_currency_reserve(self):
+        policy = self._policy("reserve-backed-v1", 1, program_cap_minor=500, period_cap_minor=500)
+        created = self.store.create_policy("policy-reserve-create", "owner-uuid", policy, 1_500)
+        evidence = {
+            "owner_signature": self.VALID_OWNER_SIGNATURE,
+            "compliance_manifest_hash": self.VALID_COMPLIANCE_MANIFEST,
+            "funded_program_cap_minor": 500,
+        }
+        with self.assertRaises(SettlementInsufficientFunds):
+            self.store.activate_policy("policy-reserve-zero", "owner-uuid", created["policy_id"], "allocation_active", evidence, 2_000)
+        self.store.record_funding("fund-eur", "owner-uuid", 500, "eur", "owner_capital", self.VALID_EVIDENCE_HASH, 2_001)
+        with self.assertRaises(SettlementInsufficientFunds):
+            self.store.activate_policy("policy-reserve-wrong-currency", "owner-uuid", created["policy_id"], "allocation_active", evidence, 2_002)
+        self.store.record_funding("fund-usd", "owner-uuid", 500, "usd", "owner_capital", self.VALID_EVIDENCE_HASH, 2_003)
+        activated = self.store.activate_policy("policy-reserve-backed", "owner-uuid", created["policy_id"], "allocation_active", evidence, 2_004)
+        self.assertEqual("usd", activated["reserve_snapshot"]["currency"])
+        self.assertEqual(500, activated["reserve_snapshot"]["available_balance_minor"])
+        self.assertEqual(["fund-usd"], [item["operation_id"] for item in activated["reserve_snapshot"]["receipts"]])
+
+    def test_policy_rejects_unknown_evidence_requirements(self):
+        policy = self._policy("unknown-evidence-v1", 1)
+        policy["evidence_requirements"] = ["invented_claim_attestation"]
+        with self.assertRaisesRegex(ValueError, "unsupported evidence requirement"):
+            self.store.create_policy("policy-unknown-evidence", "owner-uuid", policy, 1_500)
+
+    def test_settlement_activation_appends_evidence_without_replacing_prior_facts(self):
+        policy = self._policy("evidence-history-v1", 1)
+        created = self.store.create_policy("policy-evidence-create", "owner-uuid", policy, 1_500)
+        self.store.record_funding("fund-evidence", "owner-uuid", 1_000, "usd", "owner_capital", self.VALID_EVIDENCE_HASH, 1_900)
+        allocation_evidence = {
+            "owner_signature": self.VALID_OWNER_SIGNATURE,
+            "compliance_manifest_hash": self.VALID_COMPLIANCE_MANIFEST,
+            "funded_program_cap_minor": 1_000,
+        }
+        self.store.activate_policy("policy-evidence-allocation", "owner-uuid", created["policy_id"], "allocation_active", allocation_evidence, 2_000)
+        provider_evidence = {
+            "owner_signature": "sha256:" + ("e" * 64),
+            "provider_capability_hash": self.VALID_PROVIDER_CAPABILITY,
+        }
+        self.store.activate_policy("policy-evidence-settlement", "owner-uuid", created["policy_id"], "settlement_active", provider_evidence, 2_001)
+        transitions = self.store.get_policy(created["policy_id"])["activation_events"]
+        self.assertEqual(self.VALID_OWNER_SIGNATURE, transitions[0]["evidence"]["owner_signature"])
+        self.assertNotIn("owner_signature", transitions[1]["evidence"])
+        self.assertEqual(self.VALID_PROVIDER_CAPABILITY, transitions[1]["evidence"]["provider_capability_hash"])
+
+    def test_period_cap_applies_within_a_deterministic_policy_period(self):
+        policy = self._policy("period-cap-v1", 1, program_cap_minor=10, period_cap_minor=2)
+        created = self.store.create_policy("policy-period-create", "owner-uuid", policy, 1_000)
+        self.store.record_funding("fund-period", "owner-uuid", 10, "usd", "owner_capital", self.VALID_EVIDENCE_HASH, 1_100)
+        self.store.activate_policy("policy-period-active", "owner-uuid", created["policy_id"], "allocation_active", {
+            "owner_signature": self.VALID_OWNER_SIGNATURE,
+            "compliance_manifest_hash": self.VALID_COMPLIANCE_MANIFEST,
+            "funded_program_cap_minor": 10,
+        }, 1_200)
+        self.store.create_allocation("period-one", "owner-uuid", "world-1", created["policy_id"], [self._public_claim("claim:period-one")], 2_100)
+        with self.assertRaisesRegex(SettlementError, "period cap"):
+            self.store.create_allocation("period-two", "owner-uuid", "world-1", created["policy_id"], [self._public_claim("claim:period-two")], 2_200)
+        later = self.store.create_allocation("period-three", "owner-uuid", "world-1", created["policy_id"], [self._public_claim("claim:period-three")], 3_100)
+        self.assertEqual(3_000, later["period_start_ms"])
+
+    def test_independent_verifier_requirement_rejects_unverifiable_public_claim(self):
+        policy = self._policy("independent-verifier-v1", 1)
+        policy["evidence_requirements"] = ["independent_verifier"]
+        created = self.store.create_policy("policy-independent-create", "owner-uuid", policy, 1_000)
+        self.store.record_funding("fund-independent", "owner-uuid", 1_000, "usd", "owner_capital", self.VALID_EVIDENCE_HASH, 1_100)
+        self.store.activate_policy("policy-independent-active", "owner-uuid", created["policy_id"], "allocation_active", {
+            "owner_signature": self.VALID_OWNER_SIGNATURE,
+            "compliance_manifest_hash": self.VALID_COMPLIANCE_MANIFEST,
+            "funded_program_cap_minor": 1_000,
+        }, 1_200)
+        claim = self._public_claim("claim:not-independent")
+        claim["verifier_ref"] = claim["contributor_ref"]
+        with self.assertRaisesRegex(SettlementError, "evidence requirements"):
+            self.store.create_allocation("independent-quote", "owner-uuid", "world-1", created["policy_id"], [claim], 2_100)
+
+    def _policy(self, policy_id, version, program_cap_minor=1_000, period_cap_minor=1_000):
+        return {
+            "policy_id": policy_id,
+            "version": version,
+            "effective_from_ms": 1_000,
+            "effective_to_ms": None,
+            "eligible_action_types": ["calibrate_measurement_tool"],
+            "evidence_requirements": ["verified_causal_evidence"],
+            "cu_milli_per_funding_minor": 1_000,
+            "min_claim_cu_milli": 1,
+            "max_claim_cu_milli": 10_000,
+            "program_cap_minor": program_cap_minor,
+            "period_cap_minor": period_cap_minor,
+            "period_ms": 1_000,
+            "beneficiary_class": "eov_owner_development",
+            "funding_source_class": "owner_capital",
+            "funding_currency": "usd",
+            "compliance_manifest_hash": self.VALID_COMPLIANCE_MANIFEST,
+        }
+
+    @staticmethod
+    def _public_claim(claim_id):
+        return {
+            "entry_id": claim_id,
+            "status": "verified_provisional",
+            "spendable": False,
+            "unit": "CU-placeholder",
+            "action_type": "calibrate_measurement_tool",
+            "amount_milli": 2_500,
+            "evidence_hash": "verified-event-hash",
+            "commission_hash": "commissioned-event-hash",
+            "contributor_ref": "contributor:one",
+            "verifier_ref": "verifier:two",
+        }
 
 
 if __name__ == "__main__":

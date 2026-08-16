@@ -28,6 +28,10 @@ class SettlementServiceTests(unittest.TestCase):
             "compliance_manifest_hash": self.VALID_COMPLIANCE_MANIFEST,
             "funded_program_cap_minor": 1_000,
         }
+        self.store.record_funding(
+            "fund-policy", "owner-uuid", 1_000, "usd", "owner_capital",
+            "sha256:" + ("a" * 64), 1_900,
+        )
         self.store.activate_policy(
             "activate-1", "owner-uuid", self.policy_id, "allocation_active",
             self.valid_allocation_evidence, 2_000,
@@ -51,8 +55,10 @@ class SettlementServiceTests(unittest.TestCase):
             "max_claim_cu_milli": 10_000,
             "program_cap_minor": 1_000,
             "period_cap_minor": 1_000,
+            "period_ms": 1_000,
             "beneficiary_class": "eov_owner_development",
             "funding_source_class": "owner_capital",
+            "funding_currency": "usd",
             "compliance_manifest_hash": self.VALID_COMPLIANCE_MANIFEST,
         }, 1_500)
 

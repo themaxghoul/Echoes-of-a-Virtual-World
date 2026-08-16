@@ -33,6 +33,11 @@ class SettlementTransitionError(SettlementError):
 
 _CU_SOURCE = re.compile(r"(?:^|[^a-z0-9])cu(?:$|[^a-z0-9])")
 _EVIDENCE_HASH = re.compile(r"^sha256:[0-9a-f]{64}$")
+_SUPPORTED_EVIDENCE_REQUIREMENTS = frozenset({
+    "verified_causal_evidence",
+    "commissioned_action",
+    "independent_verifier",
+})
 
 
 class ComputeSponsorshipStore:
@@ -116,6 +121,7 @@ class ComputeSponsorshipStore:
                     public_claim_ids_json TEXT NOT NULL,
                     eligible_cu_milli INTEGER NOT NULL,
                     quoted_funding_minor INTEGER NOT NULL,
+                    period_start_ms INTEGER NOT NULL DEFAULT 0,
                     state TEXT NOT NULL,
                     created_at_ms INTEGER NOT NULL,
                     FOREIGN KEY(operation_id) REFERENCES settlement_operations(operation_id),
@@ -125,6 +131,7 @@ class ComputeSponsorshipStore:
                     CHECK(typeof(policy_version) = 'integer' AND policy_version > 0),
                     CHECK(typeof(eligible_cu_milli) = 'integer' AND eligible_cu_milli > 0),
                     CHECK(typeof(quoted_funding_minor) = 'integer' AND quoted_funding_minor > 0),
+                    CHECK(typeof(period_start_ms) = 'integer' AND period_start_ms >= 0),
                     CHECK(typeof(created_at_ms) = 'integer' AND created_at_ms >= 0)
                 );
                 CREATE TABLE IF NOT EXISTS settlement_claim_commitments (
@@ -136,6 +143,21 @@ class ComputeSponsorshipStore:
                     FOREIGN KEY(policy_id) REFERENCES settlement_policies(policy_id),
                     CHECK(typeof(committed_at_ms) = 'integer' AND committed_at_ms >= 0)
                 );
+                CREATE TABLE IF NOT EXISTS settlement_policy_activation_events (
+                    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+                    operation_id TEXT NOT NULL UNIQUE,
+                    policy_id TEXT NOT NULL,
+                    from_state TEXT NOT NULL,
+                    target_state TEXT NOT NULL,
+                    evidence_json TEXT NOT NULL,
+                    reserve_snapshot_json TEXT,
+                    activated_at_ms INTEGER NOT NULL,
+                    FOREIGN KEY(operation_id) REFERENCES settlement_operations(operation_id),
+                    FOREIGN KEY(policy_id) REFERENCES settlement_policies(policy_id),
+                    CHECK(from_state IN ('draft', 'allocation_active')),
+                    CHECK(target_state IN ('allocation_active', 'settlement_active')),
+                    CHECK(typeof(activated_at_ms) = 'integer' AND activated_at_ms >= 0)
+                );
                 CREATE INDEX IF NOT EXISTS idx_settlement_postings_operation
                     ON settlement_postings(operation_id);
                 CREATE INDEX IF NOT EXISTS idx_settlement_postings_account
@@ -144,8 +166,17 @@ class ComputeSponsorshipStore:
                     ON settlement_allocations(policy_id);
                 CREATE INDEX IF NOT EXISTS idx_settlement_claim_commitments_allocation
                     ON settlement_claim_commitments(allocation_id);
+                CREATE INDEX IF NOT EXISTS idx_settlement_policy_activation_events_policy
+                    ON settlement_policy_activation_events(policy_id, sequence);
                 """
             )
+            allocation_columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(settlement_allocations)")
+            }
+            if "period_start_ms" not in allocation_columns:
+                connection.execute(
+                    "ALTER TABLE settlement_allocations ADD COLUMN period_start_ms INTEGER NOT NULL DEFAULT 0"
+                )
         finally:
             self._release(connection)
 
@@ -264,8 +295,10 @@ class ComputeSponsorshipStore:
             "max_claim_cu_milli": cls._require_positive_integer(policy.get("max_claim_cu_milli"), "max_claim_cu_milli"),
             "program_cap_minor": cls._require_positive_integer(policy.get("program_cap_minor"), "program_cap_minor"),
             "period_cap_minor": cls._require_positive_integer(policy.get("period_cap_minor"), "period_cap_minor"),
+            "period_ms": cls._require_positive_integer(policy.get("period_ms"), "period_ms"),
             "beneficiary_class": cls._require_text(policy.get("beneficiary_class"), "beneficiary_class"),
             "funding_source_class": cls._require_text(policy.get("funding_source_class"), "funding_source_class"),
+            "funding_currency": cls._require_text(policy.get("funding_currency"), "funding_currency").lower(),
             "compliance_manifest_hash": cls._require_evidence_hash(
                 policy.get("compliance_manifest_hash"), "compliance_manifest_hash"
             ),
@@ -283,6 +316,9 @@ class ComputeSponsorshipStore:
             normalized[field] = [cls._require_text(value, field) for value in values]
             if len(set(normalized[field])) != len(normalized[field]):
                 raise ValueError(f"{field} must not contain duplicates")
+        unknown_requirements = set(normalized["evidence_requirements"]) - _SUPPORTED_EVIDENCE_REQUIREMENTS
+        if unknown_requirements:
+            raise ValueError("unsupported evidence requirement")
         if normalized["min_claim_cu_milli"] > normalized["max_claim_cu_milli"]:
             raise ValueError("min_claim_cu_milli must not exceed max_claim_cu_milli")
         if normalized["period_cap_minor"] > normalized["program_cap_minor"]:
@@ -293,6 +329,60 @@ class ComputeSponsorshipStore:
         if _CU_SOURCE.search(source_class) or "compute unit" in source_class or "compute_unit" in source_class or "compute-unit" in source_class:
             raise ValueError("CU cannot fund the external settlement reserve")
         return normalized
+
+    @staticmethod
+    def _claim_meets_evidence_requirements(claim: Dict[str, Any], requirements: list[str]) -> bool:
+        for requirement in requirements:
+            if requirement == "verified_causal_evidence":
+                if claim.get("status") != "verified_provisional" or not claim.get("evidence_hash"):
+                    return False
+            elif requirement == "commissioned_action":
+                if not claim.get("commission_hash"):
+                    return False
+            elif requirement == "independent_verifier":
+                contributor = claim.get("contributor_ref")
+                verifier = claim.get("verifier_ref")
+                if not contributor or not verifier or contributor == verifier:
+                    return False
+            else:
+                return False
+        return True
+
+    def _reserve_snapshot(
+        self,
+        connection: sqlite3.Connection,
+        owner_subject: str,
+        policy: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        currency = policy["funding_currency"]
+        available = connection.execute(
+            "SELECT balance_minor FROM settlement_accounts WHERE account_id = ?",
+            (self._account_id("reserve:available", currency),),
+        ).fetchone()
+        available_balance = int(available["balance_minor"]) if available else 0
+        receipts = connection.execute(
+            """SELECT operation_id, amount_minor, evidence_hash, received_at_ms
+            FROM funding_receipts
+            WHERE owner_subject = ? AND currency = ? AND source_class = ?
+            ORDER BY received_at_ms, operation_id""",
+            (owner_subject, currency, policy["funding_source_class"]),
+        ).fetchall()
+        receipt_rows = [
+            {
+                "operation_id": row["operation_id"],
+                "amount_minor": int(row["amount_minor"]),
+                "evidence_hash": row["evidence_hash"],
+                "received_at_ms": int(row["received_at_ms"]),
+            }
+            for row in receipts
+        ]
+        return {
+            "currency": currency,
+            "available_balance_minor": available_balance,
+            "receipted_minor": sum(item["amount_minor"] for item in receipt_rows),
+            "required_program_cap_minor": policy["program_cap_minor"],
+            "receipts": receipt_rows,
+        }
 
     @classmethod
     def _policy_from_row(cls, row: sqlite3.Row) -> Dict[str, Any]:
@@ -386,7 +476,27 @@ class ComputeSponsorshipStore:
             ).fetchone()
             if not row:
                 raise SettlementError("policy does not exist")
-            return self._policy_from_row(row)
+            policy = self._policy_from_row(row)
+            events = connection.execute(
+                """SELECT sequence, operation_id, from_state, target_state, evidence_json,
+                          reserve_snapshot_json, activated_at_ms
+                FROM settlement_policy_activation_events WHERE policy_id = ? ORDER BY sequence""",
+                (policy_id,),
+            ).fetchall()
+            policy["activation_events"] = [
+                {
+                    "sequence": int(event["sequence"]),
+                    "operation_id": event["operation_id"],
+                    "from_state": event["from_state"],
+                    "target_state": event["target_state"],
+                    "evidence": json.loads(event["evidence_json"]),
+                    "reserve_snapshot": json.loads(event["reserve_snapshot_json"])
+                    if event["reserve_snapshot_json"] else None,
+                    "activated_at_ms": int(event["activated_at_ms"]),
+                }
+                for event in events
+            ]
+            return policy
         finally:
             self._release(connection)
 
@@ -434,29 +544,35 @@ class ComputeSponsorshipStore:
                 raise SettlementTransitionError("policy owner subject does not match")
             policy = stored["policy"]
             evidence = values["evidence"]
-            activation_evidence = dict(stored["activation_evidence"] or {})
+            reserve_snapshot = None
             if stored["state"] == "draft" and values["target_state"] == "allocation_active":
                 if policy["cu_milli_per_funding_minor"] <= 0 or policy["program_cap_minor"] <= 0:
                     raise SettlementTransitionError("policy requires a positive rate and funded program cap")
                 if evidence.get("compliance_manifest_hash") != policy["compliance_manifest_hash"]:
                     raise SettlementTransitionError("policy requires the approved compliance manifest")
-                self._require_evidence_hash(evidence.get("compliance_manifest_hash"), "compliance_manifest_hash")
-                self._require_evidence_hash(evidence.get("owner_signature"), "owner_signature")
-                funded_cap = self._require_positive_integer(
-                    evidence.get("funded_program_cap_minor"), "funded_program_cap_minor"
-                )
-                if funded_cap < policy["program_cap_minor"]:
-                    raise SettlementTransitionError("policy requires a funded program cap")
+                activation_evidence = {
+                    "compliance_manifest_hash": self._require_evidence_hash(
+                        evidence.get("compliance_manifest_hash"), "compliance_manifest_hash"
+                    ),
+                    "owner_signature": self._require_evidence_hash(
+                        evidence.get("owner_signature"), "owner_signature"
+                    ),
+                }
+                reserve_snapshot = self._reserve_snapshot(connection, values["owner_subject"], policy)
+                if (
+                    reserve_snapshot["available_balance_minor"] < policy["program_cap_minor"]
+                    or reserve_snapshot["receipted_minor"] < policy["program_cap_minor"]
+                ):
+                    raise SettlementInsufficientFunds("receipted reserve cannot fund the policy program cap")
             elif stored["state"] == "allocation_active" and values["target_state"] == "settlement_active":
                 try:
-                    self._require_evidence_hash(
+                    activation_evidence = {"provider_capability_hash": self._require_evidence_hash(
                         evidence.get("provider_capability_hash"), "provider_capability_hash"
-                    )
+                    )}
                 except ValueError as error:
                     raise SettlementTransitionError(
                         "policy requires provider capability evidence"
                     ) from error
-                activation_evidence.update(evidence)
             else:
                 raise SettlementTransitionError("invalid policy lifecycle transition")
             result = {
@@ -465,7 +581,8 @@ class ComputeSponsorshipStore:
                 "version": stored["version"],
                 "owner_subject": stored["owner_subject"],
                 "state": values["target_state"],
-                "evidence": activation_evidence if values["target_state"] == "settlement_active" else evidence,
+                "evidence": activation_evidence,
+                "reserve_snapshot": reserve_snapshot,
                 "activated_at_ms": values["activated_at_ms"],
             }
             connection.execute(
@@ -473,14 +590,29 @@ class ComputeSponsorshipStore:
                 (values["operation_id"], request_hash, self._canonical_json(result)),
             )
             connection.execute(
-                """UPDATE settlement_policies
-                SET state = ?, activation_evidence_json = ?, activated_at_ms = ?
-                WHERE policy_id = ?""",
+                """INSERT INTO settlement_policy_activation_events(
+                    operation_id, policy_id, from_state, target_state, evidence_json,
+                    reserve_snapshot_json, activated_at_ms
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    values["target_state"], self._canonical_json(result["evidence"]),
-                    values["activated_at_ms"], stored["policy_id"],
+                    values["operation_id"], stored["policy_id"], stored["state"],
+                    values["target_state"], self._canonical_json(activation_evidence),
+                    self._canonical_json(reserve_snapshot) if reserve_snapshot else None,
+                    values["activated_at_ms"],
                 ),
             )
+            if values["target_state"] == "allocation_active":
+                connection.execute(
+                    """UPDATE settlement_policies
+                    SET state = ?, activation_evidence_json = ?, activated_at_ms = ?
+                    WHERE policy_id = ?""",
+                    (values["target_state"], self._canonical_json(activation_evidence), values["activated_at_ms"], stored["policy_id"]),
+                )
+            else:
+                connection.execute(
+                    "UPDATE settlement_policies SET state = ? WHERE policy_id = ?",
+                    (values["target_state"], stored["policy_id"]),
+                )
             connection.execute("COMMIT")
             return result
         except Exception:
@@ -553,6 +685,10 @@ class ComputeSponsorshipStore:
                     raise SettlementError("public claim is not eligible")
                 if not claim.get("evidence_hash") or not claim.get("commission_hash"):
                     raise SettlementError("public claim is not eligible")
+                if not self._claim_meets_evidence_requirements(
+                    claim, policy["evidence_requirements"]
+                ):
+                    raise SettlementError("public claim does not satisfy policy evidence requirements")
                 if amount < policy["min_claim_cu_milli"] or amount > policy["max_claim_cu_milli"]:
                     raise SettlementError("public claim is outside the policy allocation range")
                 committed = connection.execute(
@@ -565,12 +701,22 @@ class ComputeSponsorshipStore:
             quoted_funding_minor = eligible_cu_milli // policy["cu_milli_per_funding_minor"]
             if quoted_funding_minor <= 0:
                 raise SettlementError("public claims do not quote a positive funding amount")
-            committed_total = connection.execute(
+            program_total = connection.execute(
                 "SELECT COALESCE(SUM(quoted_funding_minor), 0) AS total FROM settlement_allocations WHERE policy_id = ?",
                 (stored["policy_id"],),
             ).fetchone()["total"]
-            if int(committed_total) + quoted_funding_minor > min(policy["program_cap_minor"], policy["period_cap_minor"]):
+            if int(program_total) + quoted_funding_minor > policy["program_cap_minor"]:
                 raise SettlementError("policy program cap would be exceeded")
+            period_start_ms = policy["effective_from_ms"] + (
+                (values["now_ms"] - policy["effective_from_ms"]) // policy["period_ms"]
+            ) * policy["period_ms"]
+            period_total = connection.execute(
+                """SELECT COALESCE(SUM(quoted_funding_minor), 0) AS total
+                FROM settlement_allocations WHERE policy_id = ? AND period_start_ms = ?""",
+                (stored["policy_id"], period_start_ms),
+            ).fetchone()["total"]
+            if int(period_total) + quoted_funding_minor > policy["period_cap_minor"]:
+                raise SettlementError("policy period cap would be exceeded")
             allocation_id = "allocation:" + hashlib.sha256(
                 f"{values['operation_id']}|{stored['policy_id']}|{values['world_id']}".encode("utf-8")
             ).hexdigest()[:32]
@@ -586,6 +732,7 @@ class ComputeSponsorshipStore:
                 "public_claim_ids": claim_ids,
                 "eligible_cu_milli": eligible_cu_milli,
                 "quoted_funding_minor": quoted_funding_minor,
+                "period_start_ms": period_start_ms,
                 "state": "proposed",
                 "created_at_ms": values["now_ms"],
             }
@@ -597,12 +744,13 @@ class ComputeSponsorshipStore:
                 """INSERT INTO settlement_allocations(
                     allocation_id, operation_id, owner_subject, beneficiary_class, policy_id, policy_version,
                     policy_snapshot_json, world_id, public_claim_ids_json, eligible_cu_milli,
-                    quoted_funding_minor, state, created_at_ms
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?)""",
+                    quoted_funding_minor, period_start_ms, state, created_at_ms
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?)""",
                 (
                     allocation_id, values["operation_id"], values["owner_subject"], "eov_owner_development",
                     stored["policy_id"], stored["version"], self._canonical_json(policy), values["world_id"],
-                    self._canonical_json(claim_ids), eligible_cu_milli, quoted_funding_minor, values["now_ms"],
+                    self._canonical_json(claim_ids), eligible_cu_milli, quoted_funding_minor, period_start_ms,
+                    values["now_ms"],
                 ),
             )
             connection.executemany(
@@ -639,6 +787,7 @@ class ComputeSponsorshipStore:
                 "public_claim_ids": json.loads(row["public_claim_ids_json"]),
                 "eligible_cu_milli": int(row["eligible_cu_milli"]),
                 "quoted_funding_minor": int(row["quoted_funding_minor"]),
+                "period_start_ms": int(row["period_start_ms"]),
                 "state": row["state"],
                 "created_at_ms": int(row["created_at_ms"]),
             }
