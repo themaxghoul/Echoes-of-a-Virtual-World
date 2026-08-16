@@ -1600,6 +1600,30 @@ class PersistentWorldTests(unittest.TestCase):
         self.assertEqual(0, state["players"]["builder"]["inventory"]["stone"])
         self.assertEqual(25, state["resources"]["stone"])
 
+    def test_creator_privileges_are_redacted_and_operator_amendments_are_separately_audited(self):
+        joined = self.store.apply_action(self.world["world_id"], "sirix-embodied-join", "owner-uuid", {"type": "join", "location": [8, 9]}, expected_revision=1)
+        snapshot = self.store.snapshot()
+        state = snapshot["state"]
+        state["players"]["owner-uuid"].update({"username": "sirix_1", "is_owner": True, "permission_level": "sirix_1", "abilities": ["all"], "stats": {"authority": 999}})
+        with self.store.transaction() as connection:
+            connection.execute("UPDATE worlds SET state_json=? WHERE world_id=?", (json.dumps(state), snapshot["world_id"]))
+
+        ordinary_view = self.store.observed_snapshot(self.world["world_id"], "observer")
+        creator = ordinary_view["state"]["players"]["owner-uuid"]
+        self.assertNotIn("is_owner", creator)
+        self.assertNotIn("permission_level", creator)
+        self.assertNotIn("abilities", creator)
+        self.assertEqual({"authority": None}, creator["stats"])
+
+        with self.assertRaises(PermissionError):
+            self.store.apply_action(self.world["world_id"], "forged-operator-action", "sirix_1", {"type": "operator_amendment", "operation": "pause_world", "confirmed": True})
+        amended = self.store.apply_operator_amendment(self.world["world_id"], "operator-pause-world", "owner-uuid", {"operation": "pause_world", "reason": "safe Alpha 33 maintenance", "confirmation": "CONFIRM WORLD AMENDMENT"}, expected_revision=joined["revision"])
+        self.assertTrue(amended["result"]["accepted"])
+        state = self.store.snapshot()["state"]
+        self.assertTrue(state["clock"]["paused"])
+        self.assertEqual("owner-uuid", state["operator_audit"][-1]["principal"])
+        self.assertEqual("operator_amendment", state["operator_audit"][-1]["plane"])
+
 
 if __name__ == "__main__":
     unittest.main()

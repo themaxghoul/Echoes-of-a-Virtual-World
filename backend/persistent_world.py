@@ -145,6 +145,7 @@ def founding_table_seed(now_ms: int) -> Dict[str, Any]:
             "governance": {"resource_access": {"mode": "open_stores", "proposal": None, "history": []}, "checkouts": [], "access_refusals": [], "owner_directives": [], "maintenance_orders": []},
         },
         "consequences": [],
+        "operator_audit": [],
         "causality": {"perceptions": [], "pending_reactions": [], "completed_reactions": []},
         "created_at_ms": now_ms,
     }
@@ -243,6 +244,7 @@ def migrate_state(state: Dict[str, Any]) -> Dict[str, Any]:
         for participant_id in filter(None, participant_ids):
             commitments.setdefault(participant_id, {"action_id": record["id"], "since_tick": record.get("proposed_tick", state.get("clock", {}).get("tick", 0)), "role": "participant"})
     state.setdefault("consequences", [])
+    state.setdefault("operator_audit", [])
     state.setdefault("evidence", [])
     for record in state["evidence"]:
         record.setdefault("causal_sources", [])
@@ -414,11 +416,18 @@ def actor_world_view(snapshot: Dict[str, Any], actor_id: str) -> Dict[str, Any]:
         npc.pop("relationships", None)
         npc["memories"] = [memory for memory in npc.get("memories", []) if memory.get("kind") in {"completed_work", "founding_table"}]
     for player_id, player in state.get("players", {}).items():
+        privileged = player.get("is_owner") is True or player.get("permission_level") == "sirix_1"
+        player.pop("is_owner", None)
+        player.pop("permission_level", None)
+        player.pop("abilities", None)
+        if privileged and isinstance(player.get("stats"), dict):
+            player["stats"] = {key: None for key in player["stats"]}
         if player_id != actor_id:
             player.pop("inventory", None)
             player.pop("known_cases", None)
             player.pop("memories", None)
             player.pop("competency_records", None)
+    state.pop("operator_audit", None)
     shared = state.get("shared_actions", {})
     viewer = state.get("players", {}).get(actor_id, {})
     visible_action_ids = set()
@@ -613,9 +622,57 @@ class PersistentWorldStore:
         return result
 
     def apply_action(self, world_id: str, action_id: str, actor_id: str, action: Dict[str, Any], expected_revision: Optional[int] = None, now_ms: Optional[int] = None) -> Dict[str, Any]:
-        if action.get("type") == "owner_directive":
-            raise PermissionError("Owner directives require the authenticated owner route")
+        if action.get("type") in {"owner_directive", "operator_amendment"}:
+            raise PermissionError("Operator actions require the authenticated operator route")
         return self._apply_committed_action(world_id, action_id, actor_id, action, expected_revision, now_ms, "player_action")
+
+    def apply_operator_amendment(self, world_id: str, action_id: str, operator_id: str, amendment: Dict[str, Any], expected_revision: Optional[int] = None, now_ms: Optional[int] = None) -> Dict[str, Any]:
+        now_ms = now_ms if now_ms is not None else int(time.time() * 1000)
+        if amendment.get("confirmation") != "CONFIRM WORLD AMENDMENT":
+            raise PermissionError("explicit world amendment confirmation required")
+        reason = str(amendment.get("reason", "")).strip()
+        if len(reason) < 8:
+            raise ValueError("operator amendment requires an auditable reason")
+        with self.transaction() as connection:
+            duplicate = connection.execute("SELECT result_json FROM processed_actions WHERE world_id=? AND action_id=?", (world_id, action_id)).fetchone()
+            if duplicate:
+                return json.loads(duplicate["result_json"])
+            row = connection.execute("SELECT * FROM worlds WHERE world_id=?", (world_id,)).fetchone()
+            if not row:
+                raise KeyError(world_id)
+            if expected_revision is not None and row["revision"] != expected_revision:
+                raise RevisionConflict(f"expected revision {expected_revision}, current {row['revision']}")
+            state = migrate_state(json.loads(row["state_json"]))
+            operation = amendment.get("operation")
+            before: Dict[str, Any]
+            after: Dict[str, Any]
+            if operation in {"pause_world", "resume_world"}:
+                before = {"paused": bool(state["clock"].get("paused"))}
+                state["clock"]["paused"] = operation == "pause_world"
+                after = {"paused": state["clock"]["paused"]}
+            elif operation == "amend_tile":
+                location = amendment.get("location")
+                changes = amendment.get("changes")
+                if not isinstance(location, list) or len(location) != 2 or not all(isinstance(value, int) and 0 <= value < 64 for value in location) or not isinstance(changes, dict):
+                    raise ValueError("tile amendment requires bounded coordinates and changes")
+                allowed = {key: changes[key] for key in {"passable", "travel_cost_milli", "prepared_foundation"} if key in changes}
+                if not allowed:
+                    raise ValueError("tile amendment has no supported changes")
+                key = _tile_key(location)
+                before = copy.deepcopy(state["terrain_modifications"].get(key, {}))
+                state["terrain_modifications"].setdefault(key, {}).update(allowed)
+                after = copy.deepcopy(state["terrain_modifications"][key])
+            else:
+                raise ValueError("unsupported operator amendment")
+            audit = {"id": action_id, "plane": "operator_amendment", "principal": operator_id, "world_id": world_id, "operation": operation, "reason": reason, "tick": state["clock"]["tick"], "before": before, "after": after, "recorded_ms": now_ms, "recoverable": True}
+            state["operator_audit"].append(audit)
+            revision = row["revision"] + 1
+            payload = {"accepted": True, "type": "operator_amendment", "audit": copy.deepcopy(audit), "physical_change": operation == "amend_tile"}
+            result = {"world_id": world_id, "revision": revision, "tick": row["tick"], "result": payload}
+            connection.execute("UPDATE worlds SET revision=?, state_json=?, updated_ms=? WHERE world_id=?", (revision, json.dumps(state, separators=(",", ":")), now_ms, world_id))
+            connection.execute("INSERT INTO world_events(world_id, revision, tick, event_type, actor_id, payload_json, created_ms) VALUES (?, ?, ?, ?, ?, ?, ?)", (world_id, revision, row["tick"], "operator_amendment", operator_id, json.dumps(payload, separators=(",", ":")), now_ms))
+            connection.execute("INSERT INTO processed_actions VALUES (?, ?, ?, ?)", (world_id, action_id, json.dumps(result, separators=(",", ":")), now_ms))
+            return result
 
     def apply_owner_directive(self, world_id: str, action_id: str, owner_id: str, directive: Dict[str, Any], expected_revision: Optional[int] = None, now_ms: Optional[int] = None) -> Dict[str, Any]:
         action = {"type": "owner_directive", "directive": dict(directive)}
