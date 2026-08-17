@@ -1808,6 +1808,142 @@ class ComputeSponsorshipStore:
         finally:
             self._release(connection)
 
+    def export_settlement_projection_records(self) -> Dict[str, Any]:
+        """Return the narrowly scoped facts needed by the public projection.
+
+        This is deliberately a read-only export rather than a public API.  It
+        selects each field explicitly; callers must still apply their own
+        public allowlist and must never serialize these private records.
+        """
+        connection = self._connect()
+        try:
+            policies = [
+                {
+                    "policy_id": row["policy_id"],
+                    "version": int(row["version"]),
+                    "policy": json.loads(row["policy_json"]),
+                }
+                for row in connection.execute(
+                    "SELECT policy_id, version, policy_json FROM settlement_policies ORDER BY policy_id"
+                )
+            ]
+            allocations = [
+                {
+                    "allocation_id": row["allocation_id"],
+                    "policy_id": row["policy_id"],
+                    "policy_version": int(row["policy_version"]),
+                    "policy_snapshot": json.loads(row["policy_snapshot_json"]),
+                    "beneficiary_class": row["beneficiary_class"],
+                    "eligible_cu_milli": int(row["eligible_cu_milli"]),
+                    "quoted_funding_minor": int(row["quoted_funding_minor"]),
+                    "state": row["state"],
+                    "created_at_ms": int(row["created_at_ms"]),
+                    "held_at_ms": int(row["held_at_ms"]) if row["held_at_ms"] is not None else None,
+                    "approval_hash": row["approval_hash"],
+                    "approved_at_ms": int(row["approved_at_ms"]) if row["approved_at_ms"] is not None else None,
+                    "provider": row["provider"],
+                    "provider_pending_at_ms": int(row["provider_pending_at_ms"]) if row["provider_pending_at_ms"] is not None else None,
+                    "provider_confirmed_at_ms": int(row["provider_confirmed_at_ms"]) if row["provider_confirmed_at_ms"] is not None else None,
+                    "reconciled_at_ms": int(row["reconciled_at_ms"]) if row["reconciled_at_ms"] is not None else None,
+                    "actual_cost_minor": int(row["actual_cost_minor"]) if row["actual_cost_minor"] is not None else None,
+                    "actual_cost_effective_at_ms": int(row["actual_cost_effective_at_ms"]) if row["actual_cost_effective_at_ms"] is not None else None,
+                }
+                for row in connection.execute(
+                    """SELECT allocation_id, policy_id, policy_version, policy_snapshot_json,
+                              beneficiary_class, eligible_cu_milli, quoted_funding_minor, state,
+                              created_at_ms, held_at_ms, approval_hash, approved_at_ms, provider,
+                              provider_pending_at_ms, provider_confirmed_at_ms, reconciled_at_ms,
+                              actual_cost_minor, actual_cost_effective_at_ms
+                       FROM settlement_allocations ORDER BY created_at_ms, allocation_id"""
+                )
+            ]
+            commitments = [
+                {
+                    "allocation_id": row["allocation_id"],
+                    "policy_id": row["policy_id"],
+                    "claim_id": row["claim_id"],
+                }
+                for row in connection.execute(
+                    """SELECT allocation_id, policy_id, claim_id FROM settlement_claim_commitments
+                       ORDER BY allocation_id, claim_id"""
+                )
+            ]
+            events = []
+            for row in connection.execute(
+                """SELECT sequence, operation_id, allocation_id, event_type, from_state, target_state,
+                          evidence_json, occurred_at_ms FROM settlement_events
+                   ORDER BY allocation_id, sequence"""
+            ):
+                evidence = json.loads(row["evidence_json"])
+                events.append({
+                    "sequence": int(row["sequence"]),
+                    "operation_id": row["operation_id"],
+                    "allocation_id": row["allocation_id"],
+                    "event_type": row["event_type"],
+                    "from_state": row["from_state"],
+                    "target_state": row["target_state"],
+                    "occurred_at_ms": int(row["occurred_at_ms"]),
+                    "capability_hash": evidence.get("capability_hash"),
+                    "receipt_hash": evidence.get("receipt_hash"),
+                    "cost_hash": evidence.get("cost_hash"),
+                })
+            provider_receipts = [
+                {
+                    "allocation_id": row["allocation_id"],
+                    "receipt_hash": row["receipt_hash"],
+                }
+                for row in connection.execute(
+                    "SELECT allocation_id, receipt_hash FROM settlement_provider_receipts ORDER BY allocation_id, receipt_hash"
+                )
+            ]
+            provider_costs = [
+                {
+                    "allocation_id": row["allocation_id"],
+                    "cost_hash": row["cost_hash"],
+                }
+                for row in connection.execute(
+                    "SELECT allocation_id, cost_hash FROM settlement_provider_costs ORDER BY allocation_id, cost_hash"
+                )
+            ]
+            postings = [
+                {
+                    "operation_id": row["operation_id"],
+                    "account_id": row["account_id"],
+                    "currency": row["currency"],
+                    "delta_minor": int(row["delta_minor"]),
+                    "occurred_at_ms": int(row["occurred_at_ms"]),
+                }
+                for row in connection.execute(
+                    """SELECT operation_id, account_id, currency, delta_minor, occurred_at_ms
+                       FROM settlement_postings ORDER BY sequence"""
+                )
+            ]
+            funding_receipts = [
+                {
+                    "operation_id": row["operation_id"],
+                    "amount_minor": int(row["amount_minor"]),
+                    "currency": row["currency"],
+                    "evidence_hash": row["evidence_hash"],
+                    "received_at_ms": int(row["received_at_ms"]),
+                }
+                for row in connection.execute(
+                    """SELECT operation_id, amount_minor, currency, evidence_hash, received_at_ms
+                       FROM funding_receipts ORDER BY received_at_ms, operation_id"""
+                )
+            ]
+            return {
+                "policies": policies,
+                "allocations": allocations,
+                "commitments": commitments,
+                "events": events,
+                "provider_receipts": provider_receipts,
+                "provider_costs": provider_costs,
+                "postings": postings,
+                "funding_receipts": funding_receipts,
+            }
+        finally:
+            self._release(connection)
+
     def audit_funding(self) -> Dict[str, Any]:
         connection = self._connect()
         try:
