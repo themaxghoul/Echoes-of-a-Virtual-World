@@ -253,6 +253,11 @@ class ComputeSponsorshipStore:
                 );
                 """
             )
+            # SQLite DDL is transactional.  Keep every Task 4 schema rewrite in
+            # one transaction so a fail-closed migration cannot leave a dropped
+            # source table behind.
+            connection.execute("PRAGMA foreign_keys=OFF")
+            connection.execute("BEGIN IMMEDIATE")
             posting_columns = {
                 row["name"] for row in connection.execute("PRAGMA table_info(settlement_postings)")
             }
@@ -287,8 +292,14 @@ class ComputeSponsorshipStore:
             allocation_sql = connection.execute(
                 "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'settlement_allocations'"
             ).fetchone()["sql"]
-            if "provider_pending" not in allocation_sql:
-                connection.execute("PRAGMA foreign_keys=OFF")
+            state_check = re.search(r"CHECK\s*\(\s*state\s+IN\s*\(([^)]*)\)\s*\)", allocation_sql, re.IGNORECASE)
+            allowed_states = set(re.findall(r"'([^']+)'", state_check.group(1))) if state_check else set()
+            required_states = {"provider_pending", "provider_confirmed", "reconciling", "reconciled", "reconciliation_exception"}
+            if not required_states.issubset(allowed_states):
+                legacy_indexes = connection.execute(
+                    """SELECT sql FROM sqlite_master
+                    WHERE type = 'index' AND tbl_name = 'settlement_allocations' AND sql IS NOT NULL"""
+                ).fetchall()
                 connection.execute(
                     """CREATE TABLE settlement_allocations_v4 AS
                     SELECT * FROM settlement_allocations"""
@@ -306,6 +317,7 @@ class ComputeSponsorshipStore:
                         cancelled_at_ms INTEGER, expired_at_ms INTEGER,
                         provider TEXT, provider_operation_id TEXT, provider_pending_at_ms INTEGER,
                         provider_confirmed_at_ms INTEGER, reconciled_at_ms INTEGER, actual_cost_minor INTEGER,
+                        actual_cost_effective_at_ms INTEGER,
                         FOREIGN KEY(operation_id) REFERENCES settlement_operations(operation_id),
                         FOREIGN KEY(policy_id) REFERENCES settlement_policies(policy_id),
                         CHECK(beneficiary_class = 'eov_owner_development'),
@@ -319,7 +331,8 @@ class ComputeSponsorshipStore:
                 )
                 connection.execute("INSERT INTO settlement_allocations SELECT * FROM settlement_allocations_v4")
                 connection.execute("DROP TABLE settlement_allocations_v4")
-                connection.execute("PRAGMA foreign_keys=ON")
+                for index in legacy_indexes:
+                    connection.execute(index["sql"])
             connection.execute(
                 """CREATE UNIQUE INDEX IF NOT EXISTS idx_allocation_provider_operation
                 ON settlement_allocations(provider, provider_operation_id)
@@ -329,7 +342,10 @@ class ComputeSponsorshipStore:
                 "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'settlement_events'"
             ).fetchone()["sql"]
             if "provider_submitted" not in events_sql:
-                connection.execute("PRAGMA foreign_keys=OFF")
+                legacy_event_indexes = connection.execute(
+                    """SELECT sql FROM sqlite_master
+                    WHERE type = 'index' AND tbl_name = 'settlement_events' AND sql IS NOT NULL"""
+                ).fetchall()
                 connection.execute("CREATE TABLE settlement_events_v4 AS SELECT * FROM settlement_events")
                 connection.execute("DROP TABLE settlement_events")
                 connection.execute(
@@ -345,14 +361,35 @@ class ComputeSponsorshipStore:
                 )
                 connection.execute("INSERT INTO settlement_events SELECT * FROM settlement_events_v4")
                 connection.execute("DROP TABLE settlement_events_v4")
+                for index in legacy_event_indexes:
+                    connection.execute(index["sql"])
                 connection.execute("CREATE INDEX IF NOT EXISTS idx_settlement_events_allocation ON settlement_events(allocation_id, sequence)")
-                connection.execute("PRAGMA foreign_keys=ON")
             receipt_columns = {
                 row["name"] for row in connection.execute("PRAGMA table_info(settlement_provider_receipts)")
             }
             if "receipt_id_commitment" not in receipt_columns:
                 legacy_receipts = connection.execute("SELECT * FROM settlement_provider_receipts").fetchall()
-                connection.execute("PRAGMA foreign_keys=OFF")
+                prepared_receipts = []
+                transaction_commitments = set()
+                for legacy in legacy_receipts:
+                    legacy_payload = json.loads(legacy["receipt_json"])
+                    transaction_commitment = "sha256:" + hashlib.sha256(
+                        f"transaction:{legacy_payload.get('provider_transaction_id', legacy['receipt_id'])}".encode("utf-8")
+                    ).hexdigest()
+                    transaction_key = (legacy["provider"], transaction_commitment)
+                    if transaction_key in transaction_commitments:
+                        raise SettlementTransitionError("duplicate legacy provider transaction requires manual quarantine")
+                    transaction_commitments.add(transaction_key)
+                    prepared_receipts.append((legacy, transaction_commitment))
+                bound_receipts = []
+                for legacy, transaction_commitment in prepared_receipts:
+                    operation = connection.execute(
+                        "SELECT provider_operation_id FROM settlement_allocations WHERE allocation_id = ?",
+                        (legacy["allocation_id"],),
+                    ).fetchone()
+                    if not operation or not operation["provider_operation_id"]:
+                        raise SettlementTransitionError("legacy provider receipt lacks an allocation operation binding")
+                    bound_receipts.append((legacy, transaction_commitment, operation["provider_operation_id"]))
                 connection.execute("DROP TABLE settlement_provider_receipts")
                 connection.execute(
                     """CREATE TABLE settlement_provider_receipts (
@@ -366,22 +403,12 @@ class ComputeSponsorshipStore:
                         CHECK(typeof(recorded_at_ms) = 'integer' AND recorded_at_ms >= 0)
                     )"""
                 )
-                for legacy in legacy_receipts:
-                    legacy_payload = json.loads(legacy["receipt_json"])
-                    operation = connection.execute(
-                        "SELECT provider_operation_id FROM settlement_allocations WHERE allocation_id = ?",
-                        (legacy["allocation_id"],),
-                    ).fetchone()
-                    if not operation or not operation["provider_operation_id"]:
-                        raise SettlementTransitionError("legacy provider receipt lacks an allocation operation binding")
+                for legacy, transaction_commitment, provider_operation_id in bound_receipts:
                     receipt_id_commitment = "sha256:" + hashlib.sha256(
                         f"receipt:{legacy['receipt_id']}".encode("utf-8")
                     ).hexdigest()
-                    transaction_commitment = "sha256:" + hashlib.sha256(
-                        f"transaction:{legacy_payload.get('provider_transaction_id', legacy['receipt_id'])}".encode("utf-8")
-                    ).hexdigest()
                     operation_commitment = "sha256:" + hashlib.sha256(
-                        f"operation:{operation['provider_operation_id']}".encode("utf-8")
+                        f"operation:{provider_operation_id}".encode("utf-8")
                     ).hexdigest()
                     receipt_json = self._canonical_json({
                         "provider": legacy["provider"], "receipt_id_commitment": receipt_id_commitment,
@@ -399,8 +426,11 @@ class ComputeSponsorshipStore:
                          operation_commitment, legacy["allocation_id"], receipt_json, receipt_hash,
                          legacy["recorded_at_ms"]),
                     )
-                connection.execute("PRAGMA foreign_keys=ON")
+            connection.execute("COMMIT")
         finally:
+            if connection.in_transaction:
+                connection.execute("ROLLBACK")
+            connection.execute("PRAGMA foreign_keys=ON")
             self._release(connection)
 
     def _connect(self) -> sqlite3.Connection:

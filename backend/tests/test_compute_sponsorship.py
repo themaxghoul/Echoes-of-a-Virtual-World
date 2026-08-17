@@ -55,6 +55,64 @@ class ComputeSponsorshipFundingTests(unittest.TestCase):
         self.assertTrue(store.audit_funding()["balanced"])
         store.close()
 
+    def test_task3_approved_allocation_schema_rebuilds_and_can_enter_provider_pending(self):
+        database_path = Path(self.temp.name) / "task3-approved.sqlite3"
+        self._write_task3_approved_fixture(database_path)
+        migrated = ComputeSponsorshipStore(database_path)
+        try:
+            transitioned = migrated.begin_provider_submission(
+                "legacy-provider-submit", "allocation:legacy-task3", "owner-uuid", "test-provider",
+                self.VALID_PROVIDER_CAPABILITY, 2_500,
+            )
+            self.assertEqual("provider_pending", transitioned["state"])
+            connection = migrated._connect()
+            try:
+                allocation_sql = connection.execute(
+                    "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'settlement_allocations'"
+                ).fetchone()["sql"]
+                index_names = {row["name"] for row in connection.execute("PRAGMA index_list(settlement_allocations)")}
+                self.assertEqual(1, connection.execute("SELECT COUNT(*) FROM settlement_allocations").fetchone()[0])
+            finally:
+                migrated._release(connection)
+            self.assertIn("provider_pending', 'provider_confirmed'", allocation_sql)
+            self.assertIn("idx_legacy_alloc_owner", index_names)
+        finally:
+            migrated.close()
+
+    def test_duplicate_legacy_provider_transactions_fail_before_receipt_table_is_replaced(self):
+        database_path = Path(self.temp.name) / "legacy-duplicate-receipts.sqlite3"
+        prepared = ComputeSponsorshipStore(database_path)
+        prepared.close()
+        connection = sqlite3.connect(database_path)
+        try:
+            connection.execute("DROP TABLE settlement_provider_receipts")
+            connection.execute(
+                """CREATE TABLE settlement_provider_receipts (
+                    provider TEXT NOT NULL, receipt_id TEXT NOT NULL, allocation_id TEXT NOT NULL,
+                    receipt_json TEXT NOT NULL, receipt_hash TEXT NOT NULL, recorded_at_ms INTEGER NOT NULL,
+                    PRIMARY KEY(provider, receipt_id)
+                )"""
+            )
+            for receipt_id in ("legacy-receipt-1", "legacy-receipt-2"):
+                connection.execute(
+                    "INSERT INTO settlement_provider_receipts VALUES (?, ?, ?, ?, ?, ?)",
+                    ("test-provider", receipt_id, "allocation:legacy", json.dumps({"provider_transaction_id": "same-transaction"}), self.VALID_EVIDENCE_HASH, 2_400),
+                )
+            connection.commit()
+        finally:
+            connection.close()
+        with self.assertRaisesRegex(SettlementTransitionError, "duplicate legacy provider transaction"):
+            ComputeSponsorshipStore(database_path)
+        connection = sqlite3.connect(database_path)
+        try:
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(settlement_provider_receipts)")}
+            count = connection.execute("SELECT COUNT(*) FROM settlement_provider_receipts").fetchone()[0]
+        finally:
+            connection.close()
+        self.assertIn("receipt_id", columns)
+        self.assertNotIn("receipt_id_commitment", columns)
+        self.assertEqual(2, count)
+
     def test_evidence_hash_must_be_canonical_lowercase_sha256(self):
         invalid_hashes = (
             "sha256:" + ("a" * 63),
@@ -444,6 +502,56 @@ class ComputeSponsorshipFundingTests(unittest.TestCase):
             "funding_currency": "usd",
             "compliance_manifest_hash": self.VALID_COMPLIANCE_MANIFEST,
         }
+
+    def _write_task3_approved_fixture(self, database_path):
+        policy = self._policy("legacy-policy", 1)
+        connection = sqlite3.connect(database_path)
+        try:
+            connection.executescript(
+                """CREATE TABLE settlement_operations (
+                    operation_id TEXT PRIMARY KEY, request_hash TEXT NOT NULL, result_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE settlement_policies (
+                    policy_id TEXT PRIMARY KEY, version INTEGER NOT NULL UNIQUE, owner_subject TEXT NOT NULL,
+                    policy_json TEXT NOT NULL, policy_hash TEXT NOT NULL, state TEXT NOT NULL,
+                    approved_at_ms INTEGER NOT NULL, activation_evidence_json TEXT, activated_at_ms INTEGER
+                );
+                CREATE TABLE settlement_allocations (
+                    allocation_id TEXT PRIMARY KEY, operation_id TEXT NOT NULL UNIQUE,
+                    owner_subject TEXT NOT NULL, beneficiary_class TEXT NOT NULL, policy_id TEXT NOT NULL,
+                    policy_version INTEGER NOT NULL, policy_snapshot_json TEXT NOT NULL, world_id TEXT NOT NULL,
+                    public_claim_ids_json TEXT NOT NULL, eligible_cu_milli INTEGER NOT NULL,
+                    quoted_funding_minor INTEGER NOT NULL, period_start_ms INTEGER NOT NULL DEFAULT 0,
+                    state TEXT NOT NULL, created_at_ms INTEGER NOT NULL, held_at_ms INTEGER,
+                    approval_hash TEXT, approved_at_ms INTEGER, expires_at_ms INTEGER,
+                    cancelled_at_ms INTEGER, expired_at_ms INTEGER,
+                    FOREIGN KEY(operation_id) REFERENCES settlement_operations(operation_id),
+                    FOREIGN KEY(policy_id) REFERENCES settlement_policies(policy_id),
+                    CHECK(beneficiary_class = 'eov_owner_development'),
+                    CHECK(state IN ('proposed', 'funding_held', 'owner_approved', 'cancelled', 'expired')),
+                    CHECK(typeof(policy_version) = 'integer' AND policy_version > 0),
+                    CHECK(typeof(eligible_cu_milli) = 'integer' AND eligible_cu_milli > 0),
+                    CHECK(typeof(quoted_funding_minor) = 'integer' AND quoted_funding_minor > 0),
+                    CHECK(typeof(period_start_ms) = 'integer' AND period_start_ms >= 0),
+                    CHECK(typeof(created_at_ms) = 'integer' AND created_at_ms >= 0)
+                );
+                CREATE INDEX idx_legacy_alloc_owner ON settlement_allocations(owner_subject);"""
+            )
+            connection.execute("INSERT INTO settlement_operations(operation_id, request_hash, result_json) VALUES (?, ?, ?)", ("legacy-allocation", "legacy", "{}"))
+            connection.execute(
+                "INSERT INTO settlement_policies VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                ("legacy-policy", 1, "owner-uuid", json.dumps(policy), "legacy-policy-hash", "settlement_active", 1_500, None, 2_000),
+            )
+            connection.execute(
+                "INSERT INTO settlement_allocations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                ("allocation:legacy-task3", "legacy-allocation", "owner-uuid", "eov_owner_development", "legacy-policy", 1,
+                 json.dumps(policy), "world-1", json.dumps(["claim:legacy"]), 4_000, 4, 2_000,
+                 "owner_approved", 2_100, 2_200, self.VALID_EVIDENCE_HASH, 2_300, 9_000, None, None),
+            )
+            connection.commit()
+        finally:
+            connection.close()
 
     def _proposed_allocation(
         self,
