@@ -409,7 +409,14 @@ def _serialize_observed_tile(state: Dict[str, Any], key: str, evidence: Dict[str
 def actor_world_view(snapshot: Dict[str, Any], actor_id: str) -> Dict[str, Any]:
     """Return public state plus only the requesting actor's private material."""
     view = copy.deepcopy(snapshot)
+    # Let a client reconcile its local profile with the authenticated server
+    # subject. This is the token-derived UUID, never a caller-supplied ID.
+    view["viewer_id"] = actor_id
     state = view["state"]
+    viewer_record = state.get("players", {}).get(actor_id, {})
+    # Owner status is scoped to the requesting viewer; do not expose role flags
+    # for other players in the redacted world state.
+    view["viewer_is_owner"] = bool(viewer_record.get("is_owner") is True or viewer_record.get("permission_level") == "sirix_1")
     knowledge = state.get("discoveries", {}).get(actor_id, {})
     state["observed_tiles"] = {key: _serialize_observed_tile(state, key, evidence) for key, evidence in sorted(knowledge.items())}
     state.pop("discoveries", None)

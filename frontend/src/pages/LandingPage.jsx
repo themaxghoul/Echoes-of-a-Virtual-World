@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Sparkles, Compass, BookOpen } from 'lucide-react';
 
+const { applyAuthenticatedIdentity } = require('@/lib/sessionState.cjs');
+
 const LandingPage = () => {
   const navigate = useNavigate();
   const [isLoaded, setIsLoaded] = useState(false);
@@ -66,15 +68,28 @@ const LandingPage = () => {
                 const result = await window.eovDesktop.resumeLast();
                 if (result.ok) {
                   const userId = result.user.id;
-                  sessionStorage.removeItem('eovAccessToken');
-                  localStorage.removeItem('eovNetworkUserId');
-                  localStorage.setItem('userId', userId);
-                  localStorage.setItem('username', result.user.username);
-                  localStorage.setItem('displayName', result.user.display_name);
-                  localStorage.setItem('isOwner', result.user.is_owner ? 'true' : 'false');
-                  localStorage.setItem('permissionLevel', result.user.permission_level || 'basic');
-                  localStorage.setItem('currentCharacterId', result.character.id);
-                  localStorage.setItem('characterName', result.character.name);
+                  // Continue Journey must not discard a valid server session.
+                  // When an auth endpoint is configured, verify the server
+                  // subject before reusing the token for multiplayer writes.
+                  let networkToken = sessionStorage.getItem('eovAccessToken');
+                  let networkUserId = localStorage.getItem('eovNetworkUserId');
+                  const configuredAuthUrl = process.env.REACT_APP_BACKEND_URL || (() => {
+                    try { return JSON.parse(localStorage.getItem('eov-game-settings') || '{}').authServerUrl || ''; } catch { return ''; }
+                  })();
+                  if (networkToken && configuredAuthUrl) {
+                    try {
+                      const response = await fetch(`${configuredAuthUrl.replace(/\/$/, '')}/api/auth/session`, { headers: { Authorization: `Bearer ${networkToken}` } });
+                      const payload = await response.json();
+                      if (!response.ok || payload?.user?.username !== result.user.username) throw new Error('Network identity mismatch');
+                      networkUserId = payload.user.id;
+                    } catch {
+                      networkToken = null;
+                      networkUserId = null;
+                      sessionStorage.removeItem('eovAccessToken');
+                      localStorage.removeItem('eovNetworkUserId');
+                    }
+                  }
+                  applyAuthenticatedIdentity({ localStorage, sessionStorage, user: result.user, character: result.character, desktopToken: sessionStorage.getItem('eovDesktopAccessToken'), networkToken, networkUserId });
                   const allowed = ['/select-mode', '/village', '/play', '/unity', '/settings'];
                   const lastRoute = localStorage.getItem(`eovLastRoute:${userId}`);
                   navigate(allowed.includes(lastRoute) ? lastRoute : '/select-mode');

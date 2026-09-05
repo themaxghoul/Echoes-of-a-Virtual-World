@@ -19,6 +19,13 @@ class PersistentWorldTests(unittest.TestCase):
         self.store.close()
         self.temp.cleanup()
 
+    def test_observed_snapshot_records_token_derived_viewer_id(self):
+        snapshot = self.store.snapshot()
+        snapshot["state"]["players"]["server-bound-owner-uuid"] = {"is_owner": True, "permission_level": "sirix_1", "stats": {"health": 100}}
+        observed = actor_world_view(snapshot, "server-bound-owner-uuid")
+        self.assertEqual(observed["viewer_id"], "server-bound-owner-uuid")
+        self.assertTrue(observed["viewer_is_owner"])
+
     def install_test_pump(self, actor="maintainer"):
         """Install an already validated finite unit so lifecycle tests can focus on field causality."""
         self.store.apply_action(self.world["world_id"], f"{actor}-join-tools", actor, {"type": "join", "location": [7, 8]}, now_ms=1_000_001)

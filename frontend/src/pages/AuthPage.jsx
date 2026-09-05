@@ -10,6 +10,8 @@ import { toast } from 'sonner';
 import axios from 'axios';
 import { clearNavHistory } from '@/components/GameNavigation';
 
+const { applyAuthenticatedIdentity } = require('@/lib/sessionState.cjs');
+
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const AuthPage = () => {
@@ -51,32 +53,30 @@ const AuthPage = () => {
         const result = await window.eovDesktop.login(loginData.identifier, loginData.password);
         if (!result.ok) throw new Error(result.error);
         const { user, character, session } = result;
-        sessionStorage.setItem('eovDesktopAccessToken', session);
+        let networkToken = null;
+        let networkUserId = null;
+        // A fresh login must never inherit another account's network session.
         sessionStorage.removeItem('eovAccessToken');
         localStorage.removeItem('eovNetworkUserId');
-        if (process.env.REACT_APP_BACKEND_URL) {
+        const configuredAuthUrl = process.env.REACT_APP_BACKEND_URL || (() => {
+          try { return JSON.parse(localStorage.getItem('eov-game-settings') || '{}').authServerUrl || ''; } catch { return ''; }
+        })();
+        if (configuredAuthUrl) {
           try {
-            const network = await axios.post(`${API}/auth/login`, {
+            const network = await axios.post(`${configuredAuthUrl.replace(/\/$/, '')}/api/auth/login`, {
               identifier: loginData.identifier.toLowerCase(),
               username: loginData.identifier.toLowerCase(),
               password: loginData.password,
             });
             if (network.data?.session?.access_token && network.data?.user?.username === user.username) {
-              sessionStorage.setItem('eovAccessToken', network.data.session.access_token);
-              localStorage.setItem('eovNetworkUserId', network.data.user.id);
+              networkToken = network.data.session.access_token;
+              networkUserId = network.data.user.id;
             }
           } catch {
             // The executable remains usable offline; multiplayer reconnects after a server-authenticated login.
           }
         }
-        localStorage.setItem('userId', user.id);
-        localStorage.setItem('username', user.username);
-        localStorage.setItem('displayName', user.display_name);
-        localStorage.setItem('isTranscendent', 'false');
-        localStorage.setItem('isOwner', user.is_owner ? 'true' : 'false');
-        localStorage.setItem('permissionLevel', user.permission_level);
-        localStorage.setItem('currentCharacterId', character.id);
-        localStorage.setItem('characterName', character.name);
+        applyAuthenticatedIdentity({ localStorage, sessionStorage, user, character, desktopToken: session, networkToken, networkUserId });
         localStorage.setItem(`eovLastRoute:${user.id}`, '/select-mode');
         toast.success(`Welcome back, ${user.display_name}!`);
         navigate('/select-mode');

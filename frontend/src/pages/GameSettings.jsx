@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 
 const KEY = 'eov-game-settings';
-const defaults = { textSpeed: 'normal', autosave: true, reduceMotion: false, highContrast: false, textScale: 100, masterVolume: 80, movement: 'WASD / Arrow keys', interaction: 'E', worldServerUrl: '' };
+const defaults = { textSpeed: 'normal', autosave: true, reduceMotion: false, highContrast: false, textScale: 100, masterVolume: 80, movement: 'WASD / Arrow keys', interaction: 'E', worldServerUrl: '', authServerUrl: '' };
 
 const load = () => {
   try { return { ...defaults, ...JSON.parse(localStorage.getItem(KEY)) }; } catch { return defaults; }
@@ -42,7 +42,9 @@ export default function GameSettings() {
           <h2 className="mb-4 flex items-center gap-2 font-cinzel text-gold"><Globe2 size={18} /> Persistent Multiplayer</h2>
           <Label htmlFor="world-server">World server URL</Label>
           <input id="world-server" type="url" placeholder="https://world.example.com" value={value.worldServerUrl} onChange={(e) => update('worldServerUrl', e.target.value)} className="mt-2 w-full border border-border bg-obsidian p-3 font-mono text-sm" />
-          <div className="mt-4 flex items-center justify-between gap-4"><p className="text-xs text-muted-foreground">Restart the client after changing servers. A configured server becomes authoritative and uses your signed login session; actor IDs are never taken from this form.</p><Button onClick={() => window.location.reload()}>Reconnect</Button></div>
+          <Label htmlFor="auth-server" className="mt-4 block">Authentication API URL</Label>
+          <input id="auth-server" type="url" placeholder="https://api.example.com" value={value.authServerUrl} onChange={(e) => update('authServerUrl', e.target.value)} className="mt-2 w-full border border-border bg-obsidian p-3 font-mono text-sm" />
+          <div className="mt-4 flex items-center justify-between gap-4"><p className="text-xs text-muted-foreground">The world server stores the shared state; the authentication URL issues the signed session it accepts. Restart after changing either URL. Actor IDs are always derived from that session.</p><Button onClick={() => window.location.reload()}>Reconnect</Button></div>
         </section>
         <section className="rounded-sm border border-border/40 bg-surface/70 p-5">
           <h2 className="mb-4 flex items-center gap-2 font-cinzel text-gold"><Monitor size={18} /> Display</h2>

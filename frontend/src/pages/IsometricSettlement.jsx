@@ -166,7 +166,8 @@ function operationForSite(site, inventory, tick = 0) {
 
 const IsometricSettlement = () => {
   const storageOwner = localStorage.getItem('userId') || 'anonymous';
-  const authorityActorId = localStorage.getItem('eovNetworkUserId') || storageOwner;
+  const [serverActorId, setServerActorId] = useState(null);
+  const authorityActorId = serverActorId || localStorage.getItem('eovNetworkUserId') || storageOwner;
   const worldNamespace = `world:${storageOwner}`;
   const worldStorageKey = `${STORAGE_KEY}:${storageOwner}`;
   const simulationStorageKey = `eov-settlement-simulation:${storageOwner}`;
@@ -184,6 +185,7 @@ const IsometricSettlement = () => {
   const [selected, setSelected] = useState(null);
   const [savedAt, setSavedAt] = useState(null);
   const [serverSnapshot, setServerSnapshot] = useState(null);
+  const [serverOwner, setServerOwner] = useState(null);
   const [serverError, setServerError] = useState(null);
   const [chatInput, setChatInput] = useState('');
   const [movementStatus, setMovementStatus] = useState('');
@@ -192,7 +194,7 @@ const IsometricSettlement = () => {
   const [repairConditionRecord, setRepairConditionRecord] = useState({ before: '0.30', after: '0.86' });
   const [extractionObservation, setExtractionObservation] = useState({ stockBefore: '10', observedYield: '2' });
   const [pumpDesign, setPumpDesign] = useState({ name: 'Founders lever pump', effortArm: '1.2', loadArm: '0.3', pistonDiameter: '0.12', stroke: '0.5', efficiency: '0.75' });
-  const isOwner = localStorage.getItem('isOwner') === 'true';
+  const isOwner = serverOwner ?? (localStorage.getItem('isOwner') === 'true');
   const frontierView = useMemo(() => projectObservedFrontier(serverSnapshot, authorityActorId), [authorityActorId, serverSnapshot]);
   const activeMapSize = frontierView.connected ? frontierView.size : MAP_SIZE;
 
@@ -219,8 +221,13 @@ const IsometricSettlement = () => {
       try {
         const snapshot = await fetchWorldSnapshot(undefined, controller.signal);
         if (active && isRenderableServerSnapshot(snapshot)) {
+          if (snapshot.viewer_id) {
+            setServerActorId(snapshot.viewer_id);
+            localStorage.setItem('eovNetworkUserId', snapshot.viewer_id);
+          }
+          if (typeof snapshot.viewer_is_owner === 'boolean') setServerOwner(snapshot.viewer_is_owner);
           setServerSnapshot(snapshot);
-          const actor = snapshot.state?.players?.[authorityActorId];
+          const actor = snapshot.state?.players?.[snapshot.viewer_id || authorityActorId];
           if (actor?.location) setWorld((current) => ({ ...current, player: { x: actor.location[0], y: actor.location[1] } }));
           setServerError(null);
         } else if (active) {
