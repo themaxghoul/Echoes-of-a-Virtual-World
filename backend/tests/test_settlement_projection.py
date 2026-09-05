@@ -205,6 +205,35 @@ class PublicSettlementProjectionTests(unittest.TestCase):
                 self._resign(malformed)
                 self.assertFalse(verify_public_settlement_chain(malformed, self.trusted_publishers))
 
+    def test_funding_receipts_require_public_timestamp_reference_order_after_renumbered_resign(self):
+        reordered = copy.deepcopy(self.projection)
+        reordered["funding_receipts"].reverse()
+        for sequence, receipt in enumerate(reordered["funding_receipts"], start=1):
+            receipt["sequence"] = sequence
+        self._resign(reordered)
+        self.assertFalse(verify_public_settlement_chain(reordered, self.trusted_publishers))
+
+    def test_reserve_proof_requires_an_exact_one_to_one_hold_join_after_authorized_resign(self):
+        for mutate in (
+            lambda value: next(item for item in value["reserve_proof"] if item["kind"] == "hold").__setitem__("allocation_ref", value["allocations"][1]["allocation_ref"]),
+            lambda value: value["allocations"][0]["funding"].__setitem__("hold_sequence", next(item for item in value["reserve_proof"] if item["kind"] == "receipt_credit")["sequence"]),
+            lambda value: self._move_first_credit_after_first_hold(value),
+            lambda value: value["reserve_proof"].append(copy.deepcopy(next(item for item in value["reserve_proof"] if item["kind"] == "hold"))),
+        ):
+            with self.subTest(mutate=mutate):
+                malformed = copy.deepcopy(self.projection)
+                mutate(malformed)
+                self._resign(malformed)
+                self.assertFalse(verify_public_settlement_chain(malformed, self.trusted_publishers))
+
+    @staticmethod
+    def _move_first_credit_after_first_hold(projection):
+        credit = next(item for item in projection["reserve_proof"] if item["kind"] == "receipt_credit")
+        hold = next(item for item in projection["reserve_proof"] if item["kind"] == "hold")
+        credit["occurred_at_ms"] = hold["occurred_at_ms"] + 1
+        receipt = next(item for item in projection["funding_receipts"] if item["receipt_ref"] == credit["receipt_ref"])
+        receipt["received_at_ms"] = credit["occurred_at_ms"]
+
     def _create_reconciled_allocation(self):
         hash_for = lambda digit: "sha256:" + (digit * 64)
         self.store.record_funding(

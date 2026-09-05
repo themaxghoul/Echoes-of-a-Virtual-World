@@ -70,11 +70,6 @@ def _hash(value: str) -> str:
     return "sha256:" + hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def _public_ref(kind: str, private_value: str) -> str:
-    """Commit a non-personal internal identifier in its own public domain."""
-    return f"{kind}:{hashlib.sha256(f'{SCHEMA}|{kind}|{private_value}'.encode('utf-8')).hexdigest()}"
-
-
 def _chain_hash(previous_hash: str, allocation: dict) -> str:
     body = {key: value for key, value in allocation.items() if key != "chain_hash"}
     return _hash(previous_hash + "|" + _canonical(body))
@@ -168,16 +163,14 @@ def project_public_settlement(store: ComputeSponsorshipStore, publisher: Ed25519
     public_funding_receipts = []
     receipt_ref_by_operation: dict[str, str] = {}
     receipt_refs_by_currency: dict[str, list[str]] = {}
-    for sequence, receipt in enumerate(
-        sorted(records["funding_receipts"], key=lambda value: (value["received_at_ms"], value["operation_id"])), start=1
-    ):
+    for receipt in records["funding_receipts"]:
         if receipt["currency"] != _SUPPORTED_CURRENCY:
             raise ValueError("public settlement supports only usd")
         credit_posting = next((item for item in records["postings"] if item["operation_id"] == receipt["operation_id"] and item["account_id"] == f"reserve:available:{receipt['currency']}" and item["delta_minor"] == receipt["amount_minor"]), None)
         if credit_posting is None:
             raise ValueError("funding receipt lacks an exact reserve credit")
         public_receipt = {
-            "sequence": sequence,
+            "sequence": 0,
             "receipt_ref": receipt["public_ref"],
             "amount_minor": _require_integer(receipt["amount_minor"], "funding receipt amount", positive=True),
             "currency": receipt["currency"],
@@ -188,6 +181,9 @@ def project_public_settlement(store: ComputeSponsorshipStore, publisher: Ed25519
         public_funding_receipts.append(public_receipt)
         receipt_ref_by_operation[receipt["operation_id"]] = public_receipt["receipt_ref"]
         receipt_refs_by_currency.setdefault(receipt["currency"], []).append(public_receipt["receipt_ref"])
+    public_funding_receipts.sort(key=lambda item: (item["received_at_ms"], item["receipt_ref"]))
+    for sequence, receipt in enumerate(public_funding_receipts, start=1):
+        receipt["sequence"] = sequence
 
     events_by_allocation: dict[str, list[dict]] = {}
     event_by_operation: dict[str, dict] = {}
@@ -297,7 +293,7 @@ def project_public_settlement(store: ComputeSponsorshipStore, publisher: Ed25519
         })
 
     reserve_proof = [
-        {"sequence": receipt["credit_sequence"], "kind": "receipt_credit", "receipt_ref": receipt["receipt_ref"], "allocation_ref": None, "amount_minor": receipt["amount_minor"], "occurred_at_ms": receipt["received_at_ms"]}
+        {"sequence": receipt["credit_sequence"], "kind": "receipt_credit", "receipt_ref": receipt["receipt_ref"], "allocation_ref": None, "currency": receipt["currency"], "amount_minor": receipt["amount_minor"], "occurred_at_ms": receipt["received_at_ms"]}
         for receipt in public_funding_receipts
     ]
     for allocation in public_allocations:
@@ -305,10 +301,10 @@ def project_public_settlement(store: ComputeSponsorshipStore, publisher: Ed25519
             if posting["account_ref"] == "reserve:available":
                 reserve_proof.append({
                     "sequence": posting["sequence"], "kind": "hold" if posting["amount_minor"] < 0 else "release",
-                    "receipt_ref": None, "allocation_ref": allocation["allocation_ref"],
+                    "receipt_ref": None, "allocation_ref": allocation["allocation_ref"], "currency": allocation["currency"],
                     "amount_minor": abs(posting["amount_minor"]), "occurred_at_ms": posting["occurred_at_ms"],
                 })
-    reserve_proof.sort(key=lambda item: item["sequence"])
+    reserve_proof.sort(key=lambda item: (item["occurred_at_ms"], item["sequence"]))
     root_hash = _root_hash(public_claims, public_policies, public_funding_receipts, reserve_proof)
     previous_hash = root_hash
     for allocation in public_allocations:
@@ -405,24 +401,26 @@ def _verify_projection(projection: dict, trusted_publishers: dict[str, Ed25519Pu
         _require_integer(receipt["received_at_ms"], "funding receipt timestamp")
         _require_hash(receipt["evidence_hash"], "funding receipt evidence")
         _require_integer(receipt["credit_sequence"], "receipt credit sequence", positive=True)
-    if funding_receipts != sorted(funding_receipts, key=lambda item: item["sequence"]):
+    if funding_receipts != sorted(funding_receipts, key=lambda item: (item["received_at_ms"], item["receipt_ref"])):
         raise ValueError("public funding receipt order is invalid")
 
     balance = 0
     proof_sequences = []
+    proof_by_sequence = {}
     receipt_by_ref = {item["receipt_ref"]: item for item in funding_receipts}
     for proof in reserve_proof:
-        if not isinstance(proof, dict) or set(proof) != {"sequence", "kind", "receipt_ref", "allocation_ref", "amount_minor", "occurred_at_ms"}:
+        if not isinstance(proof, dict) or set(proof) != {"sequence", "kind", "receipt_ref", "allocation_ref", "currency", "amount_minor", "occurred_at_ms"}:
             raise ValueError("reserve proof allowlist is invalid")
         _require_integer(proof["sequence"], "reserve proof sequence", positive=True)
         _require_integer(proof["amount_minor"], "reserve proof amount", positive=True)
         _require_integer(proof["occurred_at_ms"], "reserve proof timestamp")
-        if proof_sequences and proof["sequence"] <= proof_sequences[-1]:
+        if proof["currency"] != _SUPPORTED_CURRENCY or proof["sequence"] in proof_by_sequence:
             raise ValueError("reserve proof order is invalid")
         proof_sequences.append(proof["sequence"])
+        proof_by_sequence[proof["sequence"]] = proof
         if proof["kind"] == "receipt_credit":
             receipt = receipt_by_ref.get(proof["receipt_ref"])
-            if not receipt or proof["allocation_ref"] is not None or proof["sequence"] != receipt["credit_sequence"] or proof["amount_minor"] != receipt["amount_minor"] or proof["occurred_at_ms"] != receipt["received_at_ms"]:
+            if not receipt or proof["allocation_ref"] is not None or proof["sequence"] != receipt["credit_sequence"] or proof["currency"] != receipt["currency"] or proof["amount_minor"] != receipt["amount_minor"] or proof["occurred_at_ms"] != receipt["received_at_ms"]:
                 raise ValueError("reserve receipt credit proof is invalid")
             balance += proof["amount_minor"]
         elif proof["kind"] == "hold":
@@ -435,11 +433,14 @@ def _verify_projection(projection: dict, trusted_publishers: dict[str, Ed25519Pu
             balance += proof["amount_minor"]
         else:
             raise ValueError("reserve proof kind is invalid")
+    if reserve_proof != sorted(reserve_proof, key=lambda item: (item["occurred_at_ms"], item["sequence"])):
+        raise ValueError("reserve proof effective order is invalid")
 
     previous_hash = projection["root_hash"]
     seen_allocations = set()
     used_claim_refs = set()
     claim_allocation = {}
+    referenced_hold_sequences = set()
     sort_key = None
     computed = {"eligible_cu_milli": 0, "quoted_minor": 0, "held_minor": 0, "captured_minor": 0, "released_minor": 0, "posting_balance_minor": 0}
     for sequence, allocation in enumerate(allocations, start=1):
@@ -479,8 +480,6 @@ def _verify_projection(projection: dict, trusted_publishers: dict[str, Ed25519Pu
             _require_integer(funding[field], field)
         if funding["quoted_minor"] <= 0:
             raise ValueError("public funding receipt links are invalid")
-        if funding["held_minor"] and funding["hold_sequence"] not in proof_sequences:
-            raise ValueError("public held funding requires a reserve proof")
         if not isinstance(funding["postings"], list):
             raise ValueError("public funding postings are invalid")
         posting_balance = 0
@@ -503,6 +502,18 @@ def _verify_projection(projection: dict, trusted_publishers: dict[str, Ed25519Pu
                 released_postings += posting["amount_minor"]
         if posting_balance != 0 or funding["held_minor"] != held_postings or funding["captured_minor"] != captured_postings or funding["released_minor"] != released_postings:
             raise ValueError("public funding postings are unbalanced")
+        hold_postings = [posting for posting in funding["postings"] if posting["account_ref"] == "reserve:available" and posting["amount_minor"] < 0]
+        if funding["held_minor"]:
+            if len(hold_postings) != 1 or funding["hold_sequence"] != hold_postings[0]["sequence"]:
+                raise ValueError("allocation hold posting is invalid")
+            proof = proof_by_sequence.get(funding["hold_sequence"])
+            if not proof or proof["kind"] != "hold" or proof["allocation_ref"] != allocation["allocation_ref"] or proof["currency"] != allocation["currency"] or proof["amount_minor"] != -hold_postings[0]["amount_minor"] or proof["occurred_at_ms"] != hold_postings[0]["occurred_at_ms"]:
+                raise ValueError("allocation hold proof join is invalid")
+            if funding["hold_sequence"] in referenced_hold_sequences:
+                raise ValueError("reserve hold proof is referenced more than once")
+            referenced_hold_sequences.add(funding["hold_sequence"])
+        elif funding["hold_sequence"] is not None or hold_postings:
+            raise ValueError("unheld allocation has a hold proof")
 
         lifecycle = allocation["lifecycle"]
         if not isinstance(lifecycle, dict) or set(lifecycle) != {"created_at_ms", "held_at_ms", "approved_at_ms", "provider_pending_at_ms", "provider_confirmed_at_ms", "reconciled_at_ms", "provider_effective_at_ms", "events"}:
@@ -558,6 +569,8 @@ def _verify_projection(projection: dict, trusted_publishers: dict[str, Ed25519Pu
         computed["posting_balance_minor"] += posting_balance
     if used_claim_refs != claim_refs:
         raise ValueError("public claim set has broken allocation links")
+    if referenced_hold_sequences != {item["sequence"] for item in reserve_proof if item["kind"] == "hold"}:
+        raise ValueError("reserve hold proof is unreferenced")
     if projection["head_hash"] != previous_hash:
         raise ValueError("public settlement head hash is invalid")
     expected_totals = {
