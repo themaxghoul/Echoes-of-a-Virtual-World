@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import secrets
 import sqlite3
 from pathlib import Path
 from typing import Any, Dict
@@ -38,6 +39,7 @@ _SUPPORTED_EVIDENCE_REQUIREMENTS = frozenset({
     "commissioned_action",
     "independent_verifier",
 })
+PUBLIC_PROVIDER_IDS = frozenset({"openai", "test-provider"})
 _ALLOCATION_TRANSITIONS = {
     "hold": {"proposed": "funding_held"},
     "approve": {"funding_held": "owner_approved"},
@@ -100,6 +102,7 @@ class ComputeSponsorshipStore:
                 );
                 CREATE TABLE IF NOT EXISTS funding_receipts (
                     operation_id TEXT PRIMARY KEY,
+                    public_ref TEXT,
                     owner_subject TEXT NOT NULL,
                     amount_minor INTEGER NOT NULL,
                     currency TEXT NOT NULL,
@@ -112,6 +115,7 @@ class ComputeSponsorshipStore:
                 );
                 CREATE TABLE IF NOT EXISTS settlement_policies (
                     policy_id TEXT PRIMARY KEY,
+                    public_ref TEXT,
                     version INTEGER NOT NULL UNIQUE,
                     owner_subject TEXT NOT NULL,
                     policy_json TEXT NOT NULL,
@@ -128,6 +132,7 @@ class ComputeSponsorshipStore:
                 );
                 CREATE TABLE IF NOT EXISTS settlement_allocations (
                     allocation_id TEXT PRIMARY KEY,
+                    public_ref TEXT,
                     operation_id TEXT NOT NULL UNIQUE,
                     owner_subject TEXT NOT NULL,
                     beneficiary_class TEXT NOT NULL,
@@ -426,6 +431,17 @@ class ComputeSponsorshipStore:
                          operation_commitment, legacy["allocation_id"], receipt_json, receipt_hash,
                          legacy["recorded_at_ms"]),
                     )
+            # Public projection references are random opaque capabilities, not
+            # hashes of private row identifiers.  Backfill inside this schema
+            # transaction so a restart never observes a partially migrated map.
+            for table, prefix in (("funding_receipts", "funding-receipt"), ("settlement_policies", "policy"), ("settlement_allocations", "allocation")):
+                columns = {row["name"] for row in connection.execute(f"PRAGMA table_info({table})")}
+                if "public_ref" not in columns:
+                    connection.execute(f"ALTER TABLE {table} ADD COLUMN public_ref TEXT")
+                missing = connection.execute(f"SELECT rowid FROM {table} WHERE public_ref IS NULL OR public_ref = ''").fetchall()
+                for item in missing:
+                    connection.execute(f"UPDATE {table} SET public_ref = ? WHERE rowid = ?", (self._new_public_ref(prefix), item["rowid"]))
+                connection.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS idx_{table}_public_ref ON {table}(public_ref)")
             connection.execute("COMMIT")
         finally:
             if connection.in_transaction:
@@ -461,6 +477,10 @@ class ComputeSponsorshipStore:
     @staticmethod
     def _account_id(account: str, currency: str) -> str:
         return f"{account}:{currency}"
+
+    @staticmethod
+    def _new_public_ref(prefix: str) -> str:
+        return f"{prefix}:{secrets.token_urlsafe(32)}"
 
     @staticmethod
     def _require_text(value: str, field: str) -> str:
@@ -721,10 +741,10 @@ class ComputeSponsorshipStore:
             )
             connection.execute(
                 """INSERT INTO settlement_policies(
-                    policy_id, version, owner_subject, policy_json, policy_hash, state, approved_at_ms
-                ) VALUES (?, ?, ?, ?, ?, 'draft', ?)""",
+                    policy_id, public_ref, version, owner_subject, policy_json, policy_hash, state, approved_at_ms
+                ) VALUES (?, ?, ?, ?, ?, ?, 'draft', ?)""",
                 (
-                    values["policy"]["policy_id"], values["policy"]["version"], values["owner_subject"],
+                    values["policy"]["policy_id"], self._new_public_ref("policy"), values["policy"]["version"], values["owner_subject"],
                     policy_json, policy_hash, values["approved_at_ms"],
                 ),
             )
@@ -1025,12 +1045,12 @@ class ComputeSponsorshipStore:
             )
             connection.execute(
                 """INSERT INTO settlement_allocations(
-                    allocation_id, operation_id, owner_subject, beneficiary_class, policy_id, policy_version,
+                    allocation_id, public_ref, operation_id, owner_subject, beneficiary_class, policy_id, policy_version,
                     policy_snapshot_json, world_id, public_claim_ids_json, eligible_cu_milli,
                     quoted_funding_minor, period_start_ms, state, created_at_ms
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?)""",
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'proposed', ?)""",
                 (
-                    allocation_id, values["operation_id"], values["owner_subject"], "eov_owner_development",
+                    allocation_id, self._new_public_ref("allocation"), values["operation_id"], values["owner_subject"], "eov_owner_development",
                     stored["policy_id"], stored["version"], self._canonical_json(policy), values["world_id"],
                     self._canonical_json(claim_ids), eligible_cu_milli, quoted_funding_minor, period_start_ms,
                     values["now_ms"],
@@ -1511,6 +1531,8 @@ class ComputeSponsorshipStore:
             "capability_hash": self._require_evidence_hash(capability_hash, "capability_hash"),
             "now_ms": self._require_non_negative_integer(now_ms, "now_ms"),
         }
+        if values["provider"] not in PUBLIC_PROVIDER_IDS:
+            raise SettlementTransitionError("provider is not a trusted public provider")
         request_hash = self._hash_request(values)
         connection = self._connect()
         try:
@@ -1774,8 +1796,8 @@ class ComputeSponsorshipStore:
                 (values["operation_id"], request_hash, json.dumps(result, sort_keys=True, separators=(",", ":"))),
             )
             connection.execute(
-                "INSERT INTO funding_receipts(operation_id, owner_subject, amount_minor, currency, source_class, evidence_hash, received_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (values["operation_id"], values["owner_subject"], values["amount_minor"], currency, values["source_class"], values["evidence_hash"], values["received_at_ms"]),
+                "INSERT INTO funding_receipts(operation_id, public_ref, owner_subject, amount_minor, currency, source_class, evidence_hash, received_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (values["operation_id"], self._new_public_ref("funding-receipt"), values["owner_subject"], values["amount_minor"], currency, values["source_class"], values["evidence_hash"], values["received_at_ms"]),
             )
             connection.executemany(
                 """INSERT INTO settlement_postings(
@@ -1820,16 +1842,18 @@ class ComputeSponsorshipStore:
             policies = [
                 {
                     "policy_id": row["policy_id"],
+                    "public_ref": row["public_ref"],
                     "version": int(row["version"]),
                     "policy": json.loads(row["policy_json"]),
                 }
                 for row in connection.execute(
-                    "SELECT policy_id, version, policy_json FROM settlement_policies ORDER BY policy_id"
+                    "SELECT policy_id, public_ref, version, policy_json FROM settlement_policies ORDER BY public_ref"
                 )
             ]
             allocations = [
                 {
                     "allocation_id": row["allocation_id"],
+                    "public_ref": row["public_ref"],
                     "policy_id": row["policy_id"],
                     "policy_version": int(row["policy_version"]),
                     "policy_snapshot": json.loads(row["policy_snapshot_json"]),
@@ -1849,12 +1873,12 @@ class ComputeSponsorshipStore:
                     "actual_cost_effective_at_ms": int(row["actual_cost_effective_at_ms"]) if row["actual_cost_effective_at_ms"] is not None else None,
                 }
                 for row in connection.execute(
-                    """SELECT allocation_id, policy_id, policy_version, policy_snapshot_json,
+                    """SELECT allocation_id, public_ref, policy_id, policy_version, policy_snapshot_json,
                               beneficiary_class, eligible_cu_milli, quoted_funding_minor, state,
                               created_at_ms, held_at_ms, approval_hash, approved_at_ms, provider,
                               provider_pending_at_ms, provider_confirmed_at_ms, reconciled_at_ms,
                               actual_cost_minor, actual_cost_effective_at_ms
-                       FROM settlement_allocations ORDER BY created_at_ms, allocation_id"""
+                       FROM settlement_allocations ORDER BY created_at_ms, public_ref"""
                 )
             ]
             commitments = [
@@ -1907,6 +1931,7 @@ class ComputeSponsorshipStore:
             ]
             postings = [
                 {
+                    "sequence": int(row["sequence"]),
                     "operation_id": row["operation_id"],
                     "account_id": row["account_id"],
                     "currency": row["currency"],
@@ -1914,21 +1939,22 @@ class ComputeSponsorshipStore:
                     "occurred_at_ms": int(row["occurred_at_ms"]),
                 }
                 for row in connection.execute(
-                    """SELECT operation_id, account_id, currency, delta_minor, occurred_at_ms
+                    """SELECT sequence, operation_id, account_id, currency, delta_minor, occurred_at_ms
                        FROM settlement_postings ORDER BY sequence"""
                 )
             ]
             funding_receipts = [
                 {
                     "operation_id": row["operation_id"],
+                    "public_ref": row["public_ref"],
                     "amount_minor": int(row["amount_minor"]),
                     "currency": row["currency"],
                     "evidence_hash": row["evidence_hash"],
                     "received_at_ms": int(row["received_at_ms"]),
                 }
                 for row in connection.execute(
-                    """SELECT operation_id, amount_minor, currency, evidence_hash, received_at_ms
-                       FROM funding_receipts ORDER BY received_at_ms, operation_id"""
+                    """SELECT operation_id, public_ref, amount_minor, currency, evidence_hash, received_at_ms
+                       FROM funding_receipts ORDER BY received_at_ms, public_ref"""
                 )
             ]
             return {

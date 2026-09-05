@@ -9,18 +9,45 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import base64
 from typing import Any
 
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
+
 from .compute_sponsorship import ComputeSponsorshipStore
+from .compute_sponsorship import PUBLIC_PROVIDER_IDS
 
 
 SCHEMA = "eov-public-compute-sponsorship/v1"
 _HASH = re.compile(r"^sha256:[0-9a-f]{64}$")
-_PUBLIC_REF = re.compile(r"^(?:allocation|policy|funding-receipt):[0-9a-f]{64}$")
+_PUBLIC_REF = re.compile(r"^(?:allocation|policy|funding-receipt):[A-Za-z0-9_-]{32,}$")
 _SUPPORTED_CURRENCY = "usd"
 _PUBLIC_TOP_FIELDS = frozenset({
-    "schema", "claims", "policies", "funding_receipts", "root_hash", "allocations", "totals", "head_hash",
+    "schema", "claims", "policies", "funding_receipts", "reserve_proof", "root_hash", "allocations", "totals", "head_hash", "publication",
 })
+
+
+class Ed25519SettlementPublisher:
+    """Injected publication capability; private material is never persisted."""
+    def __init__(self, key_id: str, private_key: Ed25519PrivateKey):
+        if not isinstance(key_id, str) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", key_id):
+            raise ValueError("publisher key id is invalid")
+        if not isinstance(private_key, Ed25519PrivateKey):
+            raise TypeError("publisher requires an Ed25519 private key")
+        self.key_id, self._private_key = key_id, private_key
+
+    @property
+    def public_key(self) -> Ed25519PublicKey:
+        return self._private_key.public_key()
+
+    def sign(self, body: bytes) -> str:
+        return base64.b64encode(self._private_key.sign(body)).decode("ascii")
+
+
+def canonical_publication_bytes(projection: dict) -> bytes:
+    body = {key: value for key, value in projection.items() if key != "publication"}
+    return _canonical(body).encode("utf-8")
 _ALLOCATION_FIELDS = frozenset({
     "sequence", "allocation_ref", "beneficiary_class", "claim_refs", "policy", "eligible_cu_milli",
     "currency", "state", "provider", "funding", "lifecycle", "evidence", "previous_hash", "chain_hash",
@@ -53,12 +80,13 @@ def _chain_hash(previous_hash: str, allocation: dict) -> str:
     return _hash(previous_hash + "|" + _canonical(body))
 
 
-def _root_hash(claims: list[dict], policies: list[dict], funding_receipts: list[dict]) -> str:
+def _root_hash(claims: list[dict], policies: list[dict], funding_receipts: list[dict], reserve_proof: list[dict]) -> str:
     static = {
         "schema": SCHEMA,
         "claims": claims,
         "policies": policies,
         "funding_receipts": funding_receipts,
+        "reserve_proof": reserve_proof,
     }
     return _hash(SCHEMA + "|" + _canonical(static))
 
@@ -85,10 +113,12 @@ def _public_account(account_id: str, allocation_id: str, provider: str | None, c
     raise ValueError("settlement projection encountered a non-public allocation posting")
 
 
-def project_public_settlement(store: ComputeSponsorshipStore) -> dict:
+def project_public_settlement(store: ComputeSponsorshipStore, publisher: Ed25519SettlementPublisher | None) -> dict:
     """Create an allowlisted, deterministic public settlement projection."""
     if not isinstance(store, ComputeSponsorshipStore):
         raise TypeError("store must be a ComputeSponsorshipStore")
+    if not isinstance(publisher, Ed25519SettlementPublisher):
+        raise ValueError("a configured Ed25519 publisher is required")
     if not store.audit_funding()["balanced"]:
         raise ValueError("public settlement refuses an unbalanced private ledger")
     records = store.export_settlement_projection_records()
@@ -113,7 +143,7 @@ def project_public_settlement(store: ComputeSponsorshipStore) -> dict:
         formula = policy.get("cu_milli_per_funding_minor")
         _require_integer(formula, "policy formula", positive=True)
         public = {
-            "policy_ref": _public_ref("policy", row["policy_id"]),
+            "policy_ref": row["public_ref"],
             "version": _require_integer(row["version"], "policy version", positive=True),
             "formula": {"cu_milli_per_funding_minor": formula},
             "currency": currency,
@@ -136,21 +166,27 @@ def project_public_settlement(store: ComputeSponsorshipStore) -> dict:
     public_claims = sorted(public_claims_by_id.values(), key=lambda claim: claim["claim_ref"])
 
     public_funding_receipts = []
+    receipt_ref_by_operation: dict[str, str] = {}
     receipt_refs_by_currency: dict[str, list[str]] = {}
     for sequence, receipt in enumerate(
         sorted(records["funding_receipts"], key=lambda value: (value["received_at_ms"], value["operation_id"])), start=1
     ):
         if receipt["currency"] != _SUPPORTED_CURRENCY:
             raise ValueError("public settlement supports only usd")
+        credit_posting = next((item for item in records["postings"] if item["operation_id"] == receipt["operation_id"] and item["account_id"] == f"reserve:available:{receipt['currency']}" and item["delta_minor"] == receipt["amount_minor"]), None)
+        if credit_posting is None:
+            raise ValueError("funding receipt lacks an exact reserve credit")
         public_receipt = {
             "sequence": sequence,
-            "receipt_ref": _public_ref("funding-receipt", receipt["operation_id"]),
+            "receipt_ref": receipt["public_ref"],
             "amount_minor": _require_integer(receipt["amount_minor"], "funding receipt amount", positive=True),
             "currency": receipt["currency"],
             "evidence_hash": _require_hash(receipt["evidence_hash"], "funding receipt evidence"),
             "received_at_ms": _require_integer(receipt["received_at_ms"], "funding receipt timestamp"),
+            "credit_sequence": credit_posting["sequence"],
         }
         public_funding_receipts.append(public_receipt)
+        receipt_ref_by_operation[receipt["operation_id"]] = public_receipt["receipt_ref"]
         receipt_refs_by_currency.setdefault(receipt["currency"], []).append(public_receipt["receipt_ref"])
 
     events_by_allocation: dict[str, list[dict]] = {}
@@ -209,6 +245,7 @@ def project_public_settlement(store: ComputeSponsorshipStore) -> dict:
             if posting["currency"] != currency:
                 raise ValueError("allocation posting currency is invalid")
             public_postings.append({
+                "sequence": posting["sequence"],
                 "account_ref": _public_account(posting["account_id"], allocation["allocation_id"], allocation["provider"], currency),
                 "amount_minor": posting["delta_minor"],
                 "occurred_at_ms": posting["occurred_at_ms"],
@@ -219,7 +256,7 @@ def project_public_settlement(store: ComputeSponsorshipStore) -> dict:
         released = sum(item["amount_minor"] for item in public_postings if item["account_ref"] == "reserve:available" and item["amount_minor"] > 0)
         public_allocations.append({
             "sequence": sequence,
-            "allocation_ref": _public_ref("allocation", allocation["allocation_id"]),
+            "allocation_ref": allocation["public_ref"],
             "beneficiary_class": "eov_owner_development",
             "claim_refs": claim_refs,
             "policy": {
@@ -236,7 +273,7 @@ def project_public_settlement(store: ComputeSponsorshipStore) -> dict:
                 "held_minor": held,
                 "captured_minor": captured,
                 "released_minor": released,
-                "receipt_refs": list(receipt_refs_by_currency.get(currency, [])),
+                "hold_sequence": next((item["sequence"] for item in public_postings if item["account_ref"] == "reserve:available" and item["amount_minor"] < 0), None),
                 "postings": public_postings,
             },
             "lifecycle": {
@@ -259,7 +296,20 @@ def project_public_settlement(store: ComputeSponsorshipStore) -> dict:
             "chain_hash": "",
         })
 
-    root_hash = _root_hash(public_claims, public_policies, public_funding_receipts)
+    reserve_proof = [
+        {"sequence": receipt["credit_sequence"], "kind": "receipt_credit", "receipt_ref": receipt["receipt_ref"], "allocation_ref": None, "amount_minor": receipt["amount_minor"], "occurred_at_ms": receipt["received_at_ms"]}
+        for receipt in public_funding_receipts
+    ]
+    for allocation in public_allocations:
+        for posting in allocation["funding"]["postings"]:
+            if posting["account_ref"] == "reserve:available":
+                reserve_proof.append({
+                    "sequence": posting["sequence"], "kind": "hold" if posting["amount_minor"] < 0 else "release",
+                    "receipt_ref": None, "allocation_ref": allocation["allocation_ref"],
+                    "amount_minor": abs(posting["amount_minor"]), "occurred_at_ms": posting["occurred_at_ms"],
+                })
+    reserve_proof.sort(key=lambda item: item["sequence"])
+    root_hash = _root_hash(public_claims, public_policies, public_funding_receipts, reserve_proof)
     previous_hash = root_hash
     for allocation in public_allocations:
         allocation["previous_hash"] = previous_hash
@@ -283,17 +333,19 @@ def project_public_settlement(store: ComputeSponsorshipStore) -> dict:
         "claims": public_claims,
         "policies": public_policies,
         "funding_receipts": public_funding_receipts,
+        "reserve_proof": reserve_proof,
         "root_hash": root_hash,
         "allocations": public_allocations,
         "totals": totals,
         "head_hash": previous_hash,
     }
-    if not verify_public_settlement_chain(projection):
+    projection["publication"] = {"algorithm": "ed25519", "key_id": publisher.key_id, "signature": publisher.sign(canonical_publication_bytes(projection))}
+    if not verify_public_settlement_chain(projection, {publisher.key_id: publisher.public_key}):
         raise ValueError("public settlement refuses an invalid private lifecycle")
     return projection
 
 
-def _verify_projection(projection: dict) -> None:
+def _verify_projection(projection: dict, trusted_publishers: dict[str, Ed25519PublicKey]) -> None:
     if not isinstance(projection, dict) or set(projection) != _PUBLIC_TOP_FIELDS or projection.get("schema") != SCHEMA:
         raise ValueError("projection schema is invalid")
     claims = projection["claims"]
@@ -302,7 +354,15 @@ def _verify_projection(projection: dict) -> None:
     allocations = projection["allocations"]
     if not all(isinstance(value, list) for value in (claims, policies, funding_receipts, allocations)):
         raise ValueError("projection collections are invalid")
-    if projection["root_hash"] != _root_hash(claims, policies, funding_receipts):
+    publication = projection.get("publication")
+    if not isinstance(publication, dict) or set(publication) != {"algorithm", "key_id", "signature"} or publication["algorithm"] != "ed25519" or publication["key_id"] not in trusted_publishers:
+        raise ValueError("projection publisher is not trusted")
+    try:
+        trusted_publishers[publication["key_id"]].verify(base64.b64decode(publication["signature"], validate=True), canonical_publication_bytes(projection))
+    except (InvalidSignature, ValueError, TypeError):
+        raise ValueError("projection publication signature is invalid")
+    reserve_proof = projection["reserve_proof"]
+    if projection["root_hash"] != _root_hash(claims, policies, funding_receipts, reserve_proof):
         raise ValueError("projection root hash is invalid")
 
     claim_refs = set()
@@ -312,6 +372,8 @@ def _verify_projection(projection: dict) -> None:
         if claim["claim_ref"] in claim_refs:
             raise ValueError("public claim is duplicated")
         claim_refs.add(claim["claim_ref"])
+    if claims != sorted(claims, key=lambda item: item["claim_ref"]):
+        raise ValueError("public claim order is invalid")
 
     policies_by_ref = {}
     for policy in policies:
@@ -327,10 +389,12 @@ def _verify_projection(projection: dict) -> None:
         _require_integer(policy["formula"]["cu_milli_per_funding_minor"], "policy formula", positive=True)
         _require_hash(policy["compliance_manifest_hash"], "policy compliance evidence")
         policies_by_ref[policy["policy_ref"]] = policy
+    if policies != sorted(policies, key=lambda item: item["policy_ref"]):
+        raise ValueError("public policy order is invalid")
 
     funding_refs = set()
     for sequence, receipt in enumerate(funding_receipts, start=1):
-        if not isinstance(receipt, dict) or set(receipt) != {"sequence", "receipt_ref", "amount_minor", "currency", "evidence_hash", "received_at_ms"}:
+        if not isinstance(receipt, dict) or set(receipt) != {"sequence", "receipt_ref", "amount_minor", "currency", "evidence_hash", "received_at_ms", "credit_sequence"}:
             raise ValueError("public funding receipt allowlist is invalid")
         if receipt["sequence"] != sequence or receipt["currency"] != _SUPPORTED_CURRENCY or not isinstance(receipt["receipt_ref"], str) or not _PUBLIC_REF.fullmatch(receipt["receipt_ref"]):
             raise ValueError("public funding receipt is invalid")
@@ -340,10 +404,42 @@ def _verify_projection(projection: dict) -> None:
         _require_integer(receipt["amount_minor"], "funding receipt amount", positive=True)
         _require_integer(receipt["received_at_ms"], "funding receipt timestamp")
         _require_hash(receipt["evidence_hash"], "funding receipt evidence")
+        _require_integer(receipt["credit_sequence"], "receipt credit sequence", positive=True)
+    if funding_receipts != sorted(funding_receipts, key=lambda item: item["sequence"]):
+        raise ValueError("public funding receipt order is invalid")
+
+    balance = 0
+    proof_sequences = []
+    receipt_by_ref = {item["receipt_ref"]: item for item in funding_receipts}
+    for proof in reserve_proof:
+        if not isinstance(proof, dict) or set(proof) != {"sequence", "kind", "receipt_ref", "allocation_ref", "amount_minor", "occurred_at_ms"}:
+            raise ValueError("reserve proof allowlist is invalid")
+        _require_integer(proof["sequence"], "reserve proof sequence", positive=True)
+        _require_integer(proof["amount_minor"], "reserve proof amount", positive=True)
+        _require_integer(proof["occurred_at_ms"], "reserve proof timestamp")
+        if proof_sequences and proof["sequence"] <= proof_sequences[-1]:
+            raise ValueError("reserve proof order is invalid")
+        proof_sequences.append(proof["sequence"])
+        if proof["kind"] == "receipt_credit":
+            receipt = receipt_by_ref.get(proof["receipt_ref"])
+            if not receipt or proof["allocation_ref"] is not None or proof["sequence"] != receipt["credit_sequence"] or proof["amount_minor"] != receipt["amount_minor"] or proof["occurred_at_ms"] != receipt["received_at_ms"]:
+                raise ValueError("reserve receipt credit proof is invalid")
+            balance += proof["amount_minor"]
+        elif proof["kind"] == "hold":
+            if proof["receipt_ref"] is not None or not isinstance(proof["allocation_ref"], str) or balance < proof["amount_minor"]:
+                raise ValueError("reserve hold proof is invalid")
+            balance -= proof["amount_minor"]
+        elif proof["kind"] == "release":
+            if proof["receipt_ref"] is not None or not isinstance(proof["allocation_ref"], str):
+                raise ValueError("reserve release proof is invalid")
+            balance += proof["amount_minor"]
+        else:
+            raise ValueError("reserve proof kind is invalid")
 
     previous_hash = projection["root_hash"]
     seen_allocations = set()
     used_claim_refs = set()
+    claim_allocation = {}
     sort_key = None
     computed = {"eligible_cu_milli": 0, "quoted_minor": 0, "held_minor": 0, "captured_minor": 0, "released_minor": 0, "posting_balance_minor": 0}
     for sequence, allocation in enumerate(allocations, start=1):
@@ -357,7 +453,7 @@ def _verify_projection(projection: dict) -> None:
         if allocation["beneficiary_class"] != "eov_owner_development" or allocation["currency"] != _SUPPORTED_CURRENCY or allocation["state"] not in set(_TRANSITIONS) | {"reconciled", "reconciliation_exception", "cancelled", "expired"}:
             raise ValueError("public allocation identity or currency is invalid")
         if allocation["provider"] is not None and (
-            not isinstance(allocation["provider"], str) or not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", allocation["provider"])
+            not isinstance(allocation["provider"], str) or allocation["provider"] not in PUBLIC_PROVIDER_IDS
         ):
             raise ValueError("public provider reference is invalid")
         if allocation["state"] in {"provider_pending", "provider_confirmed", "reconciling", "reconciled", "reconciliation_exception"} and allocation["provider"] is None:
@@ -365,6 +461,10 @@ def _verify_projection(projection: dict) -> None:
         if not isinstance(allocation["claim_refs"], list) or not allocation["claim_refs"] or set(allocation["claim_refs"]) - claim_refs or len(set(allocation["claim_refs"])) != len(allocation["claim_refs"]):
             raise ValueError("public allocation claim links are invalid")
         used_claim_refs.update(allocation["claim_refs"])
+        for claim_ref in allocation["claim_refs"]:
+            if claim_ref in claim_allocation:
+                raise ValueError("public claim is allocated more than once")
+            claim_allocation[claim_ref] = allocation["allocation_ref"]
         policy = allocation["policy"]
         if not isinstance(policy, dict) or set(policy) != {"policy_ref", "version", "formula"} or policy["policy_ref"] not in policies_by_ref:
             raise ValueError("public allocation policy link is invalid")
@@ -373,24 +473,25 @@ def _verify_projection(projection: dict) -> None:
             raise ValueError("public allocation policy snapshot is invalid")
         _require_integer(allocation["eligible_cu_milli"], "eligible CU", positive=True)
         funding = allocation["funding"]
-        if not isinstance(funding, dict) or set(funding) != {"quoted_minor", "held_minor", "captured_minor", "released_minor", "receipt_refs", "postings"}:
+        if not isinstance(funding, dict) or set(funding) != {"quoted_minor", "held_minor", "captured_minor", "released_minor", "hold_sequence", "postings"}:
             raise ValueError("public funding allowlist is invalid")
         for field in ("quoted_minor", "held_minor", "captured_minor", "released_minor"):
             _require_integer(funding[field], field)
-        if funding["quoted_minor"] <= 0 or not isinstance(funding["receipt_refs"], list) or set(funding["receipt_refs"]) - funding_refs:
+        if funding["quoted_minor"] <= 0:
             raise ValueError("public funding receipt links are invalid")
-        if funding["held_minor"] and not funding["receipt_refs"]:
-            raise ValueError("public held funding requires a receipted reserve")
+        if funding["held_minor"] and funding["hold_sequence"] not in proof_sequences:
+            raise ValueError("public held funding requires a reserve proof")
         if not isinstance(funding["postings"], list):
             raise ValueError("public funding postings are invalid")
         posting_balance = 0
         held_postings = captured_postings = released_postings = 0
         for posting in funding["postings"]:
-            if not isinstance(posting, dict) or set(posting) != {"account_ref", "amount_minor", "occurred_at_ms"}:
+            if not isinstance(posting, dict) or set(posting) != {"sequence", "account_ref", "amount_minor", "occurred_at_ms"}:
                 raise ValueError("public posting allowlist is invalid")
             if posting["account_ref"] not in {"reserve:available", "reserve:held", "expense:provider"}:
                 raise ValueError("public posting account is invalid")
             _require_integer(posting["occurred_at_ms"], "posting timestamp")
+            _require_integer(posting["sequence"], "posting sequence", positive=True)
             if isinstance(posting["amount_minor"], bool) or not isinstance(posting["amount_minor"], int):
                 raise ValueError("public posting amount is invalid")
             posting_balance += posting["amount_minor"]
@@ -427,6 +528,13 @@ def _verify_projection(projection: dict) -> None:
             last_event_time = event["occurred_at_ms"]
         if current_state != allocation["state"]:
             raise ValueError("public lifecycle state is invalid")
+        event_times = {event["state"]: event["occurred_at_ms"] for event in lifecycle["events"]}
+        bindings = {"funding_held": "held_at_ms", "owner_approved": "approved_at_ms", "provider_pending": "provider_pending_at_ms", "provider_confirmed": "provider_confirmed_at_ms", "reconciled": "reconciled_at_ms"}
+        for state, field in bindings.items():
+            if (state in event_times) != (lifecycle[field] is not None) or (state in event_times and lifecycle[field] != event_times[state]):
+                raise ValueError("public lifecycle timestamp is not bound to its event")
+        if current_state == "reconciled" and (lifecycle["provider_effective_at_ms"] is None or lifecycle["provider_effective_at_ms"] > lifecycle["reconciled_at_ms"]):
+            raise ValueError("provider effective time is invalid")
         evidence = allocation["evidence"]
         if not isinstance(evidence, dict) or set(evidence) != {"approval_hash", "provider_capability_hash", "provider_receipt_hash", "cost_hash"}:
             raise ValueError("public evidence allowlist is invalid")
@@ -462,10 +570,10 @@ def _verify_projection(projection: dict) -> None:
         raise ValueError("public settlement totals are invalid")
 
 
-def verify_public_settlement_chain(projection: dict) -> bool:
+def verify_public_settlement_chain(projection: dict, trusted_publishers: dict[str, Ed25519PublicKey]) -> bool:
     """Independently verify the public chain without accessing private state."""
     try:
-        _verify_projection(projection)
+        _verify_projection(projection, trusted_publishers)
     except (KeyError, TypeError, ValueError):
         return False
     return True

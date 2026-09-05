@@ -5,9 +5,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
 from economy.compute_sponsorship import ComputeSponsorshipStore
 from economy.provider_adapters import RecordedOfficialBillingAdapter
 from economy.settlement_projection import (
+    Ed25519SettlementPublisher,
+    canonical_publication_bytes,
     project_public_settlement,
     verify_public_settlement_chain,
 )
@@ -23,8 +27,10 @@ class PublicSettlementProjectionTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.store = ComputeSponsorshipStore(Path(self.temp.name) / "settlement.sqlite3")
+        self.publisher = Ed25519SettlementPublisher("test-publisher", Ed25519PrivateKey.generate())
+        self.trusted_publishers = {self.publisher.key_id: self.publisher.public_key}
         self._create_reconciled_allocation()
-        self.projection = project_public_settlement(self.store)
+        self.projection = project_public_settlement(self.store, self.publisher)
 
     def tearDown(self):
         self.store.close()
@@ -34,7 +40,7 @@ class PublicSettlementProjectionTests(unittest.TestCase):
         projection = self.projection
 
         self.assertEqual("eov-public-compute-sponsorship/v1", projection["schema"])
-        self.assertTrue(verify_public_settlement_chain(projection))
+        self.assertTrue(verify_public_settlement_chain(projection, self.trusted_publishers))
         self.assertEqual(0, projection["totals"]["posting_balance_minor"])
         self.assertEqual("eov_owner_development", projection["allocations"][0]["beneficiary_class"])
         self.assertEqual(2, projection["allocations"][0]["funding"]["captured_minor"])
@@ -43,7 +49,7 @@ class PublicSettlementProjectionTests(unittest.TestCase):
         self.assertEqual(1_700, projection["allocations"][0]["lifecycle"]["provider_effective_at_ms"])
 
         self.assertEqual(
-            {"schema", "claims", "policies", "funding_receipts", "root_hash", "allocations", "totals", "head_hash"},
+            {"schema", "claims", "policies", "funding_receipts", "reserve_proof", "root_hash", "allocations", "totals", "head_hash", "publication"},
             set(projection),
         )
         self.assertEqual(
@@ -55,7 +61,7 @@ class PublicSettlementProjectionTests(unittest.TestCase):
             set(projection["allocations"][0]),
         )
         self.assertEqual(
-            {"quoted_minor", "held_minor", "captured_minor", "released_minor", "receipt_refs", "postings"},
+            {"quoted_minor", "held_minor", "captured_minor", "released_minor", "hold_sequence", "postings"},
             set(projection["allocations"][0]["funding"]),
         )
         self.assertEqual(
@@ -76,8 +82,8 @@ class PublicSettlementProjectionTests(unittest.TestCase):
         self.assertIn("sha256:" + ("8" * 64), serialized)
 
     def test_projection_is_byte_for_byte_deterministic_for_the_same_store_state(self):
-        first = project_public_settlement(self.store)
-        second = project_public_settlement(self.store)
+        first = project_public_settlement(self.store, self.publisher)
+        second = project_public_settlement(self.store, self.publisher)
 
         self.assertEqual(
             json.dumps(first, sort_keys=True, separators=(",", ":")),
@@ -87,17 +93,17 @@ class PublicSettlementProjectionTests(unittest.TestCase):
     def test_verifier_rejects_tampering_unknown_private_fields_and_chain_reordering(self):
         tampered = copy.deepcopy(self.projection)
         tampered["allocations"][0]["funding"]["captured_minor"] = 3
-        self._rechain(tampered)
-        self.assertFalse(verify_public_settlement_chain(tampered))
+        self._resign(tampered)
+        self.assertFalse(verify_public_settlement_chain(tampered, self.trusted_publishers))
 
         leaked = copy.deepcopy(self.projection)
         leaked["allocations"][0]["owner_subject"] = self.OWNER
-        self._rechain(leaked)
-        self.assertFalse(verify_public_settlement_chain(leaked))
+        self._resign(leaked)
+        self.assertFalse(verify_public_settlement_chain(leaked, self.trusted_publishers))
 
         reordered = self._two_allocation_projection()
         reordered["allocations"].reverse()
-        self.assertFalse(verify_public_settlement_chain(reordered))
+        self.assertFalse(verify_public_settlement_chain(reordered, self.trusted_publishers))
 
     def test_verifier_rejects_deleted_duplicate_and_broken_claim_policy_or_receipt_links(self):
         for mutate in (
@@ -110,8 +116,8 @@ class PublicSettlementProjectionTests(unittest.TestCase):
             with self.subTest(mutate=mutate):
                 malformed = copy.deepcopy(self.projection)
                 mutate(malformed)
-                self._rechain(malformed)
-                self.assertFalse(verify_public_settlement_chain(malformed))
+                self._resign(malformed)
+                self.assertFalse(verify_public_settlement_chain(malformed, self.trusted_publishers))
 
     def test_verifier_rejects_invalid_transition_imbalanced_postings_and_unsupported_currency(self):
         for mutate in (
@@ -125,13 +131,87 @@ class PublicSettlementProjectionTests(unittest.TestCase):
             with self.subTest(mutate=mutate):
                 malformed = copy.deepcopy(self.projection)
                 mutate(malformed)
-                self._rechain(malformed)
-                self.assertFalse(verify_public_settlement_chain(malformed))
+                self._resign(malformed)
+                self.assertFalse(verify_public_settlement_chain(malformed, self.trusted_publishers))
+
+    def test_publication_requires_an_external_trusted_key_and_rejects_rehashed_deletion(self):
+        with self.assertRaisesRegex(ValueError, "publisher"):
+            project_public_settlement(self.store, None)
+        self.assertFalse(verify_public_settlement_chain(self.projection, {}))
+
+        deleted = copy.deepcopy(self.projection)
+        deleted["allocations"].pop()
+        attacker = Ed25519SettlementPublisher("attacker", Ed25519PrivateKey.generate())
+        self._resign(deleted, attacker)
+        self.assertFalse(verify_public_settlement_chain(deleted, self.trusted_publishers))
+
+        for field in ("root_hash", "head_hash", "totals"):
+            with self.subTest(field=field):
+                tampered = copy.deepcopy(self.projection)
+                if field == "totals":
+                    tampered[field]["quoted_minor"] += 1
+                else:
+                    tampered[field] = "sha256:" + ("f" * 64)
+                self._resign(tampered, attacker)
+                self.assertFalse(verify_public_settlement_chain(tampered, self.trusted_publishers))
+
+    def test_persisted_opaque_references_survive_restart_and_do_not_derive_from_private_values(self):
+        first = self.projection
+        self.store.close()
+        self.store = ComputeSponsorshipStore(Path(self.temp.name) / "settlement.sqlite3")
+        second = project_public_settlement(self.store, self.publisher)
+        self.assertEqual(first["allocations"][0]["allocation_ref"], second["allocations"][0]["allocation_ref"])
+        self.assertEqual(first["policies"][0]["policy_ref"], second["policies"][0]["policy_ref"])
+        self.assertEqual(first["funding_receipts"][0]["receipt_ref"], second["funding_receipts"][0]["receipt_ref"])
+        serialized = json.dumps(second, sort_keys=True)
+        for private_value in (self.OWNER, self.PRIVATE_WORLD, "private-policy-id-not-public", "fund-private"):
+            self.assertNotIn(private_value, serialized)
+        self.assertNotEqual(
+            hashlib.sha256(f"eov-public-compute-sponsorship/v1|allocation|allocation-private".encode()).hexdigest(),
+            second["allocations"][0]["allocation_ref"].split(":", 1)[1],
+        )
+
+    def test_verifier_rejects_cross_allocation_claim_duplication_after_authorized_resign(self):
+        duplicate = copy.deepcopy(self.projection)
+        duplicate["allocations"][1]["claim_refs"] = list(duplicate["allocations"][0]["claim_refs"])
+        self._resign(duplicate)
+        self.assertFalse(verify_public_settlement_chain(duplicate, self.trusted_publishers))
+
+    def test_reserve_proof_binds_receipts_to_holds_before_they_are_used(self):
+        self.assertFalse(any("receipt_refs" in allocation["funding"] for allocation in self.projection["allocations"]))
+        proof = self.projection["reserve_proof"]
+        self.assertEqual([item["sequence"] for item in proof], sorted(item["sequence"] for item in proof))
+        self.assertTrue(any(item["kind"] == "receipt_credit" for item in proof))
+        self.assertTrue(any(item["kind"] == "hold" for item in proof))
+
+        future_credit = copy.deepcopy(self.projection)
+        credit = next(item for item in future_credit["reserve_proof"] if item["kind"] == "receipt_credit")
+        credit["occurred_at_ms"] = 9_999
+        self._resign(future_credit)
+        self.assertFalse(verify_public_settlement_chain(future_credit, self.trusted_publishers))
+
+    def test_verifier_rejects_reordering_lifecycle_timestamp_mismatch_and_unknown_provider_after_authorized_resign(self):
+        for mutate in (
+            lambda value: value["claims"].reverse(),
+            lambda value: value["policies"].reverse(),
+            lambda value: value["funding_receipts"].reverse(),
+            lambda value: value["reserve_proof"].reverse(),
+            lambda value: value["allocations"][0]["lifecycle"].__setitem__("held_at_ms", 1_401),
+            lambda value: value["allocations"][0].__setitem__("provider", "sk-live-private-secret"),
+        ):
+            with self.subTest(mutate=mutate):
+                malformed = copy.deepcopy(self.projection)
+                mutate(malformed)
+                self._resign(malformed)
+                self.assertFalse(verify_public_settlement_chain(malformed, self.trusted_publishers))
 
     def _create_reconciled_allocation(self):
         hash_for = lambda digit: "sha256:" + (digit * 64)
         self.store.record_funding(
             "fund-private", self.OWNER, 10, "usd", "owner_capital", hash_for("8"), 1_000,
+        )
+        self.store.record_funding(
+            "fund-private-second", self.OWNER, 1, "usd", "owner_capital", hash_for("7"), 1_050,
         )
         policy = {
             "policy_id": "private-policy-id-not-public",
@@ -154,6 +234,7 @@ class PublicSettlementProjectionTests(unittest.TestCase):
             "compliance_manifest_hash": hash_for("1"),
         }
         self.store.create_policy("policy-private", self.OWNER, policy, 1_100)
+        self.store.create_policy("policy-private-second", self.OWNER, {**policy, "policy_id": "private-policy-id-not-public-second", "version": 2}, 1_101)
         self.store.activate_policy("policy-allocate", self.OWNER, policy["policy_id"], "allocation_active", {
             "compliance_manifest_hash": hash_for("1"), "owner_signature": hash_for("2"),
         }, 1_200)
@@ -250,6 +331,15 @@ class PublicSettlementProjectionTests(unittest.TestCase):
     def _two_allocation_projection(self):
         return copy.deepcopy(self.projection)
 
+    def _resign(self, projection, publisher=None):
+        self._rechain(projection)
+        publisher = publisher or self.publisher
+        projection["publication"] = {
+            "algorithm": "ed25519",
+            "key_id": publisher.key_id,
+            "signature": publisher.sign(canonical_publication_bytes(projection)),
+        }
+
     @staticmethod
     def _rechain(projection):
         static = {
@@ -257,6 +347,7 @@ class PublicSettlementProjectionTests(unittest.TestCase):
             "claims": projection["claims"],
             "policies": projection["policies"],
             "funding_receipts": projection["funding_receipts"],
+            "reserve_proof": projection["reserve_proof"],
         }
         projection["root_hash"] = "sha256:" + hashlib.sha256(
             (projection["schema"] + "|" + json.dumps(static, sort_keys=True, separators=(",", ":"))).encode("utf-8")
