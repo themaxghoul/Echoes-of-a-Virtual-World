@@ -93,6 +93,7 @@ const AuthPage = () => {
         const user = response.data.user;
         if (!response.data.session?.access_token) throw new Error('Server did not issue an authenticated session');
         sessionStorage.setItem('eovAccessToken', response.data.session.access_token);
+        localStorage.setItem('eovNetworkUserId', user.id);
         
         // Store user data
         localStorage.setItem('userId', user.id);
@@ -196,6 +197,7 @@ const AuthPage = () => {
         const user = response.data.user;
         if (!response.data.session?.access_token) throw new Error('Server did not issue an authenticated session');
         sessionStorage.setItem('eovAccessToken', response.data.session.access_token);
+        localStorage.setItem('eovNetworkUserId', user.id);
         
         localStorage.setItem('userId', user.id);
         localStorage.setItem('username', user.username);
