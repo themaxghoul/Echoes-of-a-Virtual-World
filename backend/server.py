@@ -11,7 +11,14 @@ from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any, Set
 import uuid
 from datetime import datetime, timedelta, timezone
-from emergentintegrations.llm.chat import LlmChat, UserMessage
+try:
+    from emergentintegrations.llm.chat import LlmChat, UserMessage
+except ImportError:
+    # Authentication and persistent-world operation do not depend on the
+    # environment-specific AI preview adapter. AI routes report unavailable
+    # while the portable alpha server keeps identity online.
+    LlmChat = None
+    UserMessage = None
 import httpx
 import asyncio
 import json
@@ -3227,6 +3234,9 @@ NPCs Present: {', '.join(location['npcs'])}
 
 Guide the story with atmospheric descriptions. Voice NPCs when they speak."""
     
+    if LlmChat is None or UserMessage is None:
+        raise HTTPException(status_code=503, detail="AI conversation adapter is unavailable on this server")
+
     chat = LlmChat(
         api_key=llm_key,
         session_id=conversation_id,
@@ -6492,7 +6502,7 @@ async def request_oracle_vision(request: OracleVisionRequest):
         
     elif request.vision_type == "prophecy":
         # Generate AI prophecy about world events
-        if llm_key:
+        if llm_key and LlmChat is not None and UserMessage is not None:
             try:
                 chat = LlmChat(llm_key, model="anthropic/claude-sonnet-4-20250514")
                 chat.add_message(UserMessage(content="""You are Oracle Veythra, a mystical seer. 

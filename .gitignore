@@ -110,3 +110,7 @@ credentials.json
 
 # Isolated feature worktrees
 .worktrees/
+
+# Repository-local development runtimes and persistent service data
+/runtime/
+/tools/mongodb/
