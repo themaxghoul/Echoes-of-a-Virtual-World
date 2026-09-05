@@ -71,6 +71,16 @@ def authorize_owner(claims: Dict[str, Any] = Depends(authorize_write)) -> Dict[s
     return claims
 
 
+def authenticated_world_view(world_id: str, claims: Dict[str, Any]) -> Dict[str, Any]:
+    """Project a snapshot for the token subject and attach scoped owner status."""
+    view = actor_world_view(store.snapshot(world_id), claims["sub"])
+    # The persistent world seed does not duplicate account-role data. Owner
+    # status is therefore derived from the same immutable UUID used by the
+    # operator dependency, and exposed only for the requesting viewer.
+    view["viewer_is_owner"] = bool(OWNER_USER_ID and claims["sub"] == OWNER_USER_ID)
+    return view
+
+
 async def runclock_loop() -> None:
     while True:
         now_ms = int(time.time() * 1000)
@@ -140,7 +150,7 @@ def compute_settlement_readiness() -> Dict[str, Any]:
 
 @app.get("/worlds/{world_id}")
 def get_world(world_id: str, claims: Dict[str, Any] = Depends(authorize_write)) -> Dict[str, Any]:
-    return actor_world_view(store.snapshot(world_id), claims["sub"])
+    return authenticated_world_view(world_id, claims)
 
 
 @app.get("/worlds/{world_id}/events")
@@ -212,7 +222,7 @@ async def world_stream(websocket: WebSocket, world_id: str, after: int = Query(d
     await websocket.accept(subprotocol="eov-session")
     cursor = after
     try:
-        await websocket.send_json({"type": "snapshot", "data": actor_world_view(store.snapshot(world_id), claims["sub"])})
+        await websocket.send_json({"type": "snapshot", "data": authenticated_world_view(world_id, claims)})
         while True:
             if int(time.time()) >= claims["exp"]:
                 await websocket.close(code=4401)
