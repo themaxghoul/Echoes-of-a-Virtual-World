@@ -14,6 +14,7 @@ import './IsometricSettlement.css';
 
 const simulationEngine = require('@/lib/worldSimulation.cjs');
 const { projectObservedFrontier } = require('@/lib/frontierView.cjs');
+const { checkoutLocalStoreItem, fallbackNpcReply, operationForSite, resourceInteractionOptions } = require('@/lib/isometricInteractions.cjs');
 const { TICK_MS, STAGES, initialSimulation, advanceSimulation, catchUpSimulation, acceptWorkOrder, playerAct, setProductionPriority } = simulationEngine;
 
 const MAP_SIZE = 18;
@@ -145,23 +146,6 @@ function drawResource(ctx, point, node) {
     for (let i = -15; i <= 15; i += 6) { ctx.beginPath(); ctx.moveTo(point.x + i, point.y); ctx.lineTo(point.x + i + 2, point.y - 27 - Math.abs(i % 4)); ctx.stroke(); }
   }
   ctx.restore();
-}
-
-function operationForSite(site, inventory, tick = 0) {
-  if (site.type === 'store') return { operation: 'checkout', item: Object.keys(site.stock).find((item) => site.stock[item] > 0 && !inventory[item]) };
-  if (site.type === 'tree') return { operation: 'chop' };
-  if (site.type === 'mineral') return { operation: 'mine' };
-  if (site.type === 'reeds') return { operation: 'harvest' };
-  if (site.type === 'well') {
-    if (site.progress < 3) return { operation: 'dig' };
-    if (site.installed_pump?.maintenance_due) {
-      return inventory.wrench > 0 && inventory.timber > 0 && inventory.containers > 0 ? { operation: 'maintain_pump' } : { operation: 'inspect_pump' };
-    }
-    return { operation: 'draw_water' };
-  }
-  if (site.type === 'farm') return { operation: site.stage === 'untilled' ? 'till' : site.stage === 'tilled' ? 'sow' : 'harvest' };
-  if (site.type === 'cattle') return { operation: inventory.feed > 0 && site.fedUntilTick < tick ? 'feed' : 'milk' };
-  return { operation: 'inspect' };
 }
 
 const IsometricSettlement = () => {
@@ -476,7 +460,8 @@ const IsometricSettlement = () => {
     if (!hoverTile) return;
     const structure = world.blueprints.find((item) => item.x === hoverTile.x && item.y === hoverTile.y);
     const npc = authoritativeNpcs.find((item) => item.x === hoverTile.x && item.y === hoverTile.y);
-    const resource = visibleResourceNodes.find((item) => item.x === hoverTile.x && item.y === hoverTile.y);
+    const resources = visibleResourceNodes.filter((item) => item.x === hoverTile.x && item.y === hoverTile.y);
+    const resource = resources[0];
     const workshop = hoverTile.x === 8 && hoverTile.y === 7
       ? (serverSnapshot
         ? { id: 'measurement-lab', name: 'Measurement laboratory', role: 'Canonical work station', sharedActionStation: true }
@@ -508,7 +493,9 @@ const IsometricSettlement = () => {
       setBuildMode(false);
       return;
     }
-    const selectedObject = resource || structure || npc || workshop || null;
+    const selectedObject = resources.length > 1
+      ? { ...resource, id: `resource-tile:${hoverTile.x},${hoverTile.y}`, name: `Resources at ${hoverTile.x},${hoverTile.y}`, resourceIds: resources.map((item) => item.id) }
+      : resource || structure || npc || workshop || null;
     setSelected(selectedObject);
     if (!selectedObject) walkToTile(hoverTile);
   };
@@ -635,12 +622,15 @@ const IsometricSettlement = () => {
     });
   };
 
-  const interactWithResource = () => {
-    const node = visibleResourceNodes.find((item) => item.id === selected?.id);
+  const interactWithResource = (interaction) => {
+    const node = visibleResourceNodes.find((item) => item.id === interaction?.siteId)
+      || visibleResourceNodes.find((item) => item.id === selected?.id);
     if (!node) return;
     if (serverSnapshot) {
       const inventory = serverSnapshot.state.players?.[authorityActorId]?.inventory || {};
-      let siteAction = operationForSite(node, inventory, serverSnapshot.tick);
+      let siteAction = interaction?.operation
+        ? { operation: interaction.operation, ...(interaction.item ? { item: interaction.item } : {}) }
+        : operationForSite(node, inventory, serverSnapshot.tick);
       if (node.type === 'well' && node.progress >= 3 && !node.installed_pump) {
         const availablePump = Object.values(serverSnapshot.state.technology?.tool_catalog || {}).find((tool) => tool.archetype === 'lever_pump' && tool.available_units > 0);
         if (availablePump) siteAction = { operation: 'install_pump', design_id: availablePump.id };
@@ -656,10 +646,12 @@ const IsometricSettlement = () => {
     const inventory = next.player.inventory;
     let action = ''; let outputs = {}; let cost = 4;
     if (target.type === 'store') {
-      const requested = Object.keys(target.stock).find((item) => target.stock[item] > 0 && !inventory[item]);
+      const requested = interaction?.item || Object.keys(target.stock).find((item) => target.stock[item] > 0);
       if (!requested) { setServerError('Dev has no unissued starter supplies for you.'); return; }
-      target.stock[requested] -= 1; inventory[requested] = (inventory[requested] || 0) + (['seed', 'feed'].includes(requested) ? 4 : 1);
-      action = `checked out ${requested} from ${target.clerk}`; outputs = { [requested]: inventory[requested] }; cost = 0;
+      const quantity = interaction?.quantity || (['seed', 'feed'].includes(requested) ? 4 : 1);
+      const checkout = checkoutLocalStoreItem(target, inventory, requested, quantity);
+      if (!checkout.accepted) { setServerError(`${requested} stock is below the checkout quantity.`); return; }
+      action = `checked out ${requested} from ${target.clerk}`; outputs = checkout.outputs; cost = 0;
     } else if (target.type === 'tree') {
       if (!inventory.axe) { setServerError('An axe is required. Dev’s tool counter can issue one.'); return; }
       if (target.stock < 1) { setServerError('This tree is depleted; its stump remains part of the world.'); return; }
@@ -705,8 +697,7 @@ const IsometricSettlement = () => {
     const nearby = simulation.npcs.filter((npc) => Math.abs(npc.x - world.player.x) + Math.abs(npc.y - world.player.y) <= 4).sort((a, b) => a.id.localeCompare(b.id));
     const messages = [{ id: crypto.randomUUID(), tick: simulation.clock.tick, speaker: localStorage.getItem('username') || 'Player', content, kind: 'player' }];
     for (const npc of nearby.slice(0, 2)) {
-      const lower = content.toLowerCase();
-      const reply = lower.match(/tree|wood|stone|mine|resource/) ? 'Use what you can verify: trees need an axe, seams need a pick, and every removal changes what remains.' : lower.match(/hello|hi|hey/) ? `Hello. I’m ${npc.name}. ${npc.task.reason}` : `I heard you. I’m currently trying to ${npc.task.label}, because ${npc.task.reason.toLowerCase()}`;
+      const reply = fallbackNpcReply(npc, content);
       messages.push({ id: crypto.randomUUID(), tick: simulation.clock.tick, speaker: npc.name, content: reply, kind: 'reply' });
     }
     if (!nearby.length) messages.push({ id: crypto.randomUUID(), tick: simulation.clock.tick, speaker: 'System', content: 'Nobody is close enough to hear you.', kind: 'system' });
@@ -716,10 +707,20 @@ const IsometricSettlement = () => {
 
   const currentStage = STAGES[simulation.workOrder.stage];
   const selectedView = authoritativeNpcs.find((npc) => npc.id === selected?.id) || visibleResourceNodes.find((node) => node.id === selected?.id) || selected;
-  const selectedResource = visibleResourceNodes.find((node) => node.id === selected?.id);
+  const selectedResource = visibleResourceNodes.find((node) => node.id === selected?.id)
+    || visibleResourceNodes.find((node) => selected?.resourceIds?.includes(node.id));
+  const selectedTileResources = selectedResource
+    ? visibleResourceNodes.filter((node) => node.x === selectedResource.x && node.y === selectedResource.y)
+    : [];
   const selectedMaintenanceOrder = serverSnapshot?.state.institutions?.governance?.maintenance_orders?.find((order) => order.site_id === selectedResource?.id && order.status === 'open');
   const activeClock = serverSnapshot?.state?.clock || simulation.clock;
   const activePlayer = serverSnapshot?.state.players?.[authorityActorId] || world.player;
+  const selectedResourceOptions = resourceInteractionOptions(
+    visibleResourceNodes,
+    selectedResource ? { x: selectedResource.x, y: selectedResource.y } : null,
+    activePlayer.inventory || {},
+    serverSnapshot?.tick,
+  );
   const activeMinute = Number.isFinite(activeClock?.minute) ? activeClock.minute : 0;
   const worldTime = `${String(Math.floor(activeMinute / 60)).padStart(2, '0')}:${String(activeMinute % 60).padStart(2, '0')}`;
   const visibleMessages = serverSnapshot?.state.communications?.messages || world.communications;
@@ -736,7 +737,7 @@ const IsometricSettlement = () => {
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate('/select-mode')} aria-label="Back to modes"><ArrowLeft /></Button>
           <div>
-            <p className="iso-kicker">ECHOES OF VIRTUALITY · ALPHA 0.2</p>
+            <p className="iso-kicker">ECHOES OF VIRTUALITY · ALPHA 33</p>
             <h1>Founders' Settlement</h1>
           </div>
         </div>
@@ -987,13 +988,13 @@ const IsometricSettlement = () => {
                 {selectedView.memories?.length > 0 && <div className="iso-memories"><strong>Work memories</strong>{selectedView.memories.slice(0, 3).map((memory, index) => <small key={`${memory.tick}-${index}`}>{memory.text}</small>)}</div>}
                 {selectedView.stage && selectedView.stage < 4 && <p>Progress requires an accepted work order, supplied materials, qualified labor time, and inspection evidence.</p>}
                 {selectedResource && <>
-                  <p>Type: {selectedResource.type} · Stock {typeof selectedResource.stock === 'object' ? Object.entries(selectedResource.stock).map(([item, amount]) => `${item} ${amount}`).join(', ') : `${Math.floor(selectedResource.stock || 0)} / ${selectedResource.capacity || '—'}`}</p>
+                  {selectedTileResources.map((resource) => <p key={resource.id}>Type: {resource.type} · {resource.name} · Stock {typeof resource.stock === 'object' ? Object.entries(resource.stock).map(([item, amount]) => `${item} ${amount}`).join(', ') : `${Math.floor(resource.stock || 0)} / ${resource.capacity || '—'}`}</p>)}
                   {selectedResource.progress !== undefined && <p>Construction progress: {selectedResource.progress}/3</p>}
                   {selectedResource.installed_pump && <p>Installed technology: {selectedResource.installed_pump.design_id} · predicted {selectedResource.installed_pump.predicted_liters_per_stroke} L/stroke<br />Condition {Math.round(selectedResource.installed_pump.condition * 100)}% · {selectedResource.installed_pump.status} · {selectedResource.installed_pump.cycles} field cycles</p>}
                   {selectedMaintenanceOrder && <p><strong>Maintenance order {selectedMaintenanceOrder.id}</strong><br />{selectedMaintenanceOrder.assigned_to ? `Assigned to ${selectedMaintenanceOrder.assigned_to}` : 'Awaiting assignment'} · requires timber {selectedMaintenanceOrder.required_inputs.timber}, containers {selectedMaintenanceOrder.required_inputs.containers}, and {selectedMaintenanceOrder.required_tool}{selectedMaintenanceOrder.blockers?.at(-1)?.status === 'unresolved' ? <><br />Blocked by: {selectedMaintenanceOrder.blockers.at(-1).missing.join(', ')}</> : null}{selectedMaintenanceOrder.depletion_notices?.at(-1)?.status === 'unresolved' ? <><br />Expedition found no regional {selectedMaintenanceOrder.depletion_notices.at(-1).resource}; awaiting replenishment or another source.</> : null}{selectedMaintenanceOrder.procurement_history?.length ? <><br />Verified deliveries: {selectedMaintenanceOrder.procurement_history.map((entry) => `${entry.amount} ${entry.resource} from ${entry.source}`).join('; ')}</> : null}</p>}
                   {selectedResource.stage && <p>Growth stage: {selectedResource.stage}{selectedResource.readyTick ? ` · ready tick ${selectedResource.readyTick}` : ''}</p>}
                   {selectedResource.wellbeing !== undefined && <p>Animal wellbeing: {Math.round(selectedResource.wellbeing)} · fed through tick {selectedResource.fedUntilTick}</p>}
-                  <Button variant="outline" onClick={interactWithResource}>{operationForSite(selectedResource, activePlayer.inventory || {}, serverSnapshot?.tick).operation.replaceAll('_', ' ')} · {selectedResource.name}</Button>
+                  {selectedResourceOptions.map((option) => <Button key={option.key} variant="outline" onClick={() => interactWithResource(option)}>{option.label}</Button>)}
                   <small>Stand on an adjacent tile. Tools, energy, stock, growth time, and animal care are enforced.</small>
                 </>}
               </>

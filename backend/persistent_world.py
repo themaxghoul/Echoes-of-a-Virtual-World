@@ -946,6 +946,9 @@ def _npc_reply(npc: Dict[str, Any], content: str, state: Dict[str, Any], actor_i
     words = content.lower()
     relationship = npc.get("relationships", {}).get(actor_id, {"trust": 0.5}) if actor_id else {"trust": 0.5}
     trust = float(relationship.get("trust", 0.5))
+    recent_memory = next((memory.get("text") for memory in reversed(npc.get("memories", [])) if memory.get("text")), None)
+    if any(word in words for word in ("teach", "learn", "lesson", "show you", "explain", "algorithm")):
+        return "I can listen to the idea. I will treat it as a proposal until observation, practice, and reproducible evidence demonstrate that it works."
     if npc["id"] == "dev" and any(word in words for word in ("borrow", "checkout", "tool", "trust")):
         if trust < 0.35:
             return f"Our custody history is at trust {trust:.2f}. I will offer one supervised checkout; return it intact and ordinary access can recover."
@@ -958,10 +961,13 @@ def _npc_reply(npc: Dict[str, Any], content: str, state: Dict[str, Any], actor_i
         scarce = sorted(state["economy"].get("market_signals", {}).values(), key=lambda item: (-item["scarcity"], item["resource"]))
         return f"Check the expedition records. {scarce[0]['resource']} is our tightest measured regional stock." if scarce else "The woods, ridge, and marsh have different materials; record what you remove."
     if any(word in words for word in ("hello", "hi", "hey")):
-        return f"Hello. I am {npc['name']}. I can listen and respond; right now I am trying to {npc['intention'].lower()}."
+        return f"Hello. I am {npc['name']}. I can listen and talk while deciding how to use my time."
+    if any(word in words for word in ("talk", "socialize", "conversation", "friend", "feeling", "share an idea")):
+        remembered = f" I remember {recent_memory}" if recent_memory and any(cue in words for cue in ("remember", "before", "last time")) else ""
+        return f"I can make room for this conversation.{remembered} Tell me what matters to you, and I will decide what I think of it."
     if "?" in content or any(word in words for word in ("why", "what", "where", "when", "how", "can you")):
         return f"From what I can currently perceive, {npc['reason'].lower()} Ask me about my work, nearby resources, or what help is needed."
-    return f"I heard you. {npc['reason']} I can keep talking even while I decide what to do next."
+    return "I heard you. I can keep this conversation separate from my work plan; tell me more about what you mean."
 
 
 ENGLISH_DIALOGUE_CUES = (
@@ -978,8 +984,12 @@ def _directed_response_decision(npc: Dict[str, Any], actor_id: str, content: str
     belonging = max(0.0, min(1.0, float(needs.get("belonging", 50.0)) / 100.0))
     physical_margin = min(float(needs.get("nutrition", 70.0)), float(needs.get("hydration", 70.0)), float(needs.get("rest", 70.0))) / 100.0
     energy = max(0.0, min(1.0, float(npc.get("energy", 100.0)) / 100.0))
-    workload_cost = 0.08 if npc.get("intention") not in {None, "", "rest", "listen"} else 0.0
-    probability = max(0.12, min(0.92, 0.24 + trust * 0.24 + (1.0 - belonging) * 0.18 + energy * 0.18 + physical_margin * 0.14 - workload_cost))
+    reason = str(npc.get("reason", "")).casefold()
+    socially_available = npc.get("intention") in {None, "", "rest", "listen"} or "shift ended" in reason
+    social_availability = 0.12 if socially_available else 0.0
+    workload_cost = 0.0 if socially_available else 0.08
+    urgency_cost = 0.16 if physical_margin < 0.25 or energy < 0.25 else 0.0
+    probability = max(0.18, min(0.94, 0.24 + trust * 0.24 + (1.0 - belonging) * 0.18 + energy * 0.18 + physical_margin * 0.14 + social_availability - workload_cost - urgency_cost))
     seed = f"{tick}|{ordinal}|{actor_id}|{npc['id']}|{content}".encode("utf-8")
     roll = int.from_bytes(hashlib.sha256(seed).digest()[:8], "big") / float((1 << 64) - 1)
     lowered = content.casefold()
@@ -991,7 +1001,8 @@ def _directed_response_decision(npc: Dict[str, Any], actor_id: str, content: str
         "factors": {
             "trust": round(trust, 4), "social_need": round(1.0 - belonging, 4),
             "energy": round(energy, 4), "physical_margin": round(physical_margin, 4),
-            "workload_cost": workload_cost,
+            "social_availability": social_availability, "workload_cost": workload_cost,
+            "survival_urgency_cost": urgency_cost,
         },
     }
 

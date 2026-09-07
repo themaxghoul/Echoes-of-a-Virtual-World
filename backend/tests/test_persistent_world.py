@@ -5,7 +5,14 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from causal_ledger import CausalEvent, CausalLedger
-from persistent_world import PersistentWorldStore, RevisionConflict, actor_event_view, actor_world_view
+from persistent_world import (
+    PersistentWorldStore,
+    RevisionConflict,
+    _directed_response_decision,
+    _npc_reply,
+    actor_event_view,
+    actor_world_view,
+)
 
 
 class PersistentWorldTests(unittest.TestCase):
@@ -989,6 +996,34 @@ class PersistentWorldTests(unittest.TestCase):
         self.assertFalse(actor_world_view(snapshot, "unrelated")["state"]["communications"]["messages"])
         advanced = self.store.advance_due(now_ms=1_000_000 + 8 * 15_000, max_ticks=8)["state"]
         self.assertTrue(any(message["kind"] == "autonomous" for message in advanced["communications"]["messages"]))
+
+    def test_off_shift_work_reason_does_not_replace_social_dialogue(self):
+        snapshot = self.store.snapshot()
+        ada = snapshot["state"]["npcs"]["ada"]
+        ada["intention"] = "rest"
+        ada["reason"] = "The scheduled shift ended."
+
+        reply = _npc_reply(ada, "I would like to socialize and share an idea with you.", snapshot["state"], "speaker")
+
+        self.assertNotEqual("The scheduled shift ended.", reply)
+        self.assertNotIn("scheduled shift ended", reply.lower())
+        self.assertNotIn("trying to rest", reply.lower())
+        self.assertTrue(any(word in reply.lower() for word in ("talk", "listen", "conversation")))
+
+    def test_off_shift_resident_has_more_social_availability_than_busy_resident(self):
+        snapshot = self.store.snapshot()
+        resident = snapshot["state"]["npcs"]["ada"]
+        resident["needs"].update({"nutrition": 80, "hydration": 80, "rest": 80, "belonging": 50})
+        resident["energy"] = 80
+        resident["relationships"]["speaker"] = {"trust": 0.5}
+        off_shift = {**resident, "intention": "rest", "reason": "The scheduled shift ended."}
+        busy = {**resident, "intention": "inspect water", "reason": "A safety inspection is underway."}
+
+        available = _directed_response_decision(off_shift, "speaker", "Can we talk?", 12, 1)
+        occupied = _directed_response_decision(busy, "speaker", "Can we talk?", 12, 1)
+
+        self.assertGreater(available["probability"], occupied["probability"])
+        self.assertGreater(available["factors"].get("social_availability", 0), 0)
 
     def test_directed_non_english_speech_considers_only_the_nearby_target(self):
         joined = self.store.apply_action(self.world["world_id"], "join-directed", "speaker", {"type": "join", "location": [9, 7]}, now_ms=1_000_000)
