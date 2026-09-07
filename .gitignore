@@ -114,3 +114,8 @@ credentials.json
 # Repository-local development runtimes and persistent service data
 /runtime/
 /tools/mongodb/
+
+# Desktop packaging outputs
+/frontend/out/
+/frontend/desktop-stage/
+/frontend/release/
