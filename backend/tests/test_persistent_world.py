@@ -10,6 +10,7 @@ from persistent_world import (
     RevisionConflict,
     _directed_response_decision,
     _npc_reply,
+    _process_proximity_speech,
     actor_event_view,
     actor_world_view,
 )
@@ -1024,6 +1025,26 @@ class PersistentWorldTests(unittest.TestCase):
 
         self.assertGreater(available["probability"], occupied["probability"])
         self.assertGreater(available["factors"].get("social_availability", 0), 0)
+
+    def test_autonomous_conversation_rotates_social_attention_and_restores_belonging(self):
+        state = self.store.snapshot()["state"]
+        for npc in state["npcs"].values():
+            npc["location"] = [18, 18]
+            npc["needs"]["belonging"] = 80
+        state["npcs"]["ada"].update({"location": [8, 8], "intention": "rest", "reason": "The scheduled shift ended."})
+        state["npcs"]["orin"].update({"location": [8, 9], "intention": "inspect stores", "reason": "Food reserves are low."})
+        state["npcs"]["ada"]["needs"]["belonging"] = 10
+        state["npcs"]["orin"]["needs"]["belonging"] = 11
+
+        first = _process_proximity_speech(state, 8)
+        second = _process_proximity_speech(state, 16)
+
+        self.assertEqual("ada", first[0]["actor_id"])
+        self.assertEqual("orin", second[0]["actor_id"])
+        self.assertGreater(state["npcs"]["ada"]["needs"]["belonging"], 10)
+        self.assertGreater(state["npcs"]["orin"]["needs"]["belonging"], 11)
+        self.assertNotIn("scheduled shift ended", first[0]["payload"]["content"].lower())
+        self.assertNotEqual(first[0]["payload"]["content"], second[0]["payload"]["content"])
 
     def test_directed_non_english_speech_considers_only_the_nearby_target(self):
         joined = self.store.apply_action(self.world["world_id"], "join-directed", "speaker", {"type": "join", "location": [9, 7]}, now_ms=1_000_000)

@@ -14,7 +14,7 @@ import './IsometricSettlement.css';
 
 const simulationEngine = require('@/lib/worldSimulation.cjs');
 const { projectObservedFrontier } = require('@/lib/frontierView.cjs');
-const { checkoutLocalStoreItem, fallbackNpcReply, operationForSite, resourceInteractionOptions } = require('@/lib/isometricInteractions.cjs');
+const { approachTileForSite, checkoutLocalStoreItem, fallbackNpcReply, formatResourceReceipt, operationForSite, resourceInteractionOptions } = require('@/lib/isometricInteractions.cjs');
 const { TICK_MS, STAGES, initialSimulation, advanceSimulation, catchUpSimulation, acceptWorkOrder, playerAct, setProductionPriority } = simulationEngine;
 
 const MAP_SIZE = 18;
@@ -173,6 +173,7 @@ const IsometricSettlement = () => {
   const [serverError, setServerError] = useState(null);
   const [chatInput, setChatInput] = useState('');
   const [movementStatus, setMovementStatus] = useState('');
+  const [actionReceipt, setActionReceipt] = useState(null);
   const [calibrationReadings, setCalibrationReadings] = useState('1.000, 1.004, 1.002');
   const [mealThermalRecord, setMealThermalRecord] = useState({ temperature: '82', minutes: '15' });
   const [repairConditionRecord, setRepairConditionRecord] = useState({ before: '0.30', after: '0.86' });
@@ -181,6 +182,9 @@ const IsometricSettlement = () => {
   const isOwner = serverOwner ?? (localStorage.getItem('isOwner') === 'true');
   const frontierView = useMemo(() => projectObservedFrontier(serverSnapshot, authorityActorId), [authorityActorId, serverSnapshot]);
   const activeMapSize = frontierView.connected ? frontierView.size : MAP_SIZE;
+  const routeStatus = frontierView.route?.status === 'traveling'
+    ? `Traveling ${frontierView.route.index}/${Math.max(1, frontierView.route.path.length - 1)} to ${frontierView.route.path.at(-1).join(',')}`
+    : movementStatus;
 
   const settlementStats = useMemo(() => ({
     residents: serverSnapshot ? Object.keys(serverSnapshot.state?.npcs || {}).length + Object.keys(serverSnapshot.state?.players || {}).length : simulation.npcs.length + 1,
@@ -497,7 +501,13 @@ const IsometricSettlement = () => {
       ? { ...resource, id: `resource-tile:${hoverTile.x},${hoverTile.y}`, name: `Resources at ${hoverTile.x},${hoverTile.y}`, resourceIds: resources.map((item) => item.id) }
       : resource || structure || npc || workshop || null;
     setSelected(selectedObject);
-    if (!selectedObject) walkToTile(hoverTile);
+    setActionReceipt(null);
+    if (resource) {
+      const approach = approachTileForSite(resource, world.player, frontierView.connected ? frontierView.tiles : null, activeMapSize);
+      if (approach && (approach.x !== world.player.x || approach.y !== world.player.y)) await walkToTile(approach);
+    } else if (!selectedObject) {
+      await walkToTile(hoverTile);
+    }
   };
 
   const resetSettlement = () => {
@@ -564,8 +574,10 @@ const IsometricSettlement = () => {
       const result = await submitWorldAction(action, serverSnapshot.revision);
       setServerSnapshot(await fetchWorldSnapshot());
       setServerError(result.result?.accepted === false ? result.result.reason : null);
+      return result;
     } catch (error) {
       setServerError(error.message);
+      return { result: { accepted: false, reason: error.message } };
     }
   };
 
@@ -622,7 +634,7 @@ const IsometricSettlement = () => {
     });
   };
 
-  const interactWithResource = (interaction) => {
+  const interactWithResource = async (interaction) => {
     const node = visibleResourceNodes.find((item) => item.id === interaction?.siteId)
       || visibleResourceNodes.find((item) => item.id === selected?.id);
     if (!node) return;
@@ -636,7 +648,8 @@ const IsometricSettlement = () => {
         if (availablePump) siteAction = { operation: 'install_pump', design_id: availablePump.id };
       }
       if (!siteAction.operation || (siteAction.operation === 'checkout' && !siteAction.item)) { setServerError('No currently available site operation.'); return; }
-      performAuthorityAction({ type: 'interact_site', site_id: node.id, ...siteAction });
+      const response = await performAuthorityAction({ type: 'interact_site', site_id: node.id, ...siteAction });
+      setActionReceipt(formatResourceReceipt(response?.result, node.name));
       return;
     }
     const distance = Math.abs(world.player.x - node.x) + Math.abs(world.player.y - node.y);
@@ -685,6 +698,7 @@ const IsometricSettlement = () => {
     next.player.energy -= cost;
     next.communications = [...next.communications, { id: crypto.randomUUID(), tick: simulation.clock.tick, speaker: 'World record', content: `${localStorage.getItem('username') || 'Player'} ${action}.`, kind: 'action' }].slice(-100);
     setWorld(next); setSelected(target); saveWorld(next); setServerError(null);
+    setActionReceipt(formatResourceReceipt({ accepted: true, operation: action, outputs, energy: next.player.energy }, target.name));
     appendCausalEvent({ actionId: `resource:${target.id}:${simulation.clock.tick}:${action}`, actorId: localStorage.getItem('currentCharacterId') || 'unknown', state: 'performed', intent: action, location: `${target.x},${target.y}`, parentEventIds: [], inputs: { toolAccess: Object.keys(inventory).filter((key) => ['axe', 'pick', 'shovel', 'bucket', 'farm_tools'].includes(key) && inventory[key]) }, outputs, evidence: [{ kind: 'direct_isometric_interaction', tick: simulation.clock.tick }], physicalEffect: target.type !== 'store' });
   };
 
@@ -767,7 +781,7 @@ const IsometricSettlement = () => {
             <Button variant="outline" onClick={() => saveWorld()}><Save size={16} /> Save</Button>
             <Button variant="ghost" onClick={resetSettlement}><RotateCcw size={16} /> Reset</Button>
             {serverError && <span role="status">{serverError}</span>}
-            {movementStatus && <span role="status">{movementStatus}</span>}
+            {routeStatus && <span role="status">{routeStatus}</span>}
           </div>
         </section>
 
@@ -995,6 +1009,7 @@ const IsometricSettlement = () => {
                   {selectedResource.stage && <p>Growth stage: {selectedResource.stage}{selectedResource.readyTick ? ` · ready tick ${selectedResource.readyTick}` : ''}</p>}
                   {selectedResource.wellbeing !== undefined && <p>Animal wellbeing: {Math.round(selectedResource.wellbeing)} · fed through tick {selectedResource.fedUntilTick}</p>}
                   {selectedResourceOptions.map((option) => <Button key={option.key} variant="outline" onClick={() => interactWithResource(option)}>{option.label}</Button>)}
+                  {actionReceipt && <p role="status" data-tone={actionReceipt.tone}>{actionReceipt.text}</p>}
                   <small>Stand on an adjacent tile. Tools, energy, stock, growth time, and animal care are enforced.</small>
                 </>}
               </>

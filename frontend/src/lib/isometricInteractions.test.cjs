@@ -77,3 +77,37 @@ test('teaching dialogue records epistemic limits instead of granting expertise',
   assert.match(reply, /evidence|practice|demonstrat/i);
   assert.doesNotMatch(reply, /now i know|learned instantly|mastered/i);
 });
+
+test('resource selection chooses the nearest known passable approach tile', () => {
+  const site = { id: 'oak', x: 7, y: 7 };
+  const observed = {
+    '6,7': { passable: true },
+    '8,7': { passable: false },
+    '7,6': { passable: true },
+    '7,8': { passable: true },
+  };
+
+  const approach = interactions.approachTileForSite?.(site, { x: 4, y: 6 }, observed, 64);
+
+  assert.deepEqual(approach, { x: 7, y: 6 });
+});
+
+test('resource action receipt names gains, remaining energy, and custody', () => {
+  const receipt = interactions.formatResourceReceipt?.({
+    accepted: true,
+    operation: 'chop',
+    outputs: { timber: 2 },
+    energy: 91,
+  }, 'Old oak');
+
+  assert.deepEqual(receipt, {
+    tone: 'success',
+    text: 'Old oak · chop complete · timber +2 · energy 91 · output held in your inventory',
+  });
+});
+
+test('failed resource action receipt preserves the authoritative blocker', () => {
+  const receipt = interactions.formatResourceReceipt?.({ accepted: false, reason: 'an axe is required' }, 'Old oak');
+
+  assert.deepEqual(receipt, { tone: 'blocked', text: 'Old oak · blocked · an axe is required' });
+});

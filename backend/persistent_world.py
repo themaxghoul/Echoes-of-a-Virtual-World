@@ -1081,6 +1081,24 @@ def _process_public_discourse(state: Dict[str, Any], tick: int) -> list[Dict[str
     return emitted
 
 
+def _autonomous_speech_line(npc: Dict[str, Any], priority: str, tick: int) -> str:
+    needs = npc.get("needs", {})
+    intention = npc.get("intention") or "decide what to do next"
+    if min(float(needs.get("nutrition", 100)), float(needs.get("hydration", 100)), float(needs.get("rest", 100))) < 28:
+        return f"Before I can think clearly about {priority}, I need to {intention}. If you are nearby, I can still listen."
+    if float(needs.get("belonging", 100)) < 35:
+        return f"I have been keeping to myself. I would welcome a conversation about {priority} while I consider how to {intention}."
+    if intention in {"rest", "listen"} or "shift ended" in str(npc.get("reason", "")).lower():
+        return f"I am off duty for now, but I still have room to talk about our {priority} needs."
+    templates = (
+        f"I am weighing our {priority} needs while I work out how to {intention}.",
+        f"Has anyone nearby noticed something I have missed about {priority}? I am trying to {intention}.",
+        f"My present plan for our {priority} needs is to {intention}. I am open to evidence that should change it.",
+    )
+    selector = (tick + sum(ord(character) for character in str(npc.get("id", "")))) % len(templates)
+    return templates[selector]
+
+
 def _process_proximity_speech(state: Dict[str, Any], tick: int) -> list[Dict[str, Any]]:
     if tick % 8 != 0:
         return []
@@ -1094,12 +1112,17 @@ def _process_proximity_speech(state: Dict[str, Any], tick: int) -> list[Dict[str
     npc, npc_witnesses = min(candidates, key=lambda item: (item[0]["needs"]["belonging"], item[0]["id"]))
     pressures = _settlement_pressures(state)
     priority = min(pressures, key=lambda key: (-pressures[key], key))
-    line = f"I am concerned about {priority}. {npc['reason']} I am going to {npc['intention']}."
+    line = _autonomous_speech_line(npc, priority, tick)
     player_witnesses = [player_id for player_id, player in state["players"].items() if _distance(player["location"], npc["location"]) <= 4]
     audible_to = sorted({*[other["id"] for other in npc_witnesses], *player_witnesses})
     message = {"id": f"speech-{tick}-{npc['id']}", "tick": tick, "speaker_id": npc["id"], "speaker": npc["name"], "content": line, "kind": "autonomous", "audible_to": audible_to, "location": list(npc["location"])}
     state["communications"]["messages"].append(message)
     state["communications"]["messages"] = state["communications"]["messages"][-250:]
+    npc["needs"]["belonging"] = round(min(100, npc["needs"]["belonging"] + 4), 2)
+    npc["memories"].append({"tick": tick, "kind": "social_exchange", "text": f"Spoke near {', '.join(other['name'] for other in npc_witnesses[:3])}."})
+    for witness in npc_witnesses:
+        witness["needs"]["belonging"] = round(min(100, witness["needs"]["belonging"] + 1), 2)
+        witness["memories"].append({"tick": tick, "kind": "social_exchange", "speaker": npc["id"], "message_id": message["id"], "text": f"Heard {npc['name']} speak nearby."})
     civic_discourse_ready = (
         state["event"]["status"] == "completed"
         and bool(state["institutions"]["council"].get("completed_initiatives"))
