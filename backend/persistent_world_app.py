@@ -107,7 +107,7 @@ async def lifespan(_: FastAPI):
             pass
 
 
-app = FastAPI(title="Echoes of Virtuality Persistent World", version="0.3.0-alpha.33", lifespan=lifespan)
+app = FastAPI(title="Echoes of Virtuality Persistent World", version="0.3.0-alpha.34", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin for origin in os.environ.get("EOV_ALLOWED_ORIGINS", "http://localhost:3000,null").split(",") if origin],

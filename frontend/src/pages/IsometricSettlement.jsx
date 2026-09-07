@@ -764,7 +764,7 @@ const IsometricSettlement = () => {
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate('/select-mode')} aria-label="Back to modes"><ArrowLeft /></Button>
           <div>
-            <p className="iso-kicker">ECHOES OF VIRTUALITY · ALPHA 33</p>
+            <p className="iso-kicker">ECHOES OF VIRTUALITY · ALPHA 34</p>
             <h1>Founders' Settlement</h1>
           </div>
         </div>

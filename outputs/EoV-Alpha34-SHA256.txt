@@ -1,0 +1,2 @@
+99b08c922699c8496e38b4c41113a1ad43d8ce3ce5e70a3f191b3ec3e21839b3  EoV-Alpha34-Windows-x64.zip
+0064c9742c442b251c173c7dc4ac49e755372d2760c0d1cc5cc61f8ea9d3b0d5  EoV-Alpha34-Persistent-Server.zip
