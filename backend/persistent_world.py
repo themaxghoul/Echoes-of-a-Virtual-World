@@ -20,6 +20,7 @@ from terrain_engine import FrontierGrid
 
 
 NPC_MEMORY_LIMIT = 250
+SOCIAL_MEMORY_KINDS = {"social_exchange"}
 
 
 SCHEMA_VERSION = 31
@@ -210,7 +211,7 @@ def migrate_state(state: Dict[str, Any]) -> Dict[str, Any]:
         npc.setdefault("route", None)
         npc.setdefault("last_spoke_tick", -1)
         npc.setdefault("memories", [])
-        npc["memories"] = npc["memories"][-NPC_MEMORY_LIMIT:]
+        npc["memories"] = _compact_subjective_memories(npc["memories"])
     state.setdefault("frontier", {"seed": 1701, "size": 64})
     state["frontier"].setdefault("seed", 1701)
     state["frontier"]["size"] = 64
@@ -1105,10 +1106,24 @@ def _autonomous_speech_line(npc: Dict[str, Any], priority: str, tick: int) -> st
     return templates[selector]
 
 
+def _compact_subjective_memories(memories: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
+    """Bound ephemeral social recollection without evicting procedural evidence."""
+    retained: list[Dict[str, Any]] = []
+    social_seen = 0
+    for memory in reversed(memories):
+        if memory.get("kind") in SOCIAL_MEMORY_KINDS:
+            if social_seen >= NPC_MEMORY_LIMIT:
+                continue
+            social_seen += 1
+        retained.append(memory)
+    retained.reverse()
+    return retained
+
+
 def _append_subjective_memory(npc: Dict[str, Any], memory: Dict[str, Any]) -> None:
     memories = npc.setdefault("memories", [])
     memories.append(memory)
-    npc["memories"] = memories[-NPC_MEMORY_LIMIT:]
+    npc["memories"] = _compact_subjective_memories(memories)
 
 
 def _process_proximity_speech(state: Dict[str, Any], tick: int) -> list[Dict[str, Any]]:
@@ -2618,7 +2633,7 @@ def _advance_travel_routes(state: Dict[str, Any], tick: int) -> list[Dict[str, A
         origin = list(actor.get("location", path[next_index - 1]))
         destination = list(path[next_index])
         actor["location"] = destination
-        actor["current_region"] = "settlement"
+        actor["current_region"] = route.get("region", actor.get("current_region", "settlement"))
         route["index"] = next_index
         _reveal_frontier(state, actor_id, destination)
         arrived = next_index == len(path) - 1
@@ -4061,6 +4076,7 @@ def interact_resource_site(state: Dict[str, Any], actor_id: str, action: Dict[st
         inventory["seed"] -= 1
         site["stage"], site["ready_tick"] = "growing", state["clock"]["tick"] + 12
         inputs, outputs, energy_cost = {"farm_tools": 1, "seed": 1}, {"crop_due_tick": site["ready_tick"]}, 4
+        inventory_delta = {"seed": -1}
         site_delta = {"stage": "growing", **outputs}
     elif site["type"] == "farm" and operation == "harvest":
         if inventory.get("farm_tools", 0) < 1 or site["stage"] != "ripe":
@@ -4079,6 +4095,7 @@ def interact_resource_site(state: Dict[str, Any], actor_id: str, action: Dict[st
         site["fed_until_tick"] = state["clock"]["tick"] + 16
         site["wellbeing"] = min(100, site["wellbeing"] + 12)
         inputs, outputs, energy_cost = {"feed": 1}, {"wellbeing": site["wellbeing"]}, 3
+        inventory_delta = {"feed": -1}
         site_delta = dict(outputs)
     elif site["type"] == "cattle" and operation == "milk":
         if inventory.get("bucket", 0) < 1 or site["wellbeing"] < 50 or site["stock"] < 1:
@@ -4337,7 +4354,7 @@ def apply_player_action(state: Dict[str, Any], actor_id: str, action: Dict[str, 
             "id": f"route:{actor_id}:{state['clock']['tick']}:site:{site['id']}",
             "path": [list(position) for position in result.path], "index": 0,
             "status": "arrived" if arrived else "traveling", "cost_milli": result.cost_milli,
-            "started_tick": state["clock"]["tick"], "site_id": site["id"],
+            "started_tick": state["clock"]["tick"], "site_id": site["id"], "region": site["region"],
         }
         if arrived:
             route["arrived_tick"] = state["clock"]["tick"]
@@ -4364,6 +4381,7 @@ def apply_player_action(state: Dict[str, Any], actor_id: str, action: Dict[str, 
             "id": f"route:{actor_id}:{state['clock']['tick']}:{destination[0]},{destination[1]}",
             "path": [list(position) for position in result.path], "index": 0, "status": "traveling",
             "cost_milli": result.cost_milli, "started_tick": state["clock"]["tick"],
+            "region": player.get("current_region", "settlement"),
         }
         player["route"] = route
         return {"accepted": True, "type": action_type, "route": copy.deepcopy(route["path"]), "cost_milli": route["cost_milli"], "physical_change": False}

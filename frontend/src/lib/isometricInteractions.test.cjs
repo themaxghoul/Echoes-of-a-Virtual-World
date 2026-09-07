@@ -140,6 +140,22 @@ test('site-state receipt distinguishes a physical site update from inventory out
   });
 });
 
+test('resource receipt shows consumed materials as negative inventory deltas', () => {
+  const receipt = interactions.formatResourceReceipt?.({
+    accepted: true,
+    status: 'completed',
+    custody: 'site',
+    operation: 'sow',
+    inventory_delta: { seed: -1 },
+    site_delta: { stage: 'growing' },
+  }, 'Communal farm plot');
+
+  assert.deepEqual(receipt, {
+    tone: 'success',
+    text: 'Communal farm plot · sow complete · seed -1 · site: stage growing',
+  });
+});
+
 test('failed resource action receipt preserves the authoritative blocker', () => {
   const receipt = interactions.formatResourceReceipt?.({ accepted: false, reason: 'an axe is required' }, 'Old oak');
 

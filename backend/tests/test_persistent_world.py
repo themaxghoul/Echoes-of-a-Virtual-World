@@ -9,6 +9,7 @@ from persistent_world import (
     PersistentWorldStore,
     RevisionConflict,
     _directed_response_decision,
+    migrate_state,
     _npc_reply,
     _process_proximity_speech,
     actor_event_view,
@@ -1071,13 +1072,20 @@ class PersistentWorldTests(unittest.TestCase):
             {"tick": tick, "kind": "social_exchange", "text": f"old-{tick}"}
             for tick in range(250)
         ]
+        state["npcs"]["ada"]["memories"].insert(0, {
+            "tick": 1, "kind": "witnessed_conduct", "conduct_id": "conduct-1",
+            "text": "Saw a contested taking and have not reported it yet.",
+        })
 
         _process_proximity_speech(state, 256)
+        migrate_state(state)
 
         memories = state["npcs"]["ada"]["memories"]
-        self.assertEqual(250, len(memories))
-        self.assertNotEqual("old-0", memories[0]["text"])
+        self.assertEqual(251, len(memories))
+        self.assertEqual(250, sum(memory.get("kind") == "social_exchange" for memory in memories))
+        self.assertNotEqual("old-0", next(memory["text"] for memory in memories if memory.get("kind") == "social_exchange"))
         self.assertEqual(256, memories[-1]["tick"])
+        self.assertTrue(any(memory.get("kind") == "witnessed_conduct" for memory in memories))
 
     def test_directed_non_english_speech_considers_only_the_nearby_target(self):
         joined = self.store.apply_action(self.world["world_id"], "join-directed", "speaker", {"type": "join", "location": [9, 7]}, now_ms=1_000_000)
@@ -1349,6 +1357,7 @@ class PersistentWorldTests(unittest.TestCase):
         at_plot = self.store.apply_action(self.world["world_id"], "farm-position", "farmer", {"type": "join", "location": [3, 12]}, expected_revision=seed["revision"], now_ms=1_000_003)
         tilled = self.store.apply_action(self.world["world_id"], "till-plot", "farmer", {"type": "interact_site", "site_id": "farm-plot", "operation": "till"}, expected_revision=at_plot["revision"], now_ms=1_000_004)
         sowed = self.store.apply_action(self.world["world_id"], "sow-plot", "farmer", {"type": "interact_site", "site_id": "farm-plot", "operation": "sow"}, expected_revision=tilled["revision"], now_ms=1_000_005)
+        self.assertEqual({"seed": -1}, sowed["result"]["inventory_delta"])
         self.assertEqual("growing", self.store.snapshot()["state"]["resource_sites"]["farm-plot"]["stage"])
         ripe = self.store.advance_due(now_ms=1_000_000 + 12 * 15_000, max_ticks=12)["state"]["resource_sites"]["farm-plot"]
         self.assertEqual("ripe", ripe["stage"])
@@ -1702,6 +1711,21 @@ class PersistentWorldTests(unittest.TestCase):
         self.assertNotEqual([6, 5], approached["result"]["destination"])
         self.assertIn(approached["result"]["destination"], [[8, 5], [7, 4], [7, 6]])
         self.assertGreater(len(approached["result"]["route"]), 1)
+
+    def test_approach_route_preserves_remote_region_until_site_interaction(self):
+        joined = self.store.apply_action(self.world["world_id"], "remote-join", "traveler", {"type": "join", "location": [8, 9]}, expected_revision=1)
+        checkout = self.store.apply_action(self.world["world_id"], "remote-axe", "traveler", {"type": "interact_site", "site_id": "tool-counter", "operation": "checkout", "item": "axe"}, expected_revision=joined["revision"])
+        boundary = self.store.apply_action(self.world["world_id"], "remote-boundary", "traveler", {"type": "join", "location": [0, 8]}, expected_revision=checkout["revision"])
+        explored = self.store.apply_action(self.world["world_id"], "remote-explore", "traveler", {"type": "explore_region", "region": "north_woods"}, expected_revision=boundary["revision"])
+        approached = self.store.apply_action(self.world["world_id"], "remote-approach", "traveler", {"type": "approach_site", "site_id": "pine-stand"}, expected_revision=explored["revision"], now_ms=1_000_001)
+
+        self.assertTrue(approached["result"]["accepted"])
+        advanced = self.store.advance_due(now_ms=1_000_000 + 15_000, max_ticks=1)
+        self.assertEqual("north_woods", advanced["state"]["players"]["traveler"]["current_region"])
+
+        chopped = self.store.apply_action(self.world["world_id"], "remote-chop", "traveler", {"type": "interact_site", "site_id": "pine-stand", "operation": "chop"})
+        self.assertTrue(chopped["result"]["accepted"])
+        self.assertEqual("proposal_recorded", chopped["result"]["status"])
 
     def test_frontier_excavation_uses_verified_shared_action_and_preserves_actor_custody(self):
         joined = self.store.apply_action(self.world["world_id"], "excavator-join", "excavator", {"type": "join", "location": [9, 9]}, expected_revision=1)
