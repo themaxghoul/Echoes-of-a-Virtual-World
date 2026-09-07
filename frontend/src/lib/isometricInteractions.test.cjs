@@ -92,17 +92,51 @@ test('resource selection chooses the nearest known passable approach tile', () =
   assert.deepEqual(approach, { x: 7, y: 6 });
 });
 
-test('resource action receipt names gains, remaining energy, and custody', () => {
+test('resource action receipt names verified inventory gains and custody', () => {
   const receipt = interactions.formatResourceReceipt?.({
     accepted: true,
+    status: 'completed',
+    custody: 'actor_inventory',
     operation: 'chop',
-    outputs: { timber: 2 },
+    inventory_delta: { timber: 2 },
     energy: 91,
   }, 'Old oak');
 
   assert.deepEqual(receipt, {
     tone: 'success',
     text: 'Old oak · chop complete · timber +2 · energy 91 · output held in your inventory',
+  });
+});
+
+test('resource proposal receipt does not claim completion or inventory custody', () => {
+  const receipt = interactions.formatResourceReceipt?.({
+    accepted: true,
+    status: 'proposal_recorded',
+    custody: 'none',
+    operation: 'chop',
+    inventory_delta: {},
+    next_step: 'accept and reserve held axe',
+  }, 'Old oak');
+
+  assert.deepEqual(receipt, {
+    tone: 'pending',
+    text: 'Old oak · chop proposal recorded · no material transferred · next: accept and reserve held axe',
+  });
+});
+
+test('site-state receipt distinguishes a physical site update from inventory output', () => {
+  const receipt = interactions.formatResourceReceipt?.({
+    accepted: true,
+    status: 'completed',
+    custody: 'site',
+    operation: 'dig',
+    site_delta: { excavation_stage: 2 },
+    energy: 86,
+  }, 'Shallow well');
+
+  assert.deepEqual(receipt, {
+    tone: 'success',
+    text: 'Shallow well · dig complete · site: excavation stage 2 · energy 86',
   });
 });
 

@@ -19,6 +19,9 @@ from causal_ledger import CausalEvent, CausalLedger
 from terrain_engine import FrontierGrid
 
 
+NPC_MEMORY_LIMIT = 250
+
+
 SCHEMA_VERSION = 31
 DEFAULT_WORLD_ID = "founders-settlement"
 
@@ -205,6 +208,9 @@ def migrate_state(state: Dict[str, Any]) -> Dict[str, Any]:
         npc.setdefault("competency_records", {})
         npc.setdefault("equipment", {})
         npc.setdefault("route", None)
+        npc.setdefault("last_spoke_tick", -1)
+        npc.setdefault("memories", [])
+        npc["memories"] = npc["memories"][-NPC_MEMORY_LIMIT:]
     state.setdefault("frontier", {"seed": 1701, "size": 64})
     state["frontier"].setdefault("seed", 1701)
     state["frontier"]["size"] = 64
@@ -1099,6 +1105,12 @@ def _autonomous_speech_line(npc: Dict[str, Any], priority: str, tick: int) -> st
     return templates[selector]
 
 
+def _append_subjective_memory(npc: Dict[str, Any], memory: Dict[str, Any]) -> None:
+    memories = npc.setdefault("memories", [])
+    memories.append(memory)
+    npc["memories"] = memories[-NPC_MEMORY_LIMIT:]
+
+
 def _process_proximity_speech(state: Dict[str, Any], tick: int) -> list[Dict[str, Any]]:
     if tick % 8 != 0:
         return []
@@ -1109,7 +1121,7 @@ def _process_proximity_speech(state: Dict[str, Any], tick: int) -> list[Dict[str
             candidates.append((npc, npc_witnesses))
     if not candidates:
         return []
-    npc, npc_witnesses = min(candidates, key=lambda item: (item[0]["needs"]["belonging"], item[0]["id"]))
+    npc, npc_witnesses = min(candidates, key=lambda item: (item[0].get("last_spoke_tick", -1), item[0]["needs"]["belonging"], item[0]["id"]))
     pressures = _settlement_pressures(state)
     priority = min(pressures, key=lambda key: (-pressures[key], key))
     line = _autonomous_speech_line(npc, priority, tick)
@@ -1118,11 +1130,12 @@ def _process_proximity_speech(state: Dict[str, Any], tick: int) -> list[Dict[str
     message = {"id": f"speech-{tick}-{npc['id']}", "tick": tick, "speaker_id": npc["id"], "speaker": npc["name"], "content": line, "kind": "autonomous", "audible_to": audible_to, "location": list(npc["location"])}
     state["communications"]["messages"].append(message)
     state["communications"]["messages"] = state["communications"]["messages"][-250:]
+    npc["last_spoke_tick"] = tick
     npc["needs"]["belonging"] = round(min(100, npc["needs"]["belonging"] + 4), 2)
-    npc["memories"].append({"tick": tick, "kind": "social_exchange", "text": f"Spoke near {', '.join(other['name'] for other in npc_witnesses[:3])}."})
+    _append_subjective_memory(npc, {"tick": tick, "kind": "social_exchange", "text": f"Spoke near {', '.join(other['name'] for other in npc_witnesses[:3])}."})
     for witness in npc_witnesses:
         witness["needs"]["belonging"] = round(min(100, witness["needs"]["belonging"] + 1), 2)
-        witness["memories"].append({"tick": tick, "kind": "social_exchange", "speaker": npc["id"], "message_id": message["id"], "text": f"Heard {npc['name']} speak nearby."})
+        _append_subjective_memory(witness, {"tick": tick, "kind": "social_exchange", "speaker": npc["id"], "message_id": message["id"], "text": f"Heard {npc['name']} speak nearby."})
     civic_discourse_ready = (
         state["event"]["status"] == "completed"
         and bool(state["institutions"]["council"].get("completed_initiatives"))
@@ -1130,7 +1143,7 @@ def _process_proximity_speech(state: Dict[str, Any], tick: int) -> list[Dict[str
     claim = _record_witnessed_discourse(state, message) if civic_discourse_ready else None
     if claim:
         for witness in npc_witnesses:
-            witness["memories"].append({
+            _append_subjective_memory(witness, {
                 "tick": tick, "kind": "overheard_discourse", "speaker": npc["id"],
                 "priority": priority, "message_id": message["id"],
                 "text": f"Heard {npc['name']} raise a {priority} concern in proximity.",
@@ -3915,6 +3928,11 @@ def interact_resource_site(state: Dict[str, Any], actor_id: str, action: Dict[st
     inputs: Dict[str, Any] = {}
     energy_cost = 0
     physical = True
+    status = "completed"
+    custody = "site"
+    inventory_delta: Dict[str, Any] = {}
+    site_delta: Dict[str, Any] = {}
+    next_step = None
     required_energy = {"checkout": 0, "chop": 4, "mine": 6, "harvest": 6 if site["type"] == "farm" else 4, "dig": 7, "install_pump": 4, "inspect_pump": 1, "maintain_pump": 5, "draw_water": 3, "till": 6, "sow": 4, "feed": 3, "milk": 3}.get(operation, 0)
     if player.get("energy", 100) < required_energy:
         return {"accepted": False, "reason": "the actor is too exhausted"}
@@ -3928,6 +3946,9 @@ def interact_resource_site(state: Dict[str, Any], actor_id: str, action: Dict[st
         if item in {"axe", "pick", "farm_tools", "shovel", "wrench", "bucket"}:
             player.setdefault("equipment", {}).setdefault(item, {"condition": 0.9, "reserved_by": None, "provenance": f"checkout:{site['id']}:{actor_id}:{state['clock']['tick']}"})
         outputs = {item: quantity}
+        inventory_delta = dict(outputs)
+        site_delta = {"stock": {item: -quantity}}
+        custody = "actor_inventory"
         physical = False
     elif site["type"] == "tree" and operation == "chop":
         action_id = f"shared:extract:{actor_id}:{site['id']}:{state['clock']['tick']}:{len(state['shared_actions']['records']) + 1}"
@@ -3935,18 +3956,21 @@ def interact_resource_site(state: Dict[str, Any], actor_id: str, action: Dict[st
         if not proposal.get("accepted"):
             return proposal
         inputs, outputs, energy_cost, physical = {}, {"canonical_action_id": action_id, "next": "accept, reserve held axe, execute, and obtain independent stock verification"}, 0, False
+        status, custody, next_step = "proposal_recorded", "none", outputs["next"]
     elif site["type"] == "mineral" and operation == "mine":
         action_id = f"shared:extract:{actor_id}:{site['id']}:{state['clock']['tick']}:{len(state['shared_actions']['records']) + 1}"
         proposal = apply_shared_action_command(state, actor_id, {"operation": "propose", "shared_action_id": action_id, "action_type": "extract_site_resource", "target_id": site["id"], "intent": f"extract finite stone from {site['name']}", "observations": [f"site-stock:{site['stock']}", f"region:{site['region']}"]})
         if not proposal.get("accepted"):
             return proposal
         inputs, outputs, energy_cost, physical = {}, {"canonical_action_id": action_id, "next": "accept, reserve held pick, execute, and obtain independent stock verification"}, 0, False
+        status, custody, next_step = "proposal_recorded", "none", outputs["next"]
     elif site["type"] == "reeds" and operation == "harvest":
         action_id = f"shared:extract:{actor_id}:{site['id']}:{state['clock']['tick']}:{len(state['shared_actions']['records']) + 1}"
         proposal = apply_shared_action_command(state, actor_id, {"operation": "propose", "shared_action_id": action_id, "action_type": "extract_site_resource", "target_id": site["id"], "intent": f"harvest finite reeds from {site['name']}", "observations": [f"site-stock:{site['stock']}", f"region:{site['region']}"]})
         if not proposal.get("accepted"):
             return proposal
         inputs, outputs, energy_cost, physical = {}, {"canonical_action_id": action_id, "next": "accept, reserve held farm tools, execute, and obtain independent stock verification"}, 0, False
+        status, custody, next_step = "proposal_recorded", "none", outputs["next"]
     elif site["type"] == "well" and operation == "dig":
         if inventory.get("shovel", 0) < 1 or site["progress"] >= 3:
             return {"accepted": False, "reason": "a shovel and unfinished well are required"}
@@ -3954,6 +3978,7 @@ def interact_resource_site(state: Dict[str, Any], actor_id: str, action: Dict[st
         if site["progress"] == 3:
             site["stock"] = site["capacity"]
         inputs, outputs, energy_cost = {"shovel": 1}, {"excavation_stage": site["progress"], "water_access": site["progress"] == 3}, 7
+        site_delta = dict(outputs)
     elif site["type"] == "well" and operation == "install_pump":
         design_id = str(action.get("design_id", ""))
         tool = state["technology"]["tool_catalog"].get(design_id)
@@ -3969,6 +3994,7 @@ def interact_resource_site(state: Dict[str, Any], actor_id: str, action: Dict[st
             "status": "operational", "maintenance_due": False, "maintenance_history": [],
         }
         inputs, outputs, energy_cost = {"wrench": 1, "validated_pump": design_id}, {"installed_pump": design_id}, 4
+        site_delta = dict(outputs)
         _remember_consequence(state, state["clock"]["tick"], f"validated-technology:{design_id}", f"installed-tool:{site['id']}:{design_id}", [actor_id, "ada", "mira", "emil"])
     elif site["type"] == "well" and operation == "inspect_pump":
         pump = site.get("installed_pump")
@@ -3977,6 +4003,7 @@ def interact_resource_site(state: Dict[str, Any], actor_id: str, action: Dict[st
         measured = round(max(0.0, min(1.0, pump["condition"] - 0.01)), 4)
         order = _open_pump_maintenance(state, site, f"inspection:{site['id']}:{pump['cycles']}") if measured < 0.7 else None
         inputs, outputs, energy_cost, physical = {"observation_time": 1}, {"measured_condition": measured, "maintenance_order": order["id"] if order else None}, 1, False
+        status, custody = "inspection_recorded", "evidence_record"
         _evidence(state, state["clock"]["tick"], f"pump condition inspected at {site['name']}", [actor_id], {}, ["caliper", "field notebook"], outputs, None, [f"installed-tool:{site['id']}:{pump['design_id']}"], ["condition inspection"])
     elif site["type"] == "well" and operation == "maintain_pump":
         pump = site.get("installed_pump")
@@ -3995,6 +4022,7 @@ def interact_resource_site(state: Dict[str, Any], actor_id: str, action: Dict[st
                 return proposal
             order.update({"canonical_action_id": action_id, "assigned_to": actor_id, "assigned_tick": state["clock"]["tick"]})
         outputs, energy_cost, physical = {"canonical_action_id": action_id, "next": "accept and reserve through authoritative work"}, 0, False
+        status, custody, next_step = "proposal_recorded", "none", outputs["next"]
     elif site["type"] == "well" and operation == "draw_water":
         pump = site.get("installed_pump")
         if pump and pump["status"] == "failed":
@@ -4006,6 +4034,9 @@ def interact_resource_site(state: Dict[str, Any], actor_id: str, action: Dict[st
         site["stock"] -= pump_yield
         inventory["water"] = inventory.get("water", 0) + pump_yield
         inputs, outputs, energy_cost = {"bucket": 1, **({"installed_pump": pump["design_id"]} if pump else {})}, {"water": pump_yield, "baseline_water": 3, "technology_gain": pump_yield - 3}, 2 if pump else 3
+        inventory_delta = {"water": pump_yield}
+        site_delta = {"stock": -pump_yield}
+        custody = "actor_inventory"
         if pump:
             before = pump["condition"]
             pump["cycles"] += 1
@@ -4023,12 +4054,14 @@ def interact_resource_site(state: Dict[str, Any], actor_id: str, action: Dict[st
         if inventory.get("farm_tools", 0) < 1 or site["stage"] != "untilled":
             return {"accepted": False, "reason": "farm tools and an untilled plot are required"}
         site["stage"], inputs, outputs, energy_cost = "tilled", {"farm_tools": 1}, {"prepared_soil": 1}, 6
+        site_delta = dict(outputs)
     elif site["type"] == "farm" and operation == "sow":
         if inventory.get("farm_tools", 0) < 1 or inventory.get("seed", 0) < 1 or site["stage"] != "tilled":
             return {"accepted": False, "reason": "farm tools, seed, and a tilled plot are required"}
         inventory["seed"] -= 1
         site["stage"], site["ready_tick"] = "growing", state["clock"]["tick"] + 12
         inputs, outputs, energy_cost = {"farm_tools": 1, "seed": 1}, {"crop_due_tick": site["ready_tick"]}, 4
+        site_delta = {"stage": "growing", **outputs}
     elif site["type"] == "farm" and operation == "harvest":
         if inventory.get("farm_tools", 0) < 1 or site["stage"] != "ripe":
             return {"accepted": False, "reason": "farm tools and a ripe crop are required"}
@@ -4036,6 +4069,9 @@ def interact_resource_site(state: Dict[str, Any], actor_id: str, action: Dict[st
         inventory["raw_food"] = inventory.get("raw_food", 0) + amount
         site["stage"], site["ready_tick"], site["stock"] = "untilled", None, 0
         inputs, outputs, energy_cost = {"farm_tools": 1}, {"raw_food": amount}, 6
+        inventory_delta = dict(outputs)
+        site_delta = {"stage": "untilled", "stock": -amount}
+        custody = "actor_inventory"
     elif site["type"] == "cattle" and operation == "feed":
         if inventory.get("feed", 0) < 1:
             return {"accepted": False, "reason": "feed is required"}
@@ -4043,12 +4079,16 @@ def interact_resource_site(state: Dict[str, Any], actor_id: str, action: Dict[st
         site["fed_until_tick"] = state["clock"]["tick"] + 16
         site["wellbeing"] = min(100, site["wellbeing"] + 12)
         inputs, outputs, energy_cost = {"feed": 1}, {"wellbeing": site["wellbeing"]}, 3
+        site_delta = dict(outputs)
     elif site["type"] == "cattle" and operation == "milk":
         if inventory.get("bucket", 0) < 1 or site["wellbeing"] < 50 or site["stock"] < 1:
             return {"accepted": False, "reason": "a bucket, adequate wellbeing, and available milk are required"}
         site["stock"] = round(site["stock"] - 1, 2)
         inventory["milk"] = inventory.get("milk", 0) + 1
         inputs, outputs, energy_cost = {"bucket": 1}, {"milk": 1}, 3
+        inventory_delta = dict(outputs)
+        site_delta = {"stock": -1}
+        custody = "actor_inventory"
     else:
         return {"accepted": False, "reason": "that operation is not supported at this site"}
     player["energy"] = round(player.get("energy", 100) - energy_cost, 2)
@@ -4057,7 +4097,13 @@ def interact_resource_site(state: Dict[str, Any], actor_id: str, action: Dict[st
     site["history"] = site["history"][-100:]
     _evidence(state, state["clock"]["tick"], f"{operation} at {site['name']}", [actor_id], inputs, list(inputs), outputs, None)
     consequence = _remember_consequence(state, state["clock"]["tick"], f"site-action:{site['id']}:{operation}", f"site-state:{site['id']}", [actor_id])
-    return {"accepted": True, "type": "interact_site", "site_id": site["id"], "operation": operation, "inputs": inputs, "outputs": outputs, "energy": player["energy"], "consequence_id": consequence["id"], "physical_change": physical}
+    return {
+        "accepted": True, "type": "interact_site", "site_id": site["id"], "operation": operation,
+        "status": status, "custody": custody, "inventory_delta": inventory_delta,
+        "site_delta": site_delta, "next_step": next_step,
+        "inputs": inputs, "outputs": outputs, "energy": player["energy"],
+        "consequence_id": consequence["id"], "physical_change": physical,
+    }
 
 
 def apply_player_action(state: Dict[str, Any], actor_id: str, action: Dict[str, Any]) -> Dict[str, Any]:
@@ -4265,6 +4311,42 @@ def apply_player_action(state: Dict[str, Any], actor_id: str, action: Dict[str, 
         signal = _update_material_signal(state, resource, state["clock"]["tick"], f"player-extraction:{actor_id}")
         _remember_consequence(state, state["clock"]["tick"], f"gather:{actor_id}:{player['current_region']}", f"inventory-gain:{resource}:{amount}", [actor_id])
         return {"accepted": True, "type": action_type, "extraction": extraction, "market_signal": signal, "physical_change": True}
+    if action_type == "approach_site":
+        player = state["players"].get(actor_id)
+        site = state.get("resource_sites", {}).get(action.get("site_id"))
+        if not player or not site:
+            return {"accepted": False, "reason": "join the world and select a known resource site"}
+        if player.get("current_region", "settlement") != site.get("region"):
+            return {"accepted": False, "reason": "the selected site is in another region"}
+        knowledge = state.get("discoveries", {}).get(actor_id, {})
+        known = {tuple(int(value) for value in key.split(",", 1)) for key in knowledge}
+        grid = FrontierGrid(state["frontier"]["seed"], state["frontier"]["size"])
+        reachable = []
+        for destination in grid.neighbors(tuple(site["location"])):
+            result = grid.find_route(
+                tuple(player["location"]), destination, known=known,
+                modifications=state.get("terrain_modifications", {}),
+            )
+            if result.reached:
+                reachable.append((result.cost_milli, len(result.path), destination, result))
+        if not reachable:
+            return {"accepted": False, "reason": "no_known_route_to_site", "physical_change": False}
+        _, _, destination, result = min(reachable, key=lambda item: (item[0], item[1], item[2][0], item[2][1]))
+        arrived = len(result.path) == 1
+        route = {
+            "id": f"route:{actor_id}:{state['clock']['tick']}:site:{site['id']}",
+            "path": [list(position) for position in result.path], "index": 0,
+            "status": "arrived" if arrived else "traveling", "cost_milli": result.cost_milli,
+            "started_tick": state["clock"]["tick"], "site_id": site["id"],
+        }
+        if arrived:
+            route["arrived_tick"] = state["clock"]["tick"]
+        player["route"] = route
+        return {
+            "accepted": True, "type": action_type, "site_id": site["id"],
+            "destination": list(destination), "route": copy.deepcopy(route["path"]),
+            "cost_milli": route["cost_milli"], "physical_change": False,
+        }
     if action_type == "travel_route":
         player = state["players"].get(actor_id)
         destination = action.get("destination")

@@ -503,8 +503,13 @@ const IsometricSettlement = () => {
     setSelected(selectedObject);
     setActionReceipt(null);
     if (resource) {
-      const approach = approachTileForSite(resource, world.player, frontierView.connected ? frontierView.tiles : null, activeMapSize);
-      if (approach && (approach.x !== world.player.x || approach.y !== world.player.y)) await walkToTile(approach);
+      if (serverSnapshot) {
+        const response = await performAuthorityAction({ type: 'approach_site', site_id: resource.id });
+        if (response?.result?.accepted === false) setActionReceipt(formatResourceReceipt(response.result, resource.name));
+      } else {
+        const approach = approachTileForSite(resource, world.player, null, activeMapSize);
+        if (approach && (approach.x !== world.player.x || approach.y !== world.player.y)) await walkToTile(approach);
+      }
     } else if (!selectedObject) {
       await walkToTile(hoverTile);
     }
@@ -698,7 +703,15 @@ const IsometricSettlement = () => {
     next.player.energy -= cost;
     next.communications = [...next.communications, { id: crypto.randomUUID(), tick: simulation.clock.tick, speaker: 'World record', content: `${localStorage.getItem('username') || 'Player'} ${action}.`, kind: 'action' }].slice(-100);
     setWorld(next); setSelected(target); saveWorld(next); setServerError(null);
-    setActionReceipt(formatResourceReceipt({ accepted: true, operation: action, outputs, energy: next.player.energy }, target.name));
+    const inventoryKeys = new Set(['axe', 'pick', 'shovel', 'bucket', 'wrench', 'farm_tools', 'seed', 'feed', 'timber', 'stone', 'ore', 'water', 'raw_food', 'milk']);
+    const inventoryDelta = Object.fromEntries(Object.entries(outputs).filter(([key]) => inventoryKeys.has(key)));
+    const custody = Object.keys(inventoryDelta).length ? 'actor_inventory' : 'site';
+    setActionReceipt(formatResourceReceipt({
+      accepted: true, status: 'completed', custody, operation: action,
+      inventory_delta: inventoryDelta,
+      site_delta: custody === 'site' ? outputs : {},
+      energy: next.player.energy,
+    }, target.name));
     appendCausalEvent({ actionId: `resource:${target.id}:${simulation.clock.tick}:${action}`, actorId: localStorage.getItem('currentCharacterId') || 'unknown', state: 'performed', intent: action, location: `${target.x},${target.y}`, parentEventIds: [], inputs: { toolAccess: Object.keys(inventory).filter((key) => ['axe', 'pick', 'shovel', 'bucket', 'farm_tools'].includes(key) && inventory[key]) }, outputs, evidence: [{ kind: 'direct_isometric_interaction', tick: simulation.clock.tick }], physicalEffect: target.type !== 'store' });
   };
 

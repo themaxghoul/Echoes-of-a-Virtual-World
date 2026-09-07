@@ -1028,8 +1028,8 @@ class PersistentWorldTests(unittest.TestCase):
 
     def test_autonomous_conversation_rotates_social_attention_and_restores_belonging(self):
         state = self.store.snapshot()["state"]
-        for npc in state["npcs"].values():
-            npc["location"] = [18, 18]
+        for index, npc in enumerate(state["npcs"].values()):
+            npc["location"] = [30 + (index % 6) * 5, 30 + (index // 6) * 5]
             npc["needs"]["belonging"] = 80
         state["npcs"]["ada"].update({"location": [8, 8], "intention": "rest", "reason": "The scheduled shift ended."})
         state["npcs"]["orin"].update({"location": [8, 9], "intention": "inspect stores", "reason": "Food reserves are low."})
@@ -1045,6 +1045,39 @@ class PersistentWorldTests(unittest.TestCase):
         self.assertGreater(state["npcs"]["orin"]["needs"]["belonging"], 11)
         self.assertNotIn("scheduled shift ended", first[0]["payload"]["content"].lower())
         self.assertNotEqual(first[0]["payload"]["content"], second[0]["payload"]["content"])
+
+    def test_autonomous_conversation_rotates_even_when_belonging_is_skewed(self):
+        state = self.store.snapshot()["state"]
+        for index, npc in enumerate(state["npcs"].values()):
+            npc["location"] = [30 + (index % 6) * 5, 30 + (index // 6) * 5]
+        for npc_id, belonging in (("ada", 1), ("orin", 50), ("mira", 95)):
+            state["npcs"][npc_id]["location"] = [8, 8]
+            state["npcs"][npc_id]["needs"]["belonging"] = belonging
+
+        speakers = [
+            _process_proximity_speech(state, tick)[0]["actor_id"]
+            for tick in (8, 16, 24)
+        ]
+
+        self.assertEqual(["ada", "orin", "mira"], speakers)
+
+    def test_autonomous_social_memory_retains_only_the_recent_bounded_window(self):
+        state = self.store.snapshot()["state"]
+        for index, npc in enumerate(state["npcs"].values()):
+            npc["location"] = [30 + (index % 6) * 5, 30 + (index // 6) * 5]
+        state["npcs"]["ada"]["location"] = [8, 8]
+        state["npcs"]["orin"]["location"] = [8, 9]
+        state["npcs"]["ada"]["memories"] = [
+            {"tick": tick, "kind": "social_exchange", "text": f"old-{tick}"}
+            for tick in range(250)
+        ]
+
+        _process_proximity_speech(state, 256)
+
+        memories = state["npcs"]["ada"]["memories"]
+        self.assertEqual(250, len(memories))
+        self.assertNotEqual("old-0", memories[0]["text"])
+        self.assertEqual(256, memories[-1]["tick"])
 
     def test_directed_non_english_speech_considers_only_the_nearby_target(self):
         joined = self.store.apply_action(self.world["world_id"], "join-directed", "speaker", {"type": "join", "location": [9, 7]}, now_ms=1_000_000)
@@ -1142,11 +1175,18 @@ class PersistentWorldTests(unittest.TestCase):
         joined = self.store.apply_action(self.world["world_id"], "site-join", "worker", {"type": "join", "location": [8, 9]}, now_ms=1_000_000)
         checkout = self.store.apply_action(self.world["world_id"], "axe-checkout", "worker", {"type": "interact_site", "site_id": "tool-counter", "operation": "checkout", "item": "axe"}, expected_revision=joined["revision"], now_ms=1_000_001)
         self.assertTrue(checkout["result"]["accepted"])
+        self.assertEqual("completed", checkout["result"]["status"])
+        self.assertEqual("actor_inventory", checkout["result"]["custody"])
+        self.assertEqual({"axe": 1}, checkout["result"]["inventory_delta"])
         repositioned = self.store.apply_action(self.world["world_id"], "boundary-position", "worker", {"type": "join", "location": [0, 8]}, expected_revision=checkout["revision"], now_ms=1_000_002)
         traveled = self.store.apply_action(self.world["world_id"], "woods-expedition", "worker", {"type": "explore_region", "region": "north_woods"}, expected_revision=repositioned["revision"], now_ms=1_000_003)
         chopped = self.store.apply_action(self.world["world_id"], "chop-oak-once", "worker", {"type": "interact_site", "site_id": "old-oak", "operation": "chop"}, expected_revision=traveled["revision"], now_ms=1_000_004)
         replayed = self.store.apply_action(self.world["world_id"], "chop-oak-once", "worker", {"type": "interact_site", "site_id": "old-oak", "operation": "chop"}, now_ms=1_000_005)
         self.assertEqual(chopped, replayed)
+        self.assertEqual("proposal_recorded", chopped["result"]["status"])
+        self.assertEqual("none", chopped["result"]["custody"])
+        self.assertEqual({}, chopped["result"]["inventory_delta"])
+        self.assertIn("accept", chopped["result"]["next_step"])
         action_id = chopped["result"]["outputs"]["canonical_action_id"]
         proposed = self.store.snapshot(); state = proposed["state"]
         self.assertEqual(10, state["resource_sites"]["old-oak"]["stock"])
@@ -1632,6 +1672,36 @@ class PersistentWorldTests(unittest.TestCase):
         rejected = self.store.apply_action(self.world["world_id"], "unknown-route-command", "traveler", {"type": "travel_route", "destination": [40, 40]}, expected_revision=first["revision"])
         self.assertFalse(rejected["result"]["accepted"])
         self.assertEqual("destination_unknown", rejected["result"]["reason"])
+
+    def test_approach_site_chooses_the_lowest_cost_reachable_adjacent_tile(self):
+        joined = self.store.apply_action(self.world["world_id"], "approach-join", "traveler", {"type": "join", "location": [4, 5]}, expected_revision=1)
+        snapshot = self.store.snapshot()
+        state = snapshot["state"]
+        state["resource_sites"]["well-site"]["location"] = [7, 5]
+        state["discoveries"]["traveler"] = {
+            f"{x},{y}": {"observed_tick": 0}
+            for x in range(3, 11)
+            for y in range(2, 9)
+        }
+        state["terrain_modifications"].update({
+            "7,5": {"passable": False},
+            "5,5": {"passable": False},
+            "6,4": {"passable": False},
+            "6,6": {"passable": False},
+        })
+        with self.store.transaction() as connection:
+            connection.execute("UPDATE worlds SET state_json=? WHERE world_id=?", (json.dumps(state), snapshot["world_id"]))
+
+        approached = self.store.apply_action(
+            self.world["world_id"], "approach-well", "traveler",
+            {"type": "approach_site", "site_id": "well-site"},
+            expected_revision=joined["revision"],
+        )
+
+        self.assertTrue(approached["result"]["accepted"])
+        self.assertNotEqual([6, 5], approached["result"]["destination"])
+        self.assertIn(approached["result"]["destination"], [[8, 5], [7, 4], [7, 6]])
+        self.assertGreater(len(approached["result"]["route"]), 1)
 
     def test_frontier_excavation_uses_verified_shared_action_and_preserves_actor_custody(self):
         joined = self.store.apply_action(self.world["world_id"], "excavator-join", "excavator", {"type": "join", "location": [9, 9]}, expected_revision=1)

@@ -85,14 +85,31 @@ function formatResourceReceipt(result, siteName = 'Resource site') {
   if (!result?.accepted) {
     return { tone: 'blocked', text: `${siteName} · blocked · ${result?.reason || 'the action was not accepted'}` };
   }
-  const gains = Object.entries(result.outputs || {})
+  const operation = String(result.operation || 'interaction').replaceAll('_', ' ');
+  if (result.status === 'proposal_recorded') {
+    return {
+      tone: 'pending',
+      text: `${siteName} · ${operation} proposal recorded · no material transferred${result.next_step ? ` · next: ${result.next_step}` : ''}`,
+    };
+  }
+  const gains = Object.entries(result.inventory_delta || {})
     .filter(([, amount]) => typeof amount === 'number' && amount !== 0)
     .map(([item, amount]) => `${item.replaceAll('_', ' ')} ${amount > 0 ? '+' : ''}${amount}`);
+  const siteChanges = Object.entries(result.site_delta || {})
+    .filter(([, value]) => value !== null && value !== undefined && typeof value !== 'object')
+    .map(([item, value]) => `${item.replaceAll('_', ' ')} ${String(value)}`);
+  if (result.status === 'inspection_recorded' || result.custody === 'evidence_record') {
+    return {
+      tone: 'success',
+      text: [`${siteName} · ${operation} inspection recorded`, Number.isFinite(result.energy) ? `energy ${result.energy}` : null].filter(Boolean).join(' · '),
+    };
+  }
   const details = [
-    `${siteName} · ${String(result.operation || 'interaction').replaceAll('_', ' ')} complete`,
+    `${siteName} · ${operation} complete`,
     ...gains,
+    ...siteChanges.map((change) => `site: ${change}`),
     Number.isFinite(result.energy) ? `energy ${result.energy}` : null,
-    'output held in your inventory',
+    result.custody === 'actor_inventory' ? 'output held in your inventory' : null,
   ].filter(Boolean);
   return { tone: 'success', text: details.join(' · ') };
 }
