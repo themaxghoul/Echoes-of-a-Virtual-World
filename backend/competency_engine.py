@@ -61,6 +61,22 @@ class CompetencyProfile:
         return self.competencies.setdefault(domain, Competency(domain))
 
 
+def missing_prerequisite_evidence(profile: CompetencyProfile, domain: str) -> List[str]:
+    """Return direct prerequisites that lack demonstrated, traceable evidence."""
+    if domain not in DOMAINS:
+        raise ValueError("Unknown competency domain")
+    return [
+        name for name in DOMAINS[domain]["prerequisites"]
+        if profile.get(name).demonstrated < 0.1 or not profile.get(name).evidence
+    ]
+
+
+def require_prerequisite_evidence(profile: CompetencyProfile, domain: str) -> None:
+    missing = missing_prerequisite_evidence(profile, domain)
+    if missing:
+        raise ValueError(f"missing prerequisite evidence: {', '.join(missing)}")
+
+
 def record_demonstrated_outcome(profile: CompetencyProfile, domain: str, evidence_id: str, quality: float) -> Competency:
     """Record reproducible task evidence across every component of competence.
 
@@ -101,6 +117,7 @@ def observe(profile: CompetencyProfile, domain: str, perspective: str, evidence_
 def practice(profile: CompetencyProfile, domain: str, perspective: str, action_id: str, verified: bool) -> Competency:
     if perspective not in DIRECT_ACTION_PERSPECTIVES:
         raise ValueError("Direct practice requires an embodied or supervisory world view")
+    require_prerequisite_evidence(profile, domain)
     item = profile.get(domain)
     gain = 0.1 if verified else 0.025
     item.procedure = clamp(item.procedure + gain)
@@ -140,7 +157,7 @@ def teach(teacher: CompetencyProfile, learner: CompetencyProfile, domain: str, l
 def can_attempt(profile: CompetencyProfile, domain: str, perspective: str) -> Dict[str, object]:
     if domain not in DOMAINS:
         raise ValueError("Unknown competency domain")
-    missing = [name for name in DOMAINS[domain]["prerequisites"] if profile.get(name).demonstrated < 0.1]
+    missing = missing_prerequisite_evidence(profile, domain)
     return {
         "allowed": perspective in DIRECT_ACTION_PERSPECTIVES and not missing,
         "missing_prerequisites": missing,

@@ -14,7 +14,7 @@ import copy
 import json
 
 from causal_ledger import CausalEvent, CausalLedger
-from competency_engine import CompetencyProfile, practice
+from competency_engine import CompetencyProfile, practice, require_prerequisite_evidence
 
 
 TERMINAL_STATES = {"refused", "cancelled", "rejected", "retired", "lost"}
@@ -199,6 +199,8 @@ class SharedActionEngine:
         competency = actor.competencies.get(req.competence_domain).demonstrated if req.competence_domain else 1.0
         if competency < req.minimum_competence:
             raise ValueError("insufficient demonstrated competence")
+        if req.competence_domain:
+            require_prerequisite_evidence(actor.competencies, req.competence_domain)
         inventory = self.world.inventories.setdefault(actor.actor_id, {})
         material_source = self.world.communal_inventory if action.definition.input_custody == "communal_store" else inventory
         missing_materials = {name: amount - material_source.get(name, 0) for name, amount in req.materials.items() if material_source.get(name, 0) < amount}

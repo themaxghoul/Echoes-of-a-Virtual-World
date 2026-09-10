@@ -1,5 +1,5 @@
 import unittest
-from competency_engine import CompetencyProfile, can_attempt, observe, practice, reproduce_experiment, study, teach
+from competency_engine import CompetencyProfile, can_attempt, observe, practice, record_demonstrated_outcome, reproduce_experiment, study, teach
 
 
 class CompetencyEngineTests(unittest.TestCase):
@@ -45,9 +45,22 @@ class CompetencyEngineTests(unittest.TestCase):
     def test_mechanical_repair_is_an_evidence_domain_with_engineering_prerequisites(self):
         profile = CompetencyProfile("repairer")
         result = can_attempt(profile, "mechanical_repair", "story")
+        for domain in ("measurement", "mechanical_engineering"):
+            for evidence_number in range(3):
+                record_demonstrated_outcome(profile, domain, f"fixture:{domain}:{evidence_number}", 1.0)
         repair = practice(profile, "mechanical_repair", "first_person", "repair-1", True)
         self.assertIn("mechanical_engineering", result["missing_prerequisites"])
         self.assertIn("verified", repair.evidence[-1])
+
+    def test_practice_cannot_create_repair_evidence_without_prerequisite_evidence(self):
+        profile = CompetencyProfile("unqualified-repairer")
+        repair = profile.get("mechanical_repair")
+        repair.theory = repair.observation = repair.procedure = repair.embodied = repair.reproducibility = 0.8
+        before = repair.demonstrated
+        with self.assertRaisesRegex(ValueError, "missing prerequisite evidence"):
+            practice(profile, "mechanical_repair", "first_person", "repair-1", True)
+        self.assertEqual(before, repair.demonstrated)
+        self.assertEqual([], repair.evidence)
 
 
 if __name__ == "__main__": unittest.main()

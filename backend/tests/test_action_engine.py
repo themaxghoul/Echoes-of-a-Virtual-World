@@ -5,7 +5,7 @@ from action_engine import (
     ActionDefinition, ActionRequirements, ActionWorld, ActorContext, COMMUNAL_MEAL_PREPARATION, MEASUREMENT_TOOL_CALIBRATION,
     MECHANICAL_PUMP_REPAIR, SharedActionEngine, material_custody_transfer, site_resource_extraction,
 )
-from competency_engine import CompetencyProfile
+from competency_engine import DOMAINS, CompetencyProfile, record_demonstrated_outcome
 from scenarios.living_workshop import WaterInstallationSpec, water_installation_repair
 from society_engine import Agent, DecisionOption, decide_initiative, remember_perceived_event
 
@@ -27,6 +27,9 @@ def world_for(actor_id="worker"):
 
 def domain_actor(actor_id, kind, domain, competence=0.2, perceptions=None):
     profile = CompetencyProfile(actor_id)
+    for prerequisite in DOMAINS[domain]["prerequisites"]:
+        for evidence_number in range(3):
+            record_demonstrated_outcome(profile, prerequisite, f"fixture:{actor_id}:{prerequisite}:{evidence_number}", 1.0)
     item = profile.get(domain)
     item.theory = item.observation = item.procedure = item.embodied = item.reproducibility = competence
     return ActorContext(actor_id, kind, "first_person", set(perceptions or {"heat_control", "instrumentation"}), 10, profile)
@@ -288,6 +291,24 @@ class SharedActionEngineTests(unittest.TestCase):
         )
         engine.accept(action.action_id, worker)
         with self.assertRaisesRegex(ValueError, "insufficient demonstrated competence"):
+            engine.reserve(action.action_id, worker)
+
+    def test_water_repair_reservation_rejects_crafted_repair_score_without_prerequisite_evidence(self):
+        profile = CompetencyProfile("crafted-repair")
+        for domain in ("measurement", "mechanical_engineering", "mechanical_repair"):
+            item = profile.get(domain)
+            item.theory = item.observation = item.procedure = item.embodied = item.reproducibility = 0.8
+        worker = ActorContext("crafted-repair", "human", "first_person", {"spatial_layout", "instrumentation"}, 10, profile)
+        spec = WaterInstallationSpec()
+        engine = SharedActionEngine(water_repair_world(worker.actor_id, spec))
+        engine.register_actor(worker)
+        action = engine.propose(
+            "repair-prerequisites", water_installation_repair(spec), worker,
+            "restore safe water service", spec.installation_site, spec.installation_site,
+            ["measured-low-flow"],
+        )
+        engine.accept(action.action_id, worker)
+        with self.assertRaisesRegex(ValueError, "missing prerequisite evidence"):
             engine.reserve(action.action_id, worker)
 
     def test_repair_material_reconciliation_balances(self):
