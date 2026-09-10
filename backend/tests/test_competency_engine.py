@@ -42,5 +42,12 @@ class CompetencyEngineTests(unittest.TestCase):
             self.assertEqual(0, profile.get(domain).demonstrated)
             self.assertFalse(can_attempt(profile, domain, "story")["allowed"])
 
+    def test_mechanical_repair_is_an_evidence_domain_with_engineering_prerequisites(self):
+        profile = CompetencyProfile("repairer")
+        result = can_attempt(profile, "mechanical_repair", "story")
+        repair = practice(profile, "mechanical_repair", "first_person", "repair-1", True)
+        self.assertIn("mechanical_engineering", result["missing_prerequisites"])
+        self.assertIn("verified", repair.evidence[-1])
+
 
 if __name__ == "__main__": unittest.main()

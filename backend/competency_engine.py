@@ -13,6 +13,7 @@ DOMAINS = {
     "materials_science": {"kind": "applied_science", "prerequisites": ["physics", "chemistry"]},
     "metallurgy": {"kind": "applied_science", "prerequisites": ["measurement"]},
     "mechanical_engineering": {"kind": "engineering", "prerequisites": ["physics", "materials_science"]},
+    "mechanical_repair": {"kind": "craft", "prerequisites": ["measurement", "mechanical_engineering"]},
     "electrical_engineering": {"kind": "engineering", "prerequisites": ["physics", "mathematics"]},
     "civil_engineering": {"kind": "engineering", "prerequisites": ["physics", "materials_science"]},
     "agriculture": {"kind": "applied_science", "prerequisites": ["biology", "chemistry"]},

@@ -2,7 +2,7 @@ import copy
 import unittest
 
 from action_engine import (
-    ActionWorld, ActorContext, COMMUNAL_MEAL_PREPARATION, MEASUREMENT_TOOL_CALIBRATION,
+    ActionDefinition, ActionRequirements, ActionWorld, ActorContext, COMMUNAL_MEAL_PREPARATION, MEASUREMENT_TOOL_CALIBRATION,
     MECHANICAL_PUMP_REPAIR, SharedActionEngine, material_custody_transfer, site_resource_extraction,
 )
 from competency_engine import CompetencyProfile
@@ -27,8 +27,7 @@ def world_for(actor_id="worker"):
 
 def domain_actor(actor_id, kind, domain, competence=0.2, perceptions=None):
     profile = CompetencyProfile(actor_id)
-    profile_domain = "mechanical_engineering" if domain == "mechanical_repair" else domain
-    item = profile.get(profile_domain)
+    item = profile.get(domain)
     item.theory = item.observation = item.procedure = item.embodied = item.reproducibility = competence
     return ActorContext(actor_id, kind, "first_person", set(perceptions or {"heat_control", "instrumentation"}), 10, profile)
 
@@ -107,6 +106,40 @@ def complete(engine, worker, verifier, action_id="calibrate-1", readings=None):
 
 
 class SharedActionEngineTests(unittest.TestCase):
+    def test_scenario_evaluators_use_the_generic_execution_and_verification_lifecycle(self):
+        def execute_evaluator(context):
+            return {
+                "succeeded": bool(context["samples"]),
+                "output": {"observed_sample_count": len(context["samples"])},
+                "evidence": [{"kind": "scenario_execution", "sample_count": len(context["samples"])}],
+                "material_disposition": {},
+            }
+
+        def verify_evaluator(context):
+            return {
+                "passed": context["output"]["observed_sample_count"] == 1 and context["samples"] == [{"independent": 1.0}],
+                "state": "rejected",
+                "verification": {"independent_sample_count": len(context["samples"])},
+                "evidence": [{"kind": "scenario_verification"}],
+            }
+
+        definition = ActionDefinition(
+            action_type="scenario_evaluated_action",
+            requirements=ActionRequirements(energy=1, perception_channels={"instrumentation"}),
+            execution_evaluator=execute_evaluator,
+            verification_evaluator=verify_evaluator,
+        )
+        worker, inspector = actor(), actor("inspector", "ai")
+        engine = SharedActionEngine(ActionWorld(inventories={worker.actor_id: {}}))
+        engine.register_actor(worker); engine.register_actor(inspector)
+        action = engine.propose("scenario-evaluator", definition, worker, "record an observation", "target", "lab", ["observation"])
+        engine.accept(action.action_id, worker); engine.reserve(action.action_id, worker)
+        engine.execute(action.action_id, worker, [{"recorded": 1.0}])
+        engine.verify(action.action_id, inspector, [{"independent": 1.0}])
+        self.assertEqual("verified", action.state)
+        self.assertEqual(1, action.output["observed_sample_count"])
+        self.assertEqual(1, action.verification["independent_sample_count"])
+
     def test_measurement_workflow_conserves_inputs_and_balances_internal_valuation(self):
         engine = SharedActionEngine(world_for())
         action = complete(engine, actor(), actor("inspector", "ai"))
@@ -240,6 +273,23 @@ class SharedActionEngineTests(unittest.TestCase):
         self.assertEqual(outcomes[0]["duration_ticks"], outcomes[1]["duration_ticks"])
         self.assertEqual(outcomes[0]["state"], "submitted")
 
+    def test_water_repair_requires_mechanical_repair_evidence_not_engineering_proxy(self):
+        worker = domain_actor(
+            "engineer", "human", "mechanical_engineering",
+            perceptions={"spatial_layout", "instrumentation"},
+        )
+        spec = WaterInstallationSpec()
+        engine = SharedActionEngine(water_repair_world(worker.actor_id, spec))
+        engine.register_actor(worker)
+        action = engine.propose(
+            "repair-domain", water_installation_repair(spec), worker,
+            "restore safe water service", spec.installation_site, spec.installation_site,
+            ["measured-low-flow"],
+        )
+        engine.accept(action.action_id, worker)
+        with self.assertRaisesRegex(ValueError, "insufficient demonstrated competence"):
+            engine.reserve(action.action_id, worker)
+
     def test_repair_material_reconciliation_balances(self):
         record = run_water_repair_to_submission(
             domain_actor("worker", "human", "mechanical_repair", perceptions={"spatial_layout", "instrumentation"})
@@ -266,6 +316,7 @@ class SharedActionEngineTests(unittest.TestCase):
         self.assertEqual(first["action"].accepted_tick, 0)
         self.assertEqual(first["action"].completed_tick, first["action"].definition.requirements.duration_ticks)
         self.assertEqual(first["action"].output, second["action"].output)
+        self.assertEqual(first["engine"].digest(), second["engine"].digest())
 
     def test_water_repair_verification_uses_independent_post_repair_measurements(self):
         worker = domain_actor("worker", "human", "mechanical_repair", perceptions={"spatial_layout", "instrumentation"})

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from hashlib import sha256
-from typing import Any, Dict, Iterable, List, Optional, Set
+from typing import Any, Callable, Dict, Iterable, List, Optional, Set
 import copy
 import json
 
@@ -18,6 +18,14 @@ from competency_engine import CompetencyProfile, practice
 
 
 TERMINAL_STATES = {"refused", "cancelled", "rejected", "retired", "lost"}
+
+
+def _digest_value(value: Any) -> Any:
+    if callable(value):
+        return f"{value.__module__}.{value.__qualname__}"
+    if isinstance(value, set):
+        return sorted(value)
+    raise TypeError(f"Unsupported digest value: {type(value).__name__}")
 
 
 @dataclass(frozen=True)
@@ -47,6 +55,8 @@ class ActionDefinition:
     input_custody: str = "actor_inventory"
     output_custody: str = "commissioned_store"
     execution_parameters: Dict[str, Any] = field(default_factory=dict)
+    execution_evaluator: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None
+    verification_evaluator: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None
 
 
 @dataclass
@@ -217,6 +227,40 @@ class SharedActionEngine:
         self._event(action, "reserved", actor.actor_id, inputs=self.world.reservations[action_id])
         return action
 
+    @staticmethod
+    def _reconciliation_balances(reconciliation: Dict[str, Dict[str, int]]) -> bool:
+        return all(
+            item["before"] - item["consumed"] == item["after"]
+            and item["consumed"] == item["installed"] + item["waste"] + item["recovered"]
+            and item["damaged"] <= item["waste"]
+            for item in reconciliation.values()
+        )
+
+    def _reconcile_evaluation_materials(self, action: ActionRecord, material_source: Dict[str, int],
+                                        reservation: Dict[str, Any], disposition: Dict[str, Dict[str, int]]) -> Dict[str, Dict[str, int]]:
+        reconciliation = {}
+        material_before = reservation.get("material_before", {})
+        for name, reserved_amount in action.definition.requirements.materials.items():
+            entry = disposition.get(name, {})
+            installed = int(entry.get("installed", 0))
+            waste = int(entry.get("waste", 0))
+            recovered = int(entry.get("recovered", 0))
+            damaged = int(entry.get("damaged", 0))
+            consumed = installed + waste + recovered
+            if min(installed, waste, recovered, damaged) < 0 or damaged > waste or consumed > reserved_amount:
+                raise ValueError("invalid scenario material disposition")
+            material_source[name] = material_source.get(name, 0) + reserved_amount - consumed
+            reconciliation[name] = {
+                "before": int(material_before.get(name, 0)),
+                "consumed": consumed,
+                "after": int(material_source.get(name, 0)),
+                "installed": installed,
+                "recovered": recovered,
+                "damaged": damaged,
+                "waste": waste,
+            }
+        return reconciliation
+
     def execute(self, action_id: str, actor: ActorContext, samples: List[Dict[str, float]]) -> ActionRecord:
         action = self.actions[action_id]
         req = action.definition.requirements
@@ -240,87 +284,32 @@ class SharedActionEngine:
         if reservation and reservation.get("target_site") and self.world.resource_sites.get(reservation["target_site"], {}).get("reserved_by") == action_id:
             self.world.resource_sites[reservation["target_site"]]["reserved_by"] = None
         action.samples = copy.deepcopy(samples)
-        if action.definition.execution_model == "water_installation_repair":
-            required_measurements = (
-                "flow_lpm", "leak_rate_ml_min", "contamination_index", "pressure_kpa", "seal_alignment_mm",
+        if action.definition.execution_evaluator:
+            competence = actor.competencies.get(req.competence_domain).demonstrated if req.competence_domain else 1.0
+            evaluation = action.definition.execution_evaluator({
+                "action_id": action.action_id,
+                "samples": copy.deepcopy(samples),
+                "demonstrated_competence": competence,
+                "tool_conditions": copy.deepcopy((reservation or {}).get("tool_conditions", {})),
+                "specification": copy.deepcopy(action.definition.execution_parameters),
+                "materials": copy.deepcopy(req.materials),
+            })
+            action.material_reconciliation = self._reconcile_evaluation_materials(
+                action, material_source, reservation or {}, evaluation.get("material_disposition", {}),
             )
-            observations = [
-                {name: float(sample[name]) for name in required_measurements}
-                for sample in samples
-                if isinstance(sample, dict)
-                and all(isinstance(sample.get(name), (int, float)) for name in required_measurements)
-            ]
-            if not observations:
-                material_before = (reservation or {}).get("material_before", {})
-                for name, amount in req.materials.items():
-                    material_source[name] = material_source.get(name, 0) + amount
-                action.material_reconciliation = {
-                    name: {
-                        "before": int(material_before.get(name, 0)),
-                        "consumed": 0,
-                        "after": int(material_source.get(name, 0)),
-                        "installed": 0,
-                        "recovered": 0,
-                        "damaged": 0,
-                        "waste": 0,
-                    }
-                    for name in req.materials
-                }
-                action.failure_reason = "no complete pre-repair measurements"
+            action.output = copy.deepcopy(evaluation.get("output", {}))
+            action.output["material_reconciliation"] = copy.deepcopy(action.material_reconciliation)
+            execution_evidence = copy.deepcopy(evaluation.get("evidence", []))
+            if not evaluation.get("succeeded"):
+                action.failure_reason = evaluation.get("failure_reason", "scenario execution rejected")
                 self._event(
                     action, "failed", actor.actor_id,
-                    outputs={"reason": action.failure_reason, "material_reconciliation": action.material_reconciliation},
-                    evidence=[{"kind": "incomplete_water_repair_measurements", "material_reconciliation": action.material_reconciliation}],
+                    outputs=action.output | {"reason": action.failure_reason},
+                    evidence=execution_evidence,
                     physical=True,
                 )
                 self.world.actor_commitments.pop(actor.actor_id, None)
                 return action
-            parameters = action.definition.execution_parameters
-            seed_digest = sha256(
-                f"{action.action_id}{parameters['deterministic_seed']}".encode()
-            ).hexdigest()
-            deterministic_fraction = int(seed_digest[:16], 16) / float(0xFFFFFFFFFFFFFFFF)
-            competence = actor.competencies.get(req.competence_domain).demonstrated if req.competence_domain else 1.0
-            recorded_tool_conditions = (reservation or {}).get("tool_conditions", {})
-            tool_condition = min(recorded_tool_conditions.values()) if recorded_tool_conditions else 1.0
-            pre_measurement = observations[0]
-            diagnosis_signal = sum((
-                min(1.0, pre_measurement["flow_lpm"] / parameters["minimum_flow_lpm"]),
-                min(1.0, parameters["maximum_leak_rate_ml_min"] / max(1.0, pre_measurement["leak_rate_ml_min"])),
-                min(1.0, parameters["maximum_contamination_index"] / max(0.0001, pre_measurement["contamination_index"])),
-                min(1.0, pre_measurement["pressure_kpa"] / parameters["minimum_pressure_kpa"]),
-                min(1.0, parameters["maximum_seal_alignment_mm"] / max(0.0001, pre_measurement["seal_alignment_mm"])),
-            )) / 5.0
-            repair_quality = round(min(1.0, 0.2 + competence * 0.4 + tool_condition * 0.25 + deterministic_fraction * 0.1 + (1.0 - diagnosis_signal) * 0.05), 6)
-            material_before = (reservation or {}).get("material_before", {})
-            action.material_reconciliation = {
-                name: {
-                    "before": int(material_before.get(name, 0)),
-                    "consumed": int(amount),
-                    "after": int(material_source.get(name, 0)),
-                    "installed": int(amount),
-                    "recovered": 0,
-                    "damaged": 0,
-                    "waste": 0,
-                }
-                for name, amount in req.materials.items()
-            }
-            action.output = {
-                "pre_repair_measurements": observations,
-                "repair_quality": repair_quality,
-                "material_reconciliation": copy.deepcopy(action.material_reconciliation),
-            }
-            execution_evidence = [{
-                "kind": "water_installation_repair_execution",
-                "pre_repair_measurements": observations,
-                "deterministic_inputs": {
-                    "competence": round(competence, 6),
-                    "tool_condition": round(tool_condition, 6),
-                    "tolerances": copy.deepcopy(parameters),
-                    "action_seed_hash": seed_digest,
-                },
-                "material_reconciliation": copy.deepcopy(action.material_reconciliation),
-            }]
         elif action.definition.execution_model == "thermal_batch":
             observations = [
                 (float(sample["temperature_c"]), float(sample["duration_minutes"]))
@@ -417,47 +406,20 @@ class SharedActionEngine:
         if verifier_domain and verifier.competencies.get(verifier_domain).demonstrated < action.definition.minimum_verifier_competence:
             raise ValueError("Verifier lacks demonstrated competence")
         action.verifier_id = verifier.actor_id
-        if action.definition.execution_model == "water_installation_repair":
-            required_measurements = (
-                "flow_lpm", "leak_rate_ml_min", "contamination_index", "pressure_kpa", "seal_alignment_mm",
-            )
-            post_repair_samples = [
-                {name: float(sample[name]) for name in required_measurements}
-                for sample in (samples or [])
-                if isinstance(sample, dict)
-                and all(isinstance(sample.get(name), (int, float)) for name in required_measurements)
-            ]
-            if not post_repair_samples:
-                raise ValueError("complete independent post-repair measurements required")
-            observed = post_repair_samples[0]
-            parameters = action.definition.execution_parameters
-            tolerance_comparison = {
-                "flow_lpm": {"observed": observed["flow_lpm"], "minimum": parameters["minimum_flow_lpm"], "passed": observed["flow_lpm"] >= parameters["minimum_flow_lpm"]},
-                "leak_rate_ml_min": {"observed": observed["leak_rate_ml_min"], "maximum": parameters["maximum_leak_rate_ml_min"], "passed": observed["leak_rate_ml_min"] <= parameters["maximum_leak_rate_ml_min"]},
-                "contamination_index": {"observed": observed["contamination_index"], "maximum": parameters["maximum_contamination_index"], "passed": observed["contamination_index"] <= parameters["maximum_contamination_index"]},
-                "pressure_kpa": {"observed": observed["pressure_kpa"], "minimum": parameters["minimum_pressure_kpa"], "passed": observed["pressure_kpa"] >= parameters["minimum_pressure_kpa"]},
-                "seal_alignment_mm": {"observed": observed["seal_alignment_mm"], "maximum": parameters["maximum_seal_alignment_mm"], "passed": observed["seal_alignment_mm"] <= parameters["maximum_seal_alignment_mm"]},
-            }
-            reconciliation_balances = all(
-                item["before"] - item["consumed"] == item["after"]
-                and item["consumed"] == item["installed"] + item["waste"] + item["recovered"]
-                and item["damaged"] <= item["waste"]
-                for item in action.material_reconciliation.values()
-            )
-            passed = bool(action.material_reconciliation) and reconciliation_balances and all(
-                item["passed"] for item in tolerance_comparison.values()
-            )
-            action.verification = {
-                "state": "verified" if passed else "rejected",
-                "post_repair_samples": copy.deepcopy(post_repair_samples),
-                "tolerance_comparison": tolerance_comparison,
-                "material_reconciliation_balances": reconciliation_balances,
-            }
-            verification_evidence = [{
-                "kind": "independent_water_repair_check",
-                "verification": copy.deepcopy(action.verification),
+        if action.definition.verification_evaluator:
+            reconciliation_balances = self._reconciliation_balances(action.material_reconciliation)
+            evaluation = action.definition.verification_evaluator({
+                "samples": copy.deepcopy(samples or []),
+                "output": copy.deepcopy(action.output),
+                "specification": copy.deepcopy(action.definition.execution_parameters),
                 "material_reconciliation": copy.deepcopy(action.material_reconciliation),
-            }]
+                "material_reconciliation_balances": reconciliation_balances,
+            })
+            passed = bool(evaluation.get("passed")) and reconciliation_balances
+            action.verification = copy.deepcopy(evaluation.get("verification", {}))
+            action.verification["state"] = "verified" if passed else "rejected"
+            action.verification["material_reconciliation_balances"] = reconciliation_balances
+            verification_evidence = copy.deepcopy(evaluation.get("evidence", []))
         elif action.definition.execution_model == "thermal_batch":
             passed = action.output.get("safety", 0.0) >= action.definition.verification_threshold
             verification_evidence = [{"kind": "independent_safety_check", "threshold": action.definition.verification_threshold, "observed_safety": action.output.get("safety")}]
@@ -473,7 +435,7 @@ class SharedActionEngine:
         else:
             passed = action.output.get("spread", float("inf")) <= action.definition.verification_tolerance
             verification_evidence = [{"kind": "independent_check", "tolerance": action.definition.verification_tolerance, "observed_spread": action.output.get("spread")}]
-        state = "verified" if passed else ("rejected" if action.definition.execution_model == "water_installation_repair" else "needs_rework")
+        state = "verified" if passed else ("rejected" if action.definition.verification_evaluator else "needs_rework")
         event = self._event(action, state, verifier.actor_id, evidence=verification_evidence)
         if not passed:
             self.world.actor_commitments.pop(action.actor_id, None)
@@ -533,7 +495,7 @@ class SharedActionEngine:
 
     def digest(self) -> str:
         payload = {"world": asdict(self.world), "actions": {key: asdict(value) for key, value in sorted(self.actions.items())}, "ledger": [event.payload() | {"event_hash": event.event_hash} for event in self.ledger.events]}
-        return sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"), default=sorted).encode()).hexdigest()
+        return sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"), default=_digest_value).encode()).hexdigest()
 
 
 MEASUREMENT_TOOL_CALIBRATION = ActionDefinition(
