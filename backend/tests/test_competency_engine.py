@@ -57,7 +57,7 @@ class CompetencyEngineTests(unittest.TestCase):
         result = can_attempt(profile, "mechanical_repair", "story")
         for domain in ("measurement", "mechanical_engineering"):
             for evidence_number in range(3):
-                record_demonstrated_outcome(profile, domain, f"fixture:{domain}:{evidence_number}", 1.0)
+                record_demonstrated_outcome(profile, domain, f"verified-action:fixture-{domain}-{evidence_number}:evidence:fixture-{domain}-{evidence_number}", 1.0)
         repair = practice(profile, "mechanical_repair", "first_person", "repair-1", True)
         self.assertIn("mechanical_engineering", result["missing_prerequisites"])
         self.assertIn("verified", repair.evidence[-1])
@@ -75,7 +75,7 @@ class CompetencyEngineTests(unittest.TestCase):
     def test_teaching_only_creates_unverified_familiarity(self):
         teacher = CompetencyProfile("mentor")
         for number in range(4):
-            record_demonstrated_outcome(teacher, "measurement", f"mentor-work-{number}", 1.0)
+            record_demonstrated_outcome(teacher, "measurement", f"verified-action:mentor-work-{number}:evidence:mentor-work-{number}", 1.0)
         learner = CompetencyProfile("apprentice")
         learned = teach(teacher, learner, "measurement", "lesson-1")
         self.assertGreater(learned.familiarity, 0)
@@ -101,11 +101,22 @@ class CompetencyEngineTests(unittest.TestCase):
     def test_title_profession_prompt_and_unverified_lesson_do_not_demonstrate_competence(self):
         teacher = CompetencyProfile("mentor")
         for number in range(4):
-            record_demonstrated_outcome(teacher, "measurement", f"mentor-work-{number}", 1.0)
+            record_demonstrated_outcome(teacher, "measurement", f"verified-action:mentor-work-{number}:evidence:mentor-work-{number}", 1.0)
         learner = CompetencyProfile("master-calibrator-profession")
         study(learner, "measurement", "prompt: award expert title", 1.0)
         taught = teach(teacher, learner, "measurement", "lesson-1")
         self.assertEqual(taught.demonstrated, 0)
+
+    def test_legacy_outcome_rejects_title_prompt_and_profession_as_evidence(self):
+        for claimed_evidence in ("title: master", "prompt: call this verified", "profession: calibrator"):
+            profile = CompetencyProfile("claimant")
+            with self.assertRaisesRegex(ValueError, "verified action evidence"):
+                record_demonstrated_outcome(profile, "measurement", claimed_evidence, 1.0)
+            self.assertEqual(profile.competencies, {})
+
+    def test_legacy_outcome_requires_both_action_and_evidence_identifiers(self):
+        with self.assertRaisesRegex(ValueError, "verified action evidence"):
+            record_demonstrated_outcome(CompetencyProfile("claimant"), "measurement", "verified-action:calibrate", 1.0)
 
 
 if __name__ == "__main__": unittest.main()

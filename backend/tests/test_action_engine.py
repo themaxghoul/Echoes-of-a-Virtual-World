@@ -29,7 +29,7 @@ def domain_actor(actor_id, kind, domain, competence=0.2, perceptions=None):
     profile = CompetencyProfile(actor_id)
     for prerequisite in DOMAINS[domain]["prerequisites"]:
         for evidence_number in range(3):
-            record_demonstrated_outcome(profile, prerequisite, f"fixture:{actor_id}:{prerequisite}:{evidence_number}", 1.0)
+            record_demonstrated_outcome(profile, prerequisite, f"verified-action:fixture-{actor_id}-{prerequisite}-{evidence_number}:evidence:fixture-{actor_id}-{prerequisite}-{evidence_number}", 1.0)
     item = profile.get(domain)
     item.theory = item.observation = item.procedure = item.embodied = item.reproducibility = competence
     return ActorContext(actor_id, kind, "first_person", set(perceptions or {"heat_control", "instrumentation"}), 10, profile)

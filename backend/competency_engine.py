@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 from typing import Dict, List
+import re
 
 
 DOMAINS = {
@@ -28,6 +29,7 @@ DOMAINS = {
 }
 
 DIRECT_ACTION_PERSPECTIVES = {"isometric", "first_person", "vr"}
+VERIFIED_ACTION_EVIDENCE = re.compile(r"^verified-action:[A-Za-z0-9][A-Za-z0-9_.-]*:evidence:[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
 
 def clamp(value: float) -> float:
@@ -78,12 +80,8 @@ def require_prerequisite_evidence(profile: CompetencyProfile, domain: str) -> No
         raise ValueError(f"missing prerequisite evidence: {', '.join(missing)}")
 
 
-def record_demonstrated_outcome(profile: CompetencyProfile, domain: str, evidence_id: str, quality: float) -> Competency:
-    """Record reproducible task evidence across every component of competence.
-
-    This is the only compatibility path for legacy "specialization" progress;
-    labels and profession titles never call it without a completed outcome.
-    """
+def _record_verified_outcome(profile: CompetencyProfile, domain: str, action_id: str, quality: float) -> Competency:
+    """Apply demonstrated competency after a caller has verified action evidence."""
     item = profile.get(domain)
     gain = clamp(quality) * 0.08
     item.theory = clamp(item.theory + gain * 0.6)
@@ -91,8 +89,15 @@ def record_demonstrated_outcome(profile: CompetencyProfile, domain: str, evidenc
     item.procedure = clamp(item.procedure + gain)
     item.embodied = clamp(item.embodied + gain)
     item.reproducibility = clamp(item.reproducibility + gain)
-    item.evidence.append(f"demonstrated:{evidence_id}")
+    item.evidence.append(f"demonstrated:{action_id}")
     return item
+
+
+def record_demonstrated_outcome(profile: CompetencyProfile, domain: str, evidence_id: str, quality: float) -> Competency:
+    """Compatibility fixture hook for explicitly verified action evidence only."""
+    if not VERIFIED_ACTION_EVIDENCE.fullmatch(evidence_id):
+        raise ValueError("record_demonstrated_outcome requires verified action evidence")
+    return _record_verified_outcome(profile, domain, evidence_id, quality)
 
 
 def record_practice_evidence(
@@ -109,7 +114,7 @@ def record_practice_evidence(
     evidence = [str(evidence_id) for evidence_id in evidence_ids]
     item.evidence.extend(f"evidence:{evidence_id}" for evidence_id in evidence)
     if verified:
-        item = record_demonstrated_outcome(profile, domain, action_id, quality)
+        item = _record_verified_outcome(profile, domain, action_id, quality)
         item.evidence.append(f"practice:{action_id}:verified")
         return item
     item.familiarity = clamp(item.familiarity + clamp(quality) * 0.1)

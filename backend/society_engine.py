@@ -21,6 +21,8 @@ class Knowledge:
     topic: str
     competence: float = 0.0
     confidence: float = 0.0
+    familiarity: float = 0.0
+    theory: float = 0.0
     provenance: List[str] = field(default_factory=list)
     independently_reproduced: bool = False
 
@@ -96,6 +98,11 @@ PERSONALITY_CATEGORY_WEIGHTS = {
 KNOWN_ACTION_CATEGORIES = frozenset(category for weights in PERSONALITY_CATEGORY_WEIGHTS.values() for category in weights)
 
 
+def validate_action_category(option: DecisionOption) -> None:
+    if option.category not in KNOWN_ACTION_CATEGORIES:
+        raise ValueError(f"Unknown action category: {option.category}")
+
+
 def normalize_personality(personality: Dict[str, float]) -> Dict[str, float]:
     """Project legacy labels into the only five personality decision factors."""
     normalized = {trait: 0.0 for trait in PERSONALITY_TRAITS}
@@ -114,6 +121,7 @@ class DecisionContext:
     relationships: Dict[str, float] = field(default_factory=dict)
     resources: Dict[str, float] = field(default_factory=dict)
     risks: Dict[str, float] = field(default_factory=dict)
+    utilities: Dict[str, float] = field(default_factory=dict)
     obligations: Dict[str, float] = field(default_factory=dict)
     personality: Dict[str, float] = field(default_factory=dict)
 
@@ -207,9 +215,10 @@ def teach(teacher: Agent, learner: Agent, topic: str, teaching_quality: float = 
         raise ValueError("Teacher lacks sufficient acquired competence")
     target = learner.knowledge.setdefault(topic, Knowledge(topic=topic))
     fidelity = clamp(teaching_quality) * source.competence * source.confidence
-    target.competence = min(source.competence, clamp(target.competence + fidelity * 0.18))
+    target.familiarity = min(source.competence, clamp(target.familiarity + fidelity * 0.18))
+    target.theory = min(source.competence, clamp(target.theory + fidelity * 0.12))
     target.confidence = clamp(target.confidence + fidelity * 0.12)
-    target.provenance.append(f"taught_by:{teacher.agent_id}")
+    target.provenance.append(f"taught_by:{teacher.agent_id}:unverified")
     return target
 
 
@@ -217,9 +226,12 @@ def practice(agent: Agent, topic: str, verified_outcome: bool) -> Knowledge:
     if not agent.alive:
         raise ValueError("Dead agents cannot practice")
     record = agent.knowledge.setdefault(topic, Knowledge(topic=topic))
-    gain = 0.12 if verified_outcome else 0.025
-    record.competence = clamp(record.competence + gain)
-    record.confidence = clamp(record.confidence + (0.1 if verified_outcome else 0.01))
+    if verified_outcome:
+        record.competence = clamp(record.competence + 0.12)
+        record.confidence = clamp(record.confidence + 0.1)
+    else:
+        record.familiarity = clamp(record.familiarity + 0.025)
+        record.theory = clamp(record.theory + 0.005)
     record.provenance.append("practice:verified" if verified_outcome else "practice:unverified")
     if verified_outcome:
         record.independently_reproduced = True
@@ -229,7 +241,8 @@ def practice(agent: Agent, topic: str, verified_outcome: bool) -> Knowledge:
 def specialize(agent: Agent, specialty: str, effort: float) -> float:
     """Legacy read-only adapter; specialization projects demonstrated evidence."""
     del effort
-    return agent.competency_profile.get(specialty).demonstrated
+    item = agent.competency_profile.competencies.get(specialty)
+    return item.demonstrated if item else 0.0
 
 
 def priority(agent: Agent) -> str:
@@ -258,8 +271,7 @@ def dependency_market(agents: List[Agent]) -> Dict[str, List[str]]:
 
 def score_option(agent: Agent, option: DecisionOption, context: DecisionContext) -> DecisionScore:
     """Score a proposal from explicit, perceived inputs with an inspectable breakdown."""
-    if option.category not in KNOWN_ACTION_CATEGORIES:
-        raise ValueError(f"Unknown action category: {option.category}")
+    validate_action_category(option)
     need = sum((1.0 - context.perceived_needs.get(name, 1.0)) * weight for name, weight in option.addressed_needs.items())
     goal = 0.25 * len(context.goals.intersection(option.goal_tags))
     competence = sum(
@@ -268,7 +280,7 @@ def score_option(agent: Agent, option: DecisionOption, context: DecisionContext)
     )
     relationship = context.relationships.get(option.relationship_target, 0.0) * 0.15 if option.relationship_target else 0.0
     resource = -sum(max(0.0, amount - context.resources.get(item, 0.0)) for item, amount in option.required_resources.items())
-    risk = -clamp(context.risks.get(option.action_id, context.risks.get(option.category, option.risk)))
+    risk = -clamp(context.risks.get(option.action_id, context.risks.get(option.category, 0.0)))
     obligation = context.obligations.get(option.action_id, context.obligations.get(option.category, 0.0))
     personality = {
         trait: context.personality[trait] * PERSONALITY_CATEGORY_WEIGHTS[trait].get(option.category, 0.0)
@@ -281,7 +293,7 @@ def score_option(agent: Agent, option: DecisionOption, context: DecisionContext)
         relationship=relationship,
         resource=resource,
         risk=risk,
-        utility=option.expected_utility,
+        utility=context.utilities.get(option.action_id, context.utilities.get(option.category, 0.0)),
         obligation=obligation,
         personality=personality,
     )
@@ -296,6 +308,8 @@ def decide_initiative(agent: Agent, options: List[DecisionOption]) -> Optional[s
         resources=dict(agent.inventory),
         personality=dict(agent.personality),
     )
+    for option in options:
+        validate_action_category(option)
     scored = []
     for option in options:
         if not option.required_perceptions.issubset(agent.perceptions):

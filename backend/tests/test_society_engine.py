@@ -9,6 +9,7 @@ from society_engine import (
     Knowledge,
     Observation,
     decision_context,
+    decide_initiative,
     dependency_market,
     perceive,
     practice,
@@ -35,7 +36,7 @@ class SocietyEngineTests(unittest.TestCase):
         learner = Agent("learner")
         taught = teach(teacher, learner, "metallurgy", 1.0)
         self.assertLessEqual(taught.competence, 0.55)
-        self.assertEqual(taught.provenance, ["taught_by:mentor"])
+        self.assertEqual(taught.provenance, ["taught_by:mentor:unverified"])
 
     def test_verified_practice_reproduces_knowledge(self):
         result = practice(Agent("researcher"), "coil winding", True)
@@ -53,8 +54,8 @@ class SocietyEngineTests(unittest.TestCase):
     def test_specialization_projects_demonstrated_evidence_into_scarcity_and_dependency(self):
         smith, grower = Agent("smith"), Agent("grower")
         for _ in range(8):
-            record_demonstrated_outcome(smith.competency_profile, "metallurgy", "smith-work", 1.0)
-            record_demonstrated_outcome(grower.competency_profile, "agriculture", "grow-work", 1.0)
+            record_demonstrated_outcome(smith.competency_profile, "metallurgy", "verified-action:smith-work:evidence:smith-work", 1.0)
+            record_demonstrated_outcome(grower.competency_profile, "agriculture", "verified-action:grow-work:evidence:grow-work", 1.0)
         before = dict(smith.specialties)
         self.assertEqual(specialize(smith, "metallurgy", 1.0), before["metallurgy"])
         self.assertEqual(smith.specialties, before)
@@ -102,6 +103,34 @@ class SocietyEngineTests(unittest.TestCase):
             set(score.components),
             {"need", "goal", "competence", "relationship", "resource", "risk", "utility", "obligation", "personality"},
         )
+
+    def test_option_risk_and_utility_metadata_cannot_change_perceived_score(self):
+        ada = Agent("ada")
+        context = decision_context(risks={"repair-pump": 0.2}, utilities={"repair-pump": 0.3})
+        safe_metadata = DecisionOption("repair-pump", "craft", risk=0.0, expected_utility=0.0)
+        hidden_metadata = DecisionOption("repair-pump", "craft", risk=1.0, expected_utility=1.0)
+        self.assertEqual(score_option(ada, safe_metadata, context), score_option(ada, hidden_metadata, context))
+
+    def test_legacy_teaching_and_unverified_practice_only_create_familiarity(self):
+        teacher = Agent("mentor", knowledge={"metallurgy": Knowledge("metallurgy", 0.55, 0.8)})
+        learner = Agent("learner")
+        taught = teach(teacher, learner, "metallurgy", 1.0)
+        practiced = practice(Agent("trainee"), "coil winding", False)
+        self.assertEqual(taught.competence, 0)
+        self.assertGreater(taught.familiarity, 0)
+        self.assertEqual(practiced.competence, 0)
+        self.assertGreater(practiced.familiarity, 0)
+
+    def test_unknown_categories_are_rejected_before_feasibility_filters(self):
+        agent = Agent("ada")
+        hidden = DecisionOption("unknown", "unmapped-category", required_perceptions={"unseen"})
+        with self.assertRaisesRegex(ValueError, "Unknown action category"):
+            decide_initiative(agent, [hidden])
+
+    def test_specialize_does_not_create_an_empty_competency_record(self):
+        agent = Agent("ada")
+        self.assertEqual(specialize(agent, "measurement", 1.0), 0)
+        self.assertEqual(agent.competency_profile.competencies, {})
 
 
 if __name__ == "__main__":
