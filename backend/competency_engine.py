@@ -43,6 +43,7 @@ class Competency:
     embodied: float = 0.0
     reproducibility: float = 0.0
     teaching: float = 0.0
+    familiarity: float = 0.0
     evidence: List[str] = field(default_factory=list)
 
     @property
@@ -94,6 +95,28 @@ def record_demonstrated_outcome(profile: CompetencyProfile, domain: str, evidenc
     return item
 
 
+def record_practice_evidence(
+    profile: CompetencyProfile,
+    domain: str,
+    action_id: str,
+    evidence_ids: List[str],
+    verified: bool,
+    quality: float,
+) -> Competency:
+    """Record an embodied action without treating unverified claims as competence."""
+    require_prerequisite_evidence(profile, domain)
+    item = profile.get(domain)
+    evidence = [str(evidence_id) for evidence_id in evidence_ids]
+    item.evidence.extend(f"evidence:{evidence_id}" for evidence_id in evidence)
+    if verified:
+        item = record_demonstrated_outcome(profile, domain, action_id, quality)
+        item.evidence.append(f"practice:{action_id}:verified")
+        return item
+    item.familiarity = clamp(item.familiarity + clamp(quality) * 0.1)
+    item.evidence.append(f"practice:{action_id}:unverified")
+    return item
+
+
 def study(profile: CompetencyProfile, domain: str, source_id: str, source_quality: float) -> Competency:
     """Text and testimony can build theory, never embodied execution."""
     item = profile.get(domain)
@@ -118,18 +141,10 @@ def practice(profile: CompetencyProfile, domain: str, perspective: str, action_i
     if perspective not in DIRECT_ACTION_PERSPECTIVES:
         raise ValueError("Direct practice requires an embodied or supervisory world view")
     require_prerequisite_evidence(profile, domain)
-    item = profile.get(domain)
-    gain = 0.1 if verified else 0.025
-    item.procedure = clamp(item.procedure + gain)
-    item.embodied = clamp(item.embodied + gain * ({"isometric": 0.55, "first_person": 1.0, "vr": 1.0}[perspective]))
-    # Performing a task exposes observable consequences and, when verified,
-    # connects procedure back to a bounded explanation. It cannot substitute
-    # for study, but it must allow demonstrated ability to grow from evidence.
-    item.observation = clamp(item.observation + gain * (0.4 if verified else 0.15))
-    item.theory = clamp(item.theory + gain * (0.2 if verified else 0.05))
+    profile.get(domain).evidence.append(f"practice-perspective:{perspective}")
+    item = record_practice_evidence(profile, domain, action_id, [f"perspective:{perspective}"], verified, 1.0)
     if verified:
-        item.reproducibility = clamp(item.reproducibility + 0.08)
-    item.evidence.append(f"practice:{perspective}:{action_id}:{'verified' if verified else 'unverified'}")
+        item.embodied = clamp(item.embodied + 0.04 * {"isometric": 0.55, "first_person": 1.0, "vr": 1.0}[perspective])
     return item
 
 
@@ -147,9 +162,8 @@ def teach(teacher: CompetencyProfile, learner: CompetencyProfile, domain: str, l
         raise ValueError("Teacher has not demonstrated sufficient competence")
     target = learner.get(domain)
     transferable = min(source.theory, source.procedure, source.reproducibility)
-    target.theory = min(source.theory, clamp(target.theory + transferable * 0.08))
-    target.procedure = min(source.procedure, clamp(target.procedure + transferable * 0.04))
-    target.evidence.append(f"lesson:{lesson_id}:teacher:{teacher.entity_id}")
+    target.familiarity = min(source.demonstrated, clamp(target.familiarity + transferable * 0.12))
+    target.evidence.append(f"lesson:{lesson_id}:teacher:{teacher.entity_id}:unverified")
     source.teaching = clamp(source.teaching + 0.025)
     return target
 

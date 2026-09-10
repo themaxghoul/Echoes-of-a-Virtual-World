@@ -1,5 +1,15 @@
 import unittest
-from competency_engine import CompetencyProfile, can_attempt, observe, practice, record_demonstrated_outcome, reproduce_experiment, study, teach
+from competency_engine import (
+    CompetencyProfile,
+    can_attempt,
+    observe,
+    practice,
+    record_demonstrated_outcome,
+    record_practice_evidence,
+    reproduce_experiment,
+    study,
+    teach,
+)
 
 
 class CompetencyEngineTests(unittest.TestCase):
@@ -61,6 +71,41 @@ class CompetencyEngineTests(unittest.TestCase):
             practice(profile, "mechanical_repair", "first_person", "repair-1", True)
         self.assertEqual(before, repair.demonstrated)
         self.assertEqual([], repair.evidence)
+
+    def test_teaching_only_creates_unverified_familiarity(self):
+        teacher = CompetencyProfile("mentor")
+        for number in range(4):
+            record_demonstrated_outcome(teacher, "measurement", f"mentor-work-{number}", 1.0)
+        learner = CompetencyProfile("apprentice")
+        learned = teach(teacher, learner, "measurement", "lesson-1")
+        self.assertGreater(learned.familiarity, 0)
+        self.assertEqual(learned.demonstrated, 0)
+        self.assertIn("lesson:lesson-1:teacher:mentor:unverified", learned.evidence)
+
+    def test_verified_practice_records_action_and_evidence_provenance(self):
+        profile = CompetencyProfile("operator")
+        recorded = record_practice_evidence(
+            profile, "measurement", "calibrate-1", ["gauge-1", "review-1"], True, 1.0
+        )
+        self.assertGreater(recorded.demonstrated, 0)
+        self.assertIn("practice:calibrate-1:verified", recorded.evidence)
+        self.assertIn("evidence:gauge-1", recorded.evidence)
+        self.assertIn("evidence:review-1", recorded.evidence)
+
+    def test_unverified_practice_cannot_increase_demonstrated_competence(self):
+        profile = CompetencyProfile("operator")
+        recorded = record_practice_evidence(profile, "measurement", "calibrate-1", ["claim-1"], False, 1.0)
+        self.assertGreater(recorded.familiarity, 0)
+        self.assertEqual(recorded.demonstrated, 0)
+
+    def test_title_profession_prompt_and_unverified_lesson_do_not_demonstrate_competence(self):
+        teacher = CompetencyProfile("mentor")
+        for number in range(4):
+            record_demonstrated_outcome(teacher, "measurement", f"mentor-work-{number}", 1.0)
+        learner = CompetencyProfile("master-calibrator-profession")
+        study(learner, "measurement", "prompt: award expert title", 1.0)
+        taught = teach(teacher, learner, "measurement", "lesson-1")
+        self.assertEqual(taught.demonstrated, 0)
 
 
 if __name__ == "__main__": unittest.main()

@@ -2,9 +2,8 @@
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set
-import math
 
-from competency_engine import CompetencyProfile, record_demonstrated_outcome
+from competency_engine import CompetencyProfile
 
 
 PERSPECTIVES = {
@@ -15,7 +14,6 @@ PERSPECTIVES = {
 }
 
 NEED_DECAY = {"nutrition": 0.025, "rest": 0.018, "shelter": 0.006, "safety": 0.009, "belonging": 0.007, "purpose": 0.005}
-SPECIALTY_CAPACITY = 3.0
 
 
 @dataclass
@@ -77,16 +75,87 @@ class DecisionOption:
     relationship_target: Optional[str] = None
 
 
-PERSONALITY_CATEGORY_WEIGHTS = {
-    "cooperative": {"social": 0.35, "care": 0.4, "public_work": 0.3},
-    "aggressive": {"conflict": 0.4, "defense": 0.3},
-    "curious": {"exploration": 0.4, "knowledge": 0.4, "measurement": 0.35},
-    "creative": {"construction": 0.35, "craft": 0.4, "design": 0.4},
-    "social": {"social": 0.45, "coordination": 0.35},
-    "territorial": {"defense": 0.4, "stewardship": 0.25},
-    "mercantile": {"trade": 0.4, "logistics": 0.3},
-    "spiritual": {"ritual": 0.35, "care": 0.15},
+PERSONALITY_TRAITS = ("diligence", "sociability", "caution", "curiosity", "cooperation")
+LEGACY_PERSONALITY_TRAITS = {
+    "cooperative": "cooperation",
+    "aggressive": "caution",
+    "curious": "curiosity",
+    "creative": "curiosity",
+    "social": "sociability",
+    "territorial": "caution",
+    "mercantile": "diligence",
+    "spiritual": "cooperation",
 }
+PERSONALITY_CATEGORY_WEIGHTS = {
+    "diligence": {"construction": 0.35, "craft": 0.4, "design": 0.4, "logistics": 0.3, "trade": 0.2},
+    "sociability": {"social": 0.45, "coordination": 0.35, "trade": 0.2},
+    "caution": {"conflict": 0.2, "defense": 0.4, "stewardship": 0.25, "care": 0.1},
+    "curiosity": {"exploration": 0.4, "knowledge": 0.4, "measurement": 0.35},
+    "cooperation": {"social": 0.35, "care": 0.4, "public_work": 0.3, "coordination": 0.2, "ritual": 0.35},
+}
+KNOWN_ACTION_CATEGORIES = frozenset(category for weights in PERSONALITY_CATEGORY_WEIGHTS.values() for category in weights)
+
+
+def normalize_personality(personality: Dict[str, float]) -> Dict[str, float]:
+    """Project legacy labels into the only five personality decision factors."""
+    normalized = {trait: 0.0 for trait in PERSONALITY_TRAITS}
+    for trait, value in personality.items():
+        target = LEGACY_PERSONALITY_TRAITS.get(trait, trait)
+        if target not in normalized:
+            raise ValueError(f"Unknown personality trait: {trait}")
+        normalized[target] = clamp(normalized[target] + value)
+    return normalized
+
+
+@dataclass(frozen=True)
+class DecisionContext:
+    perceived_needs: Dict[str, float] = field(default_factory=dict)
+    goals: Set[str] = field(default_factory=set)
+    relationships: Dict[str, float] = field(default_factory=dict)
+    resources: Dict[str, float] = field(default_factory=dict)
+    risks: Dict[str, float] = field(default_factory=dict)
+    obligations: Dict[str, float] = field(default_factory=dict)
+    personality: Dict[str, float] = field(default_factory=dict)
+
+    def __post_init__(self):
+        object.__setattr__(self, "personality", normalize_personality(self.personality))
+
+
+def decision_context(*, authoritative_only: Optional[Dict[str, float]] = None, **kwargs: Any) -> DecisionContext:
+    """Build subjective decision inputs; authoritative-only facts are intentionally discarded."""
+    del authoritative_only
+    return DecisionContext(**kwargs)
+
+
+@dataclass(frozen=True)
+class DecisionScore:
+    need: float
+    goal: float
+    competence: float
+    relationship: float
+    resource: float
+    risk: float
+    utility: float
+    obligation: float
+    personality: Dict[str, float]
+
+    @property
+    def components(self) -> Dict[str, float]:
+        return {
+            "need": self.need,
+            "goal": self.goal,
+            "competence": self.competence,
+            "relationship": self.relationship,
+            "resource": self.resource,
+            "risk": self.risk,
+            "utility": self.utility,
+            "obligation": self.obligation,
+            "personality": sum(self.personality.values()),
+        }
+
+    @property
+    def total(self) -> float:
+        return sum(self.components.values())
 
 
 def clamp(value: float) -> float:
@@ -158,11 +227,9 @@ def practice(agent: Agent, topic: str, verified_outcome: bool) -> Knowledge:
 
 
 def specialize(agent: Agent, specialty: str, effort: float) -> float:
-    """Legacy adapter: only evidence-bearing demonstrated work may specialize."""
-    current = agent.specialties.get(specialty, 0.0)
-    available = max(0.0, SPECIALTY_CAPACITY - agent.specialty_load())
-    quality = min(max(0.0, effort), available / max(0.08, math.sqrt(current + 0.1)))
-    return record_demonstrated_outcome(agent.competency_profile, specialty, f"legacy-adapter:{agent.age_ticks}:{len(agent.specialties)}", quality).demonstrated
+    """Legacy read-only adapter; specialization projects demonstrated evidence."""
+    del effort
+    return agent.competency_profile.get(specialty).demonstrated
 
 
 def priority(agent: Agent) -> str:
@@ -189,27 +256,55 @@ def dependency_market(agents: List[Agent]) -> Dict[str, List[str]]:
     return {"unmet_needs": needs, "scarce_specialties": scarce}
 
 
-def decide_initiative(agent: Agent, options: List[DecisionOption]) -> Optional[str]:
-    """Select the highest-utility perceived feasible proposal deterministically.
+def score_option(agent: Agent, option: DecisionOption, context: DecisionContext) -> DecisionScore:
+    """Score a proposal from explicit, perceived inputs with an inspectable breakdown."""
+    if option.category not in KNOWN_ACTION_CATEGORIES:
+        raise ValueError(f"Unknown action category: {option.category}")
+    need = sum((1.0 - context.perceived_needs.get(name, 1.0)) * weight for name, weight in option.addressed_needs.items())
+    goal = 0.25 * len(context.goals.intersection(option.goal_tags))
+    competence = sum(
+        max(0.0, agent.competency_profile.get(domain).demonstrated - minimum)
+        for domain, minimum in option.required_competence.items()
+    )
+    relationship = context.relationships.get(option.relationship_target, 0.0) * 0.15 if option.relationship_target else 0.0
+    resource = -sum(max(0.0, amount - context.resources.get(item, 0.0)) for item, amount in option.required_resources.items())
+    risk = -clamp(context.risks.get(option.action_id, context.risks.get(option.category, option.risk)))
+    obligation = context.obligations.get(option.action_id, context.obligations.get(option.category, 0.0))
+    personality = {
+        trait: context.personality[trait] * PERSONALITY_CATEGORY_WEIGHTS[trait].get(option.category, 0.0)
+        for trait in PERSONALITY_TRAITS
+    }
+    return DecisionScore(
+        need=need,
+        goal=goal,
+        competence=competence,
+        relationship=relationship,
+        resource=resource,
+        risk=risk,
+        utility=option.expected_utility,
+        obligation=obligation,
+        personality=personality,
+    )
 
-    Initiative emerges from pressure and opportunity. Actor kind, randomness,
-    titles, and administrator status are deliberately absent.
-    """
+
+def decide_initiative(agent: Agent, options: List[DecisionOption]) -> Optional[str]:
+    """Select the highest-scoring feasible proposal using the explicit decision scorer."""
+    context = DecisionContext(
+        perceived_needs=dict(agent.needs),
+        goals=set(agent.goals),
+        relationships=dict(agent.relationships),
+        resources=dict(agent.inventory),
+        personality=dict(agent.personality),
+    )
     scored = []
     for option in options:
         if not option.required_perceptions.issubset(agent.perceptions):
             continue
-        if any(agent.inventory.get(item, 0) < amount for item, amount in option.required_resources.items()):
+        if any(context.resources.get(item, 0) < amount for item, amount in option.required_resources.items()):
             continue
         if any(agent.competency_profile.get(domain).demonstrated < level for domain, level in option.required_competence.items()):
             continue
-        need_pressure = sum((1.0 - agent.needs.get(need, 1.0)) * weight for need, weight in option.addressed_needs.items())
-        goal_alignment = 0.25 * len(set(agent.goals) & option.goal_tags)
-        personality = sum(agent.personality.get(trait, 0.0) * categories.get(option.category, 0.0) for trait, categories in PERSONALITY_CATEGORY_WEIGHTS.items())
-        relationship = agent.relationships.get(option.relationship_target, 0.0) * 0.15 if option.relationship_target else 0.0
-        competence_margin = sum(max(0.0, agent.competency_profile.get(domain).demonstrated - minimum) for domain, minimum in option.required_competence.items())
-        score = need_pressure + goal_alignment + personality + relationship + competence_margin + option.expected_utility - clamp(option.risk)
-        scored.append((round(score, 8), option.action_id))
+        scored.append((round(score_option(agent, option, context).total, 8), option.action_id))
     return max(scored, key=lambda item: (item[0], item[1]))[1] if scored else None
 
 
