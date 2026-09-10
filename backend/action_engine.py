@@ -14,7 +14,7 @@ import copy
 import json
 
 from causal_ledger import CausalEvent, CausalLedger
-from competency_engine import CompetencyProfile, practice, require_prerequisite_evidence
+from competency_engine import CompetencyProfile, practice, register_evidence, require_prerequisite_evidence
 
 
 TERMINAL_STATES = {"refused", "cancelled", "rejected", "retired", "lost"}
@@ -442,8 +442,9 @@ class SharedActionEngine:
         if not passed:
             self.world.actor_commitments.pop(action.actor_id, None)
         if passed and action.definition.requirements.competence_domain:
+            register_evidence(self._actor_profile(action.actor_id), event.event_id, action.action_id, state, verifier.actor_id)
             practice(self._actor_profile(action.actor_id), action.definition.requirements.competence_domain,
-                     self._actor_perspective(action.actor_id), action.action_id, True)
+                     self._actor_perspective(action.actor_id), action.action_id, True, [event.event_id])
         for participant_id in {action.actor_id, verifier.actor_id}:
             participant = self._actors.get(participant_id)
             if participant:

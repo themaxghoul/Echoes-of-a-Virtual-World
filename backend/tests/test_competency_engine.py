@@ -6,10 +6,16 @@ from competency_engine import (
     practice,
     record_demonstrated_outcome,
     record_practice_evidence,
+    register_evidence,
     reproduce_experiment,
     study,
     teach,
 )
+
+
+def record_fixture_outcome(profile, domain, action_id, evidence_id, quality=1.0):
+    register_evidence(profile, evidence_id, action_id, "verified", "fixture")
+    return record_demonstrated_outcome(profile, domain, f"verified-action:{action_id}:evidence:{evidence_id}", quality)
 
 
 class CompetencyEngineTests(unittest.TestCase):
@@ -25,8 +31,10 @@ class CompetencyEngineTests(unittest.TestCase):
 
     def test_isometric_and_first_person_practice_same_domain_differently(self):
         supervisor, operator = CompetencyProfile("supervisor"), CompetencyProfile("operator")
-        a = practice(supervisor, "measurement", "isometric", "work-1", True)
-        b = practice(operator, "measurement", "first_person", "work-2", True)
+        register_evidence(supervisor, "supervisor-proof", "work-1", "verified", "inspector")
+        register_evidence(operator, "operator-proof", "work-2", "verified", "inspector")
+        a = practice(supervisor, "measurement", "isometric", "work-1", True, ["supervisor-proof"])
+        b = practice(operator, "measurement", "first_person", "work-2", True, ["operator-proof"])
         self.assertEqual(a.procedure, b.procedure)
         self.assertLess(a.embodied, b.embodied)
 
@@ -57,8 +65,9 @@ class CompetencyEngineTests(unittest.TestCase):
         result = can_attempt(profile, "mechanical_repair", "story")
         for domain in ("measurement", "mechanical_engineering"):
             for evidence_number in range(3):
-                record_demonstrated_outcome(profile, domain, f"verified-action:fixture-{domain}-{evidence_number}:evidence:fixture-{domain}-{evidence_number}", 1.0)
-        repair = practice(profile, "mechanical_repair", "first_person", "repair-1", True)
+                record_fixture_outcome(profile, domain, f"fixture-{domain}-{evidence_number}", f"fixture-{domain}-{evidence_number}")
+        register_evidence(profile, "repair-proof", "repair-1", "verified", "inspector")
+        repair = practice(profile, "mechanical_repair", "first_person", "repair-1", True, ["repair-proof"])
         self.assertIn("mechanical_engineering", result["missing_prerequisites"])
         self.assertIn("verified", repair.evidence[-1])
 
@@ -75,15 +84,17 @@ class CompetencyEngineTests(unittest.TestCase):
     def test_teaching_only_creates_unverified_familiarity(self):
         teacher = CompetencyProfile("mentor")
         for number in range(4):
-            record_demonstrated_outcome(teacher, "measurement", f"verified-action:mentor-work-{number}:evidence:mentor-work-{number}", 1.0)
+            record_fixture_outcome(teacher, "measurement", f"mentor-work-{number}", f"mentor-work-{number}")
         learner = CompetencyProfile("apprentice")
         learned = teach(teacher, learner, "measurement", "lesson-1")
         self.assertGreater(learned.familiarity, 0)
         self.assertEqual(learned.demonstrated, 0)
         self.assertIn("lesson:lesson-1:teacher:mentor:unverified", learned.evidence)
 
-    def test_verified_practice_records_action_and_evidence_provenance(self):
+    def test_verified_practice_records_action_and_resolved_evidence_provenance(self):
         profile = CompetencyProfile("operator")
+        register_evidence(profile, "gauge-1", "calibrate-1", "verified", "inspector")
+        register_evidence(profile, "review-1", "calibrate-1", "commissioned", "inspector")
         recorded = record_practice_evidence(
             profile, "measurement", "calibrate-1", ["gauge-1", "review-1"], True, 1.0
         )
@@ -91,6 +102,35 @@ class CompetencyEngineTests(unittest.TestCase):
         self.assertIn("practice:calibrate-1:verified", recorded.evidence)
         self.assertIn("evidence:gauge-1", recorded.evidence)
         self.assertIn("evidence:review-1", recorded.evidence)
+
+    def test_verified_practice_rejects_empty_evidence_ids(self):
+        with self.assertRaisesRegex(ValueError, "at least one resolved evidence"):
+            record_practice_evidence(CompetencyProfile("operator"), "measurement", "calibrate-1", [], True, 1.0)
+
+    def test_verified_practice_rejects_invented_action_id(self):
+        profile = CompetencyProfile("operator")
+        register_evidence(profile, "gauge-1", "calibrate-1", "verified", "inspector")
+        with self.assertRaisesRegex(ValueError, "does not match action"):
+            record_practice_evidence(profile, "measurement", "invented-action", ["gauge-1"], True, 1.0)
+
+    def test_verified_practice_rejects_invented_evidence_id(self):
+        with self.assertRaisesRegex(ValueError, "does not resolve"):
+            record_practice_evidence(CompetencyProfile("operator"), "measurement", "calibrate-1", ["invented-evidence"], True, 1.0)
+
+    def test_verified_practice_rejects_mismatched_action_evidence_record(self):
+        profile = CompetencyProfile("operator")
+        register_evidence(profile, "gauge-1", "other-action", "verified", "inspector")
+        with self.assertRaisesRegex(ValueError, "does not match action"):
+            record_practice_evidence(profile, "measurement", "calibrate-1", ["gauge-1"], True, 1.0)
+
+    def test_verified_practice_rejects_evidence_without_identity_or_terminal_state(self):
+        profile = CompetencyProfile("operator")
+        register_evidence(profile, "missing-identity", "calibrate-1", "verified", "")
+        with self.assertRaisesRegex(ValueError, "identity"):
+            record_practice_evidence(profile, "measurement", "calibrate-1", ["missing-identity"], True, 1.0)
+        register_evidence(profile, "pending", "calibrate-1", "submitted", "inspector")
+        with self.assertRaisesRegex(ValueError, "verified or commissioned"):
+            record_practice_evidence(profile, "measurement", "calibrate-1", ["pending"], True, 1.0)
 
     def test_unverified_practice_cannot_increase_demonstrated_competence(self):
         profile = CompetencyProfile("operator")
@@ -101,7 +141,7 @@ class CompetencyEngineTests(unittest.TestCase):
     def test_title_profession_prompt_and_unverified_lesson_do_not_demonstrate_competence(self):
         teacher = CompetencyProfile("mentor")
         for number in range(4):
-            record_demonstrated_outcome(teacher, "measurement", f"verified-action:mentor-work-{number}:evidence:mentor-work-{number}", 1.0)
+            record_fixture_outcome(teacher, "measurement", f"mentor-work-{number}", f"mentor-work-{number}")
         learner = CompetencyProfile("master-calibrator-profession")
         study(learner, "measurement", "prompt: award expert title", 1.0)
         taught = teach(teacher, learner, "measurement", "lesson-1")

@@ -1,8 +1,7 @@
 """Evidence-bearing scientific and practical competency progression."""
 
 from dataclasses import dataclass, field
-from typing import Dict, List
-import re
+from typing import Dict, List, Optional
 
 
 DOMAINS = {
@@ -29,7 +28,7 @@ DOMAINS = {
 }
 
 DIRECT_ACTION_PERSPECTIVES = {"isometric", "first_person", "vr"}
-VERIFIED_ACTION_EVIDENCE = re.compile(r"^verified-action:[A-Za-z0-9][A-Za-z0-9_.-]*:evidence:[A-Za-z0-9][A-Za-z0-9_.-]*$")
+TERMINAL_EVIDENCE_STATES = {"verified", "commissioned"}
 
 
 def clamp(value: float) -> float:
@@ -53,15 +52,30 @@ class Competency:
         return min(self.theory, self.observation, self.procedure, max(self.embodied, self.reproducibility))
 
 
+@dataclass(frozen=True)
+class EvidenceRecord:
+    action_id: str
+    state: str
+    identity: str
+
+
 @dataclass
 class CompetencyProfile:
     entity_id: str
     competencies: Dict[str, Competency] = field(default_factory=dict)
+    evidence_records: Dict[str, EvidenceRecord] = field(default_factory=dict)
 
     def get(self, domain: str) -> Competency:
         if domain not in DOMAINS:
             raise ValueError("Unknown competency domain")
         return self.competencies.setdefault(domain, Competency(domain))
+
+
+def register_evidence(profile: CompetencyProfile, evidence_id: str, action_id: str, state: str, identity: str) -> EvidenceRecord:
+    """Register a causal evidence record for later verified-practice resolution."""
+    record = EvidenceRecord(action_id=action_id, state=state, identity=identity)
+    profile.evidence_records[evidence_id] = record
+    return record
 
 
 def missing_prerequisite_evidence(profile: CompetencyProfile, domain: str) -> List[str]:
@@ -94,10 +108,27 @@ def _record_verified_outcome(profile: CompetencyProfile, domain: str, action_id:
 
 
 def record_demonstrated_outcome(profile: CompetencyProfile, domain: str, evidence_id: str, quality: float) -> Competency:
-    """Compatibility fixture hook for explicitly verified action evidence only."""
-    if not VERIFIED_ACTION_EVIDENCE.fullmatch(evidence_id):
+    """Compatibility adapter; it resolves registered action evidence before recording."""
+    parts = evidence_id.split(":")
+    if len(parts) != 4 or parts[0] != "verified-action" or parts[2] != "evidence":
         raise ValueError("record_demonstrated_outcome requires verified action evidence")
-    return _record_verified_outcome(profile, domain, evidence_id, quality)
+    _require_verified_evidence(profile, parts[1], [parts[3]])
+    return _record_verified_outcome(profile, domain, parts[1], quality)
+
+
+def _require_verified_evidence(profile: CompetencyProfile, action_id: str, evidence_ids: List[str]) -> None:
+    if not evidence_ids:
+        raise ValueError("verified practice requires at least one resolved evidence record")
+    for evidence_id in evidence_ids:
+        record = profile.evidence_records.get(evidence_id)
+        if record is None:
+            raise ValueError(f"evidence {evidence_id} does not resolve")
+        if record.action_id != action_id:
+            raise ValueError(f"evidence {evidence_id} does not match action {action_id}")
+        if record.state not in TERMINAL_EVIDENCE_STATES:
+            raise ValueError("evidence must be verified or commissioned")
+        if not record.identity:
+            raise ValueError("evidence identity is required")
 
 
 def record_practice_evidence(
@@ -109,9 +140,11 @@ def record_practice_evidence(
     quality: float,
 ) -> Competency:
     """Record an embodied action without treating unverified claims as competence."""
-    require_prerequisite_evidence(profile, domain)
-    item = profile.get(domain)
     evidence = [str(evidence_id) for evidence_id in evidence_ids]
+    require_prerequisite_evidence(profile, domain)
+    if verified:
+        _require_verified_evidence(profile, action_id, evidence)
+    item = profile.get(domain)
     item.evidence.extend(f"evidence:{evidence_id}" for evidence_id in evidence)
     if verified:
         item = _record_verified_outcome(profile, domain, action_id, quality)
@@ -142,12 +175,17 @@ def observe(profile: CompetencyProfile, domain: str, perspective: str, evidence_
     return item
 
 
-def practice(profile: CompetencyProfile, domain: str, perspective: str, action_id: str, verified: bool) -> Competency:
+def practice(
+    profile: CompetencyProfile,
+    domain: str,
+    perspective: str,
+    action_id: str,
+    verified: bool,
+    evidence_ids: Optional[List[str]] = None,
+) -> Competency:
     if perspective not in DIRECT_ACTION_PERSPECTIVES:
         raise ValueError("Direct practice requires an embodied or supervisory world view")
-    require_prerequisite_evidence(profile, domain)
-    profile.get(domain).evidence.append(f"practice-perspective:{perspective}")
-    item = record_practice_evidence(profile, domain, action_id, [f"perspective:{perspective}"], verified, 1.0)
+    item = record_practice_evidence(profile, domain, action_id, list(evidence_ids or []), verified, 1.0)
     if verified:
         item.embodied = clamp(item.embodied + 0.04 * {"isometric": 0.55, "first_person": 1.0, "vr": 1.0}[perspective])
     return item

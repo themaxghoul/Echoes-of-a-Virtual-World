@@ -1,6 +1,6 @@
 import unittest
 
-from competency_engine import record_demonstrated_outcome
+from competency_engine import record_demonstrated_outcome, register_evidence
 
 from society_engine import (
     Agent,
@@ -54,6 +54,8 @@ class SocietyEngineTests(unittest.TestCase):
     def test_specialization_projects_demonstrated_evidence_into_scarcity_and_dependency(self):
         smith, grower = Agent("smith"), Agent("grower")
         for _ in range(8):
+            register_evidence(smith.competency_profile, "smith-work", "smith-work", "verified", "fixture")
+            register_evidence(grower.competency_profile, "grow-work", "grow-work", "verified", "fixture")
             record_demonstrated_outcome(smith.competency_profile, "metallurgy", "verified-action:smith-work:evidence:smith-work", 1.0)
             record_demonstrated_outcome(grower.competency_profile, "agriculture", "verified-action:grow-work:evidence:grow-work", 1.0)
         before = dict(smith.specialties)

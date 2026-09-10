@@ -5,7 +5,7 @@ from action_engine import (
     ActionDefinition, ActionRequirements, ActionWorld, ActorContext, COMMUNAL_MEAL_PREPARATION, MEASUREMENT_TOOL_CALIBRATION,
     MECHANICAL_PUMP_REPAIR, SharedActionEngine, material_custody_transfer, site_resource_extraction,
 )
-from competency_engine import DOMAINS, CompetencyProfile, record_demonstrated_outcome
+from competency_engine import DOMAINS, CompetencyProfile, record_demonstrated_outcome, register_evidence
 from scenarios.living_workshop import WaterInstallationSpec, water_installation_repair
 from society_engine import Agent, DecisionOption, decide_initiative, remember_perceived_event
 
@@ -29,7 +29,9 @@ def domain_actor(actor_id, kind, domain, competence=0.2, perceptions=None):
     profile = CompetencyProfile(actor_id)
     for prerequisite in DOMAINS[domain]["prerequisites"]:
         for evidence_number in range(3):
-            record_demonstrated_outcome(profile, prerequisite, f"verified-action:fixture-{actor_id}-{prerequisite}-{evidence_number}:evidence:fixture-{actor_id}-{prerequisite}-{evidence_number}", 1.0)
+            fixture_id = f"fixture-{actor_id}-{prerequisite}-{evidence_number}"
+            register_evidence(profile, fixture_id, fixture_id, "verified", "fixture")
+            record_demonstrated_outcome(profile, prerequisite, f"verified-action:{fixture_id}:evidence:{fixture_id}", 1.0)
     item = profile.get(domain)
     item.theory = item.observation = item.procedure = item.embodied = item.reproducibility = competence
     return ActorContext(actor_id, kind, "first_person", set(perceptions or {"heat_control", "instrumentation"}), 10, profile)
