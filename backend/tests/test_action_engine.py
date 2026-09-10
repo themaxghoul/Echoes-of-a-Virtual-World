@@ -6,6 +6,7 @@ from action_engine import (
     MECHANICAL_PUMP_REPAIR, SharedActionEngine, material_custody_transfer, site_resource_extraction,
 )
 from competency_engine import CompetencyProfile
+from scenarios.living_workshop import WaterInstallationSpec, water_installation_repair
 from society_engine import Agent, DecisionOption, decide_initiative, remember_perceived_event
 
 
@@ -26,7 +27,8 @@ def world_for(actor_id="worker"):
 
 def domain_actor(actor_id, kind, domain, competence=0.2, perceptions=None):
     profile = CompetencyProfile(actor_id)
-    item = profile.get(domain)
+    profile_domain = "mechanical_engineering" if domain == "mechanical_repair" else domain
+    item = profile.get(profile_domain)
     item.theory = item.observation = item.procedure = item.embodied = item.reproducibility = competence
     return ActorContext(actor_id, kind, "first_person", set(perceptions or {"heat_control", "instrumentation"}), 10, profile)
 
@@ -37,6 +39,56 @@ def meal_world(actor_id):
         tools={"cooking_pot": {"condition": 0.9, "reserved_by": None}, "food_thermometer": {"condition": 0.9, "reserved_by": None}},
         stations={"communal_hearth": {"reserved_by": None}},
     )
+
+
+def water_repair_world(actor_id, spec):
+    return ActionWorld(
+        inventories={actor_id: {}},
+        communal_inventory={spec.seal_material: spec.seal_material_amount, spec.fastener_material: spec.fastener_amount},
+        tools={
+            spec.wrench_tool: {"condition": 0.9, "reserved_by": None},
+            spec.calibrated_measure_tool: {"condition": 0.95, "reserved_by": None},
+        },
+        stations={spec.installation_site: {"reserved_by": None}},
+    )
+
+
+def water_measurement(flow_lpm=4.0, leak_rate_ml_min=240.0, contamination_index=0.36,
+                      pressure_kpa=85.0, seal_alignment_mm=2.4):
+    return {
+        "flow_lpm": flow_lpm,
+        "leak_rate_ml_min": leak_rate_ml_min,
+        "contamination_index": contamination_index,
+        "pressure_kpa": pressure_kpa,
+        "seal_alignment_mm": seal_alignment_mm,
+    }
+
+
+def run_water_repair_to_submission(worker, samples=None):
+    spec = WaterInstallationSpec()
+    engine = SharedActionEngine(water_repair_world(worker.actor_id, spec))
+    engine.register_actor(worker)
+    action = engine.propose(
+        f"{worker.actor_id}-water-repair", water_installation_repair(spec), worker,
+        "restore safe water service", spec.installation_site, spec.installation_site,
+        ["measured-low-flow", "measured-leak"],
+    )
+    engine.accept(action.action_id, worker)
+    engine.reserve(action.action_id, worker)
+    engine.execute(action.action_id, worker, [water_measurement()] if samples is None else samples)
+    reconciliation = action.material_reconciliation
+    return {
+        "engine": engine,
+        "action": action,
+        "before": sum(item["before"] for item in reconciliation.values()),
+        "consumed": sum(item["consumed"] for item in reconciliation.values()),
+        "after": sum(item["after"] for item in reconciliation.values()),
+        "installed": sum(item["installed"] for item in reconciliation.values()),
+        "waste": sum(item["waste"] for item in reconciliation.values()),
+        "recovered": sum(item["recovered"] for item in reconciliation.values()),
+        "duration_ticks": action.completed_tick - action.accepted_tick,
+        "state": action.state,
+    }
 
 
 def complete(engine, worker, verifier, action_id="calibrate-1", readings=None):
@@ -175,6 +227,69 @@ class SharedActionEngineTests(unittest.TestCase):
         self.assertEqual(outcomes[0], outcomes[1])
         self.assertEqual("commissioned", outcomes[0][0])
         self.assertEqual({"timber": 0, "containers": 0}, outcomes[0][3])
+
+    def test_water_repair_has_identical_human_and_ai_requirements(self):
+        outcomes = []
+        for kind in ("human", "ai"):
+            worker = domain_actor(
+                f"{kind}-worker", kind, "mechanical_repair",
+                perceptions={"spatial_layout", "instrumentation"},
+            )
+            outcomes.append(run_water_repair_to_submission(worker))
+        self.assertEqual(outcomes[0]["consumed"], outcomes[1]["consumed"])
+        self.assertEqual(outcomes[0]["duration_ticks"], outcomes[1]["duration_ticks"])
+        self.assertEqual(outcomes[0]["state"], "submitted")
+
+    def test_repair_material_reconciliation_balances(self):
+        record = run_water_repair_to_submission(
+            domain_actor("worker", "human", "mechanical_repair", perceptions={"spatial_layout", "instrumentation"})
+        )
+        self.assertEqual(record["before"] - record["consumed"], record["after"])
+        self.assertEqual(record["consumed"], record["installed"] + record["waste"] + record["recovered"])
+
+    def test_water_repair_without_pre_measurements_preserves_unused_materials(self):
+        record = run_water_repair_to_submission(
+            domain_actor("worker", "human", "mechanical_repair", perceptions={"spatial_layout", "instrumentation"}),
+            samples=[],
+        )
+        self.assertEqual("failed", record["state"])
+        self.assertEqual(record["before"], record["after"])
+        self.assertEqual(0, record["consumed"])
+        self.assertEqual({"seal_material": 2, "fasteners": 4}, record["engine"].world.communal_inventory)
+        self.assertTrue(record["action"].material_reconciliation)
+
+    def test_water_repair_records_lifecycle_ticks_and_is_deterministic_from_pre_measurements(self):
+        worker = domain_actor("worker", "human", "mechanical_repair", perceptions={"spatial_layout", "instrumentation"})
+        first = run_water_repair_to_submission(worker)
+        replay_worker = domain_actor("worker", "human", "mechanical_repair", perceptions={"spatial_layout", "instrumentation"})
+        second = run_water_repair_to_submission(replay_worker)
+        self.assertEqual(first["action"].accepted_tick, 0)
+        self.assertEqual(first["action"].completed_tick, first["action"].definition.requirements.duration_ticks)
+        self.assertEqual(first["action"].output, second["action"].output)
+
+    def test_water_repair_verification_uses_independent_post_repair_measurements(self):
+        worker = domain_actor("worker", "human", "mechanical_repair", perceptions={"spatial_layout", "instrumentation"})
+        record = run_water_repair_to_submission(worker)
+        inspector = domain_actor("inspector", "ai", "measurement", perceptions={"instrumentation"})
+        engine = record["engine"]
+        engine.register_actor(inspector)
+        engine.verify(record["action"].action_id, inspector, [water_measurement(flow_lpm=1.0, leak_rate_ml_min=300.0)])
+        self.assertEqual("rejected", record["action"].state)
+        self.assertEqual("rejected", record["action"].verification["state"])
+        self.assertIn("material_reconciliation", engine.ledger.events[-1].evidence[0])
+
+    def test_water_repair_verification_accepts_post_repair_measurements_at_tolerance(self):
+        worker = domain_actor("worker", "human", "mechanical_repair", perceptions={"spatial_layout", "instrumentation"})
+        record = run_water_repair_to_submission(worker)
+        inspector = domain_actor("inspector", "ai", "measurement", perceptions={"instrumentation"})
+        engine = record["engine"]
+        engine.register_actor(inspector)
+        engine.verify(record["action"].action_id, inspector, [water_measurement(
+            flow_lpm=12.0, leak_rate_ml_min=20.0, contamination_index=0.1,
+            pressure_kpa=160.0, seal_alignment_mm=0.5,
+        )])
+        self.assertEqual("verified", record["action"].state)
+        self.assertTrue(all(item["passed"] for item in record["action"].verification["tolerance_comparison"].values()))
 
     def test_actor_time_commitment_prevents_double_booking_and_cancel_releases_custody(self):
         worker = actor()
