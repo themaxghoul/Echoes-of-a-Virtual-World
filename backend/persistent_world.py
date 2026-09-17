@@ -559,8 +559,19 @@ def _project_living_workshop_outcome(
     workshop: Dict[str, Any], outcome: Dict[str, Any], actor_id: str
 ) -> Dict[str, Any]:
     evidence_ids = list(outcome.get("perceived_evidence_ids", []))
-    visible_ids, _ = _project_living_workshop_evidence(workshop, actor_id, evidence_ids)
-    if (evidence_ids and len(visible_ids) == len(evidence_ids)) or (
+    visible_ids, visible_symptoms = _project_living_workshop_evidence(workshop, actor_id, evidence_ids)
+    required_symptoms = set(outcome.get("symptoms", []))
+    reason = str(outcome.get("reason", "")).casefold()
+    required_symptoms.update(
+        symptom for symptom in _LIVING_WORKSHOP_SYMPTOM_VALUES
+        if symptom in reason or symptom.replace("_", " ") in reason
+    )
+    if evidence_ids and not required_symptoms:
+        measurements = {item.get("id"): item for item in workshop.get("measurements", [])}
+        for evidence_id in evidence_ids:
+            required_symptoms.update(measurements.get(evidence_id, {}).get("symptoms", []))
+    complete_channel_access = required_symptoms.issubset(visible_symptoms)
+    if (evidence_ids and len(visible_ids) == len(evidence_ids) and complete_channel_access) or (
         not evidence_ids and outcome.get("actor_id") == actor_id
     ):
         projected = copy.deepcopy(outcome)
@@ -3092,6 +3103,7 @@ def _process_living_workshop(state: Dict[str, Any], tick: int) -> list[Dict[str,
                 "tick": tick,
                 "kind": "demand_proposal_blocked",
                 "actor_id": proposer_id,
+                "symptoms": sorted(symptoms_by_actor.get(proposer_id, set())),
                 "perceived_evidence_ids": perceived_evidence_ids,
                 "reason": proposal.get("reason", "canonical proposal rejected"),
             })

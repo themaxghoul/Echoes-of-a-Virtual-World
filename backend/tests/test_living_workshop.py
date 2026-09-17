@@ -254,6 +254,41 @@ class LivingWorkshopTests(unittest.TestCase):
             self.assertNotIn(evidence_id, hidden_projection)
             self.assertTrue(hidden_event["payload"]["private"])
 
+    def test_mixed_measurement_does_not_authorize_outcome_from_an_unseen_channel(self):
+        state = self.workshop_state()
+        location = state["places"][state["installations"]["water"]["location"]]["location"]
+        local_untrained = self.add_player(state, "local-untrained", location)
+        local_untrained["needs"].update({"hydration": 100.0, "safety": 100.0})
+        state["installations"]["water"].update({"condition": 0.75, "contamination_index": 0.2})
+
+        _process_living_workshop(state, 1)
+
+        measurement = state["living_workshop"]["measurements"][0]
+        self.assertIn("declining_flow", measurement["symptoms"])
+        self.assertIn("unsafe_quality", measurement["symptoms"])
+        self.assertIn("unsafe_quality", measurement["perceived_symptoms"]["ada"])
+        self.assertEqual(["declining_flow"], measurement["perceived_symptoms"]["local-untrained"])
+        self.assertEqual("ada", state["living_workshop"]["demands"][0]["proposer_id"])
+        outcome = {
+            "tick": 1,
+            "kind": "inspection_follow_up",
+            "actor_id": "ada",
+            "symptoms": ["declining_flow", "unsafe_quality"],
+            "perceived_evidence_ids": [measurement["id"]],
+            "reason": "declining_flow is visible, but unsafe_quality requires instrument follow-up",
+        }
+        state["living_workshop"]["recent_outcomes"].append(outcome)
+        snapshot = {"world_id": "fixture", "revision": 1, "tick": 1, "state": state}
+
+        authorized = actor_world_view(snapshot, "ada")["state"]["living_workshop"]["recent_outcomes"][0]
+        untrained = actor_world_view(snapshot, "local-untrained")["state"]["living_workshop"]["recent_outcomes"][0]
+
+        self.assertEqual(outcome, authorized)
+        self.assertTrue(untrained["private"])
+        self.assertNotIn("symptoms", untrained)
+        self.assertNotIn("reason", untrained)
+        self.assertNotIn("perceived_evidence_ids", untrained)
+
     def test_same_coordinates_in_another_region_do_not_create_direct_perception(self):
         state = self.workshop_state()
         location = state["places"][state["installations"]["water"]["location"]]["location"]
