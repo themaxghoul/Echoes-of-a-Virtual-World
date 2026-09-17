@@ -135,14 +135,14 @@ def _require_ledger_evidence(
     if not action_history or action_history[0].state != "proposed":
         raise ValueError("ledger action does not belong to competency profile")
     for event in action_history:
+        if not isinstance(event.actor_id, str) or not event.actor_id.strip():
+            raise ValueError("evidence identity must be a nonblank string")
         if event.state in PERFORMER_STATES:
             if event.actor_id != profile.entity_id:
                 raise ValueError("ledger action history does not belong to competency profile")
         elif event.state in INDEPENDENT_REVIEW_STATES:
             # Validate every review, not only the selected evidence: commissioning
             # cannot make an earlier self-verification independent.
-            if not event.actor_id:
-                raise ValueError("evidence identity is required")
             if event.actor_id == profile.entity_id:
                 raise ValueError("evidence must be independently attributed")
         elif event.state not in ASSET_LIFECYCLE_STATES:

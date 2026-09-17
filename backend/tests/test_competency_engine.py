@@ -220,6 +220,62 @@ class CompetencyEngineTests(unittest.TestCase):
         self.assertGreater(recorded.demonstrated, 0)
         self.assertIn("evidence:proof-10", recorded.evidence)
 
+    def test_review_identity_must_be_nonblank_string_for_both_adapters(self):
+        work = [(state, "operator") for state in (
+            "proposed", "accepted", "reserved", "in_progress", "submitted",
+        )]
+        for identity in ("", " ", "\t\n", None, 42):
+            ledger = lifecycle_ledger(work + [
+                ("verified", identity), ("commissioned", "inspector"),
+            ])
+            self.assertTrue(ledger.verify())
+            for evidence_id in ("proof-6", "proof-7"):
+                for adapter in ("practice", "legacy"):
+                    with self.subTest(identity=identity, evidence_id=evidence_id, adapter=adapter):
+                        profile = CompetencyProfile("operator")
+                        with self.assertRaisesRegex(ValueError, "identity"):
+                            if adapter == "practice":
+                                record_practice_evidence(
+                                    profile, "measurement", "calibrate-1", [evidence_id],
+                                    True, 1.0, ledger=ledger,
+                                )
+                            else:
+                                record_demonstrated_outcome(
+                                    profile, "measurement",
+                                    f"verified-action:calibrate-1:evidence:{evidence_id}",
+                                    1.0, ledger=ledger,
+                                )
+                        self.assertEqual({}, profile.competencies)
+
+    def test_performer_and_asset_identities_must_be_nonblank_strings(self):
+        for identity in ("", " ", "\t\n", None, 42):
+            for role in ("performer", "asset"):
+                performer_id = identity if role == "performer" else "operator"
+                work = [(state, performer_id) for state in (
+                    "proposed", "accepted", "reserved", "in_progress", "submitted",
+                )]
+                ledger = lifecycle_ledger(work + [
+                    ("verified", "inspector"), ("commissioned", "inspector"),
+                    ("maintained", identity if role == "asset" else "maintainer"),
+                ])
+                self.assertTrue(ledger.verify())
+                for adapter in ("practice", "legacy"):
+                    with self.subTest(identity=identity, role=role, adapter=adapter):
+                        profile = CompetencyProfile(performer_id)
+                        with self.assertRaisesRegex(ValueError, "identity"):
+                            if adapter == "practice":
+                                record_practice_evidence(
+                                    profile, "measurement", "calibrate-1", ["proof-7"],
+                                    True, 1.0, ledger=ledger,
+                                )
+                            else:
+                                record_demonstrated_outcome(
+                                    profile, "measurement",
+                                    "verified-action:calibrate-1:evidence:proof-7", 1.0,
+                                    ledger=ledger,
+                                )
+                        self.assertEqual({}, profile.competencies)
+
     def test_self_authored_rework_review_cannot_certify_practice(self):
         work = [(state, "operator") for state in (
             "proposed", "accepted", "reserved", "in_progress", "submitted",
