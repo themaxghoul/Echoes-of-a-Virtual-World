@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from causal_ledger import CausalLedger
+
 
 DOMAINS = {
     "measurement": {"kind": "foundation", "prerequisites": []},
@@ -52,30 +54,15 @@ class Competency:
         return min(self.theory, self.observation, self.procedure, max(self.embodied, self.reproducibility))
 
 
-@dataclass(frozen=True)
-class EvidenceRecord:
-    action_id: str
-    state: str
-    identity: str
-
-
 @dataclass
 class CompetencyProfile:
     entity_id: str
     competencies: Dict[str, Competency] = field(default_factory=dict)
-    evidence_records: Dict[str, EvidenceRecord] = field(default_factory=dict)
 
     def get(self, domain: str) -> Competency:
         if domain not in DOMAINS:
             raise ValueError("Unknown competency domain")
         return self.competencies.setdefault(domain, Competency(domain))
-
-
-def register_evidence(profile: CompetencyProfile, evidence_id: str, action_id: str, state: str, identity: str) -> EvidenceRecord:
-    """Register a causal evidence record for later verified-practice resolution."""
-    record = EvidenceRecord(action_id=action_id, state=state, identity=identity)
-    profile.evidence_records[evidence_id] = record
-    return record
 
 
 def missing_prerequisite_evidence(profile: CompetencyProfile, domain: str) -> List[str]:
@@ -107,28 +94,60 @@ def _record_verified_outcome(profile: CompetencyProfile, domain: str, action_id:
     return item
 
 
-def record_demonstrated_outcome(profile: CompetencyProfile, domain: str, evidence_id: str, quality: float) -> Competency:
-    """Compatibility adapter; it resolves registered action evidence before recording."""
+def record_demonstrated_outcome(
+    profile: CompetencyProfile,
+    domain: str,
+    evidence_id: str,
+    quality: float,
+    *,
+    ledger: Optional[CausalLedger] = None,
+) -> Competency:
+    """Compatibility adapter; resolve authoritative causal evidence before recording."""
     parts = evidence_id.split(":")
     if len(parts) != 4 or parts[0] != "verified-action" or parts[2] != "evidence":
         raise ValueError("record_demonstrated_outcome requires verified action evidence")
-    _require_verified_evidence(profile, parts[1], [parts[3]])
+    _require_ledger_evidence(profile, parts[1], [parts[3]], ledger)
     return _record_verified_outcome(profile, domain, parts[1], quality)
 
 
-def _require_verified_evidence(profile: CompetencyProfile, action_id: str, evidence_ids: List[str]) -> None:
+def _require_ledger_evidence(
+    profile: CompetencyProfile,
+    action_id: str,
+    evidence_ids: List[str],
+    ledger: Optional[CausalLedger],
+) -> None:
     if not evidence_ids:
         raise ValueError("verified practice requires at least one resolved evidence record")
+    if ledger is None:
+        raise ValueError("verified practice requires an authoritative ledger")
+    if type(ledger) is not CausalLedger:
+        raise TypeError("verified practice requires an authoritative CausalLedger")
+    if not CausalLedger.verify(ledger):
+        raise ValueError("ledger integrity verification failed")
+    action_history = [event for event in ledger.events if event.action_id == action_id]
+    if not action_history or action_history[0].state != "proposed":
+        raise ValueError("ledger action does not belong to competency profile")
+    if any(
+        event.actor_id != profile.entity_id
+        for event in action_history
+        if event.state not in TERMINAL_EVIDENCE_STATES
+    ):
+        raise ValueError("ledger action history does not belong to competency profile")
     for evidence_id in evidence_ids:
-        record = profile.evidence_records.get(evidence_id)
-        if record is None:
+        if not isinstance(evidence_id, str) or not evidence_id.strip():
+            raise ValueError("evidence ID is required")
+        matches = [event for event in action_history if event.event_id == evidence_id]
+        if len(matches) != 1:
             raise ValueError(f"evidence {evidence_id} does not resolve")
-        if record.action_id != action_id:
+        event = matches[0]
+        if event.action_id != action_id:
             raise ValueError(f"evidence {evidence_id} does not match action {action_id}")
-        if record.state not in TERMINAL_EVIDENCE_STATES:
+        if event.state not in TERMINAL_EVIDENCE_STATES:
             raise ValueError("evidence must be verified or commissioned")
-        if not record.identity:
+        if not event.actor_id:
             raise ValueError("evidence identity is required")
+        if event.actor_id == profile.entity_id:
+            raise ValueError("evidence must be independently attributed")
 
 
 def record_practice_evidence(
@@ -138,12 +157,14 @@ def record_practice_evidence(
     evidence_ids: List[str],
     verified: bool,
     quality: float,
+    *,
+    ledger: Optional[CausalLedger] = None,
 ) -> Competency:
     """Record an embodied action without treating unverified claims as competence."""
-    evidence = [str(evidence_id) for evidence_id in evidence_ids]
+    evidence = list(evidence_ids)
     require_prerequisite_evidence(profile, domain)
     if verified:
-        _require_verified_evidence(profile, action_id, evidence)
+        _require_ledger_evidence(profile, action_id, evidence, ledger)
     item = profile.get(domain)
     item.evidence.extend(f"evidence:{evidence_id}" for evidence_id in evidence)
     if verified:
@@ -182,10 +203,12 @@ def practice(
     action_id: str,
     verified: bool,
     evidence_ids: Optional[List[str]] = None,
+    *,
+    ledger: Optional[CausalLedger] = None,
 ) -> Competency:
     if perspective not in DIRECT_ACTION_PERSPECTIVES:
         raise ValueError("Direct practice requires an embodied or supervisory world view")
-    item = record_practice_evidence(profile, domain, action_id, list(evidence_ids or []), verified, 1.0)
+    item = record_practice_evidence(profile, domain, action_id, list(evidence_ids or []), verified, 1.0, ledger=ledger)
     if verified:
         item.embodied = clamp(item.embodied + 0.04 * {"isometric": 0.55, "first_person": 1.0, "vr": 1.0}[perspective])
     return item

@@ -1,6 +1,7 @@
 import unittest
 
-from competency_engine import record_demonstrated_outcome, register_evidence
+from causal_ledger import CausalEvent, CausalLedger
+from competency_engine import record_demonstrated_outcome
 
 from society_engine import (
     Agent,
@@ -19,6 +20,21 @@ from society_engine import (
     teach,
     tick_survival,
 )
+
+
+def fixture_ledger(action_id, evidence_id, actor_id):
+    ledger = CausalLedger()
+    prior = None
+    for sequence, state in enumerate(("proposed", "accepted", "reserved", "in_progress", "submitted", "verified"), 1):
+        prior = ledger.append(CausalEvent(
+            event_id=evidence_id if state == "verified" else f"{action_id}:{state}",
+            sequence=sequence, tick=sequence, event_type="action",
+            actor_id="fixture-verifier" if state == "verified" else actor_id,
+            action_id=action_id, state=state, intent="fixture evidence", location="fixture",
+            parent_event_ids=[prior.event_id] if prior else [],
+            previous_hash=prior.event_hash if prior else "GENESIS",
+        ))
+    return ledger
 
 
 class SocietyEngineTests(unittest.TestCase):
@@ -54,10 +70,8 @@ class SocietyEngineTests(unittest.TestCase):
     def test_specialization_projects_demonstrated_evidence_into_scarcity_and_dependency(self):
         smith, grower = Agent("smith"), Agent("grower")
         for _ in range(8):
-            register_evidence(smith.competency_profile, "smith-work", "smith-work", "verified", "fixture")
-            register_evidence(grower.competency_profile, "grow-work", "grow-work", "verified", "fixture")
-            record_demonstrated_outcome(smith.competency_profile, "metallurgy", "verified-action:smith-work:evidence:smith-work", 1.0)
-            record_demonstrated_outcome(grower.competency_profile, "agriculture", "verified-action:grow-work:evidence:grow-work", 1.0)
+            record_demonstrated_outcome(smith.competency_profile, "metallurgy", "verified-action:smith-work:evidence:smith-work", 1.0, ledger=fixture_ledger("smith-work", "smith-work", "smith"))
+            record_demonstrated_outcome(grower.competency_profile, "agriculture", "verified-action:grow-work:evidence:grow-work", 1.0, ledger=fixture_ledger("grow-work", "grow-work", "grower"))
         before = dict(smith.specialties)
         self.assertEqual(specialize(smith, "metallurgy", 1.0), before["metallurgy"])
         self.assertEqual(smith.specialties, before)

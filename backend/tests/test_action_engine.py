@@ -5,7 +5,8 @@ from action_engine import (
     ActionDefinition, ActionRequirements, ActionWorld, ActorContext, COMMUNAL_MEAL_PREPARATION, MEASUREMENT_TOOL_CALIBRATION,
     MECHANICAL_PUMP_REPAIR, SharedActionEngine, material_custody_transfer, site_resource_extraction,
 )
-from competency_engine import DOMAINS, CompetencyProfile, record_demonstrated_outcome, register_evidence
+from causal_ledger import CausalEvent, CausalLedger
+from competency_engine import DOMAINS, CompetencyProfile, record_demonstrated_outcome
 from scenarios.living_workshop import WaterInstallationSpec, water_installation_repair
 from society_engine import Agent, DecisionOption, decide_initiative, remember_perceived_event
 
@@ -15,6 +16,21 @@ def actor(actor_id="worker", kind="human", perspective="first_person", competenc
     item = profile.get("measurement")
     item.theory = item.observation = item.procedure = item.embodied = item.reproducibility = competence
     return ActorContext(actor_id, kind, perspective, {"surface_detail", "instrumentation"}, 10, profile)
+
+
+def fixture_ledger(action_id, evidence_id, actor_id):
+    ledger = CausalLedger()
+    prior = None
+    for sequence, state in enumerate(("proposed", "accepted", "reserved", "in_progress", "submitted", "verified"), 1):
+        prior = ledger.append(CausalEvent(
+            event_id=evidence_id if state == "verified" else f"{action_id}:{state}",
+            sequence=sequence, tick=sequence, event_type="action",
+            actor_id="fixture-verifier" if state == "verified" else actor_id,
+            action_id=action_id, state=state, intent="fixture evidence", location="fixture",
+            parent_event_ids=[prior.event_id] if prior else [],
+            previous_hash=prior.event_hash if prior else "GENESIS",
+        ))
+    return ledger
 
 
 def world_for(actor_id="worker"):
@@ -30,8 +46,10 @@ def domain_actor(actor_id, kind, domain, competence=0.2, perceptions=None):
     for prerequisite in DOMAINS[domain]["prerequisites"]:
         for evidence_number in range(3):
             fixture_id = f"fixture-{actor_id}-{prerequisite}-{evidence_number}"
-            register_evidence(profile, fixture_id, fixture_id, "verified", "fixture")
-            record_demonstrated_outcome(profile, prerequisite, f"verified-action:{fixture_id}:evidence:{fixture_id}", 1.0)
+            record_demonstrated_outcome(
+                profile, prerequisite, f"verified-action:{fixture_id}:evidence:{fixture_id}", 1.0,
+                ledger=fixture_ledger(fixture_id, fixture_id, actor_id),
+            )
     item = profile.get(domain)
     item.theory = item.observation = item.procedure = item.embodied = item.reproducibility = competence
     return ActorContext(actor_id, kind, "first_person", set(perceptions or {"heat_control", "instrumentation"}), 10, profile)
