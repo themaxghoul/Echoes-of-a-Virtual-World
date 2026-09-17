@@ -12,6 +12,7 @@ from persistent_world import (
     migrate_state,
     _npc_reply,
     _process_proximity_speech,
+    _process_living_workshop,
     actor_event_view,
     actor_world_view,
 )
@@ -29,6 +30,36 @@ class PersistentWorldTests(unittest.TestCase):
     def tearDown(self):
         self.store.close()
         self.temp.cleanup()
+
+    def test_workshop_concurrent_acceptance_has_one_durable_assignee_and_no_spoofing(self):
+        snapshot = self.store.snapshot()
+        state = snapshot["state"]
+        location = state["places"][state["installations"]["water"]["location"]]["location"]
+        for actor_id in ("ada", "orin"):
+            state["npcs"][actor_id]["location"] = list(location)
+        state["installations"]["water"]["condition"] = 0.75
+        _process_living_workshop(state, 1)
+        order = state["living_workshop"]["work_orders"][0]
+        with self.store.transaction() as connection:
+            connection.execute("UPDATE worlds SET state_json=? WHERE world_id=?", (json.dumps(state), snapshot["world_id"]))
+        def accept(actor_id):
+            try:
+                return self.store.apply_action(snapshot["world_id"], f"accept-water-{actor_id}", actor_id, {"type": "respond_work_order", "work_order_id": order["id"], "accepted": True, "actor_id": "forged"}, now_ms=1_000_001)
+            finally:
+                self.store.close()
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(accept, ("ada", "orin")))
+        self.assertEqual(1, sum(result["result"]["accepted"] for result in results))
+        before_restart = self.store.snapshot()["state"]
+        persisted = before_restart["living_workshop"]["work_orders"][0]
+        self.assertIn(persisted["assigned_actor_id"], {"ada", "orin"})
+        self.assertEqual(1, len(persisted["negotiations"]))
+        self.store.close()
+        self.store = PersistentWorldStore(self.path)
+        self.assertEqual(persisted, self.store.snapshot()["state"]["living_workshop"]["work_orders"][0])
+        repeated = accept(persisted["assigned_actor_id"])
+        self.assertTrue(repeated["result"]["accepted"])
+        self.assertEqual(persisted, self.store.snapshot()["state"]["living_workshop"]["work_orders"][0])
 
     def test_observed_snapshot_records_token_derived_viewer_id(self):
         snapshot = self.store.snapshot()
