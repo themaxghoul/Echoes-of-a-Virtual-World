@@ -1027,6 +1027,37 @@ class PersistentWorldTests(unittest.TestCase):
         self.assertGreater(available["probability"], occupied["probability"])
         self.assertGreater(available["factors"].get("social_availability", 0), 0)
 
+    def test_directed_speech_always_receives_acknowledgement_when_elaboration_is_declined(self):
+        joined = self.store.apply_action(
+            self.world["world_id"], "join-acknowledgement", "speaker",
+            {"type": "join", "location": [9, 7]}, now_ms=1_000_000,
+        )
+        state = self.store.snapshot()["state"]
+        ada = state["npcs"]["ada"]
+        content = next(
+            candidate
+            for index in range(1000)
+            if not _directed_response_decision(
+                ada, "speaker", candidate := f"Please acknowledge this message {index}",
+                state["clock"]["tick"], 1,
+            )["elaborated"]
+        )
+
+        spoken = self.store.apply_action(
+            self.world["world_id"], "say-acknowledgement", "speaker",
+            {"type": "speak", "content": content, "target_id": "ada"},
+            expected_revision=joined["revision"], now_ms=1_000_001,
+        )
+
+        decision = spoken["result"]["response_decisions"][0]
+        self.assertTrue(decision["responded"])
+        self.assertFalse(decision["elaborated"])
+        self.assertEqual("acknowledgement", decision["response_mode"])
+        self.assertEqual(1, len(spoken["result"]["replies"]))
+        self.assertIn("heard", spoken["result"]["replies"][0]["content"].lower())
+        self.assertNotIn("directly influence", spoken["result"]["replies"][0]["content"].lower())
+        self.assertNotIn("respond or ignore", spoken["result"]["replies"][0]["content"].lower())
+
     def test_autonomous_conversation_rotates_social_attention_and_restores_belonging(self):
         state = self.store.snapshot()["state"]
         for index, npc in enumerate(state["npcs"].values()):

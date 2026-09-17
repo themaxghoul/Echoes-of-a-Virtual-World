@@ -984,7 +984,7 @@ ENGLISH_DIALOGUE_CUES = (
 
 
 def _directed_response_decision(npc: Dict[str, Any], actor_id: str, content: str, tick: int, ordinal: int) -> Dict[str, Any]:
-    """Make willingness stochastic in feel but deterministic for replay."""
+    """Guarantee social acknowledgement while keeping elaboration autonomous."""
     relationship = npc.get("relationships", {}).get(actor_id, {"trust": 0.5})
     trust = max(0.0, min(1.0, float(relationship.get("trust", 0.5))))
     needs = npc.get("needs", {})
@@ -1001,10 +1001,13 @@ def _directed_response_decision(npc: Dict[str, Any], actor_id: str, content: str
     roll = int.from_bytes(hashlib.sha256(seed).digest()[:8], "big") / float((1 << 64) - 1)
     lowered = content.casefold()
     language_support = "english_optimized" if any(cue in lowered for cue in ENGLISH_DIALOGUE_CUES) else "best_effort"
+    elaborated = roll < probability
     return {
         "resident_id": npc["id"], "eligible": True,
         "probability": round(probability, 4), "roll": round(roll, 4),
-        "responded": roll < probability, "language_support": language_support,
+        "responded": True, "elaborated": elaborated,
+        "response_mode": "elaborated" if elaborated else "acknowledgement",
+        "language_support": language_support,
         "factors": {
             "trust": round(trust, 4), "social_need": round(1.0 - belonging, 4),
             "energy": round(energy, 4), "physical_margin": round(physical_margin, 4),
@@ -4590,10 +4593,10 @@ def apply_player_action(state: Dict[str, Any], actor_id: str, action: Dict[str, 
         elif target:
             decision = _directed_response_decision(target, actor_id, content, state["clock"]["tick"], len(state["communications"]["messages"]))
             response_decisions.append(decision)
-            if decision["responded"]:
-                reply = {"id": str(uuid.uuid4()), "tick": state["clock"]["tick"], "speaker_id": target["id"], "speaker": target["name"], "content": _npc_reply(target, content, state, actor_id), "kind": "reply", "response_to": player_message["id"], "audible_to": [actor_id], "location": list(target["location"]), "decision": copy.deepcopy(decision)}
-                state["communications"]["messages"].append(reply)
-                replies.append(reply)
+            reply_content = _npc_reply(target, content, state, actor_id) if decision["elaborated"] else "I heard you. Give me a moment to consider what you said."
+            reply = {"id": str(uuid.uuid4()), "tick": state["clock"]["tick"], "speaker_id": target["id"], "speaker": target["name"], "content": reply_content, "kind": "reply", "response_to": player_message["id"], "audible_to": [actor_id], "location": list(target["location"]), "decision": copy.deepcopy(decision)}
+            state["communications"]["messages"].append(reply)
+            replies.append(reply)
         for npc in heard:
             npc["memories"].append({
                 "tick": state["clock"]["tick"],

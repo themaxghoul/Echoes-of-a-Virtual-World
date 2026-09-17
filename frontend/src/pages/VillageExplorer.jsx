@@ -325,8 +325,10 @@ const VillageExplorer = () => {
       replies.forEach((reply) => seenWorldMessageIds.current.add(reply.id));
       if (replies.length) {
         setMessages((current) => [...current, ...replies.map((reply) => ({ role: 'assistant', speaker: reply.speaker, content: reply.content, eventId: reply.id }))]);
+      } else if (selectedResidentId) {
+        setMessages((current) => [...current, { role: 'narrator', content: 'The directed message was recorded; its acknowledgement is still synchronizing from the persistent world.' }]);
       } else {
-        setMessages((current) => [...current, { role: 'narrator', content: 'Your words are audible, but no nearby resident answers at this moment.' }]);
+        setMessages((current) => [...current, { role: 'narrator', content: 'Your words join the local conversation. Nearby residents may respond when they choose.' }]);
       }
       setServerSnapshot(await fetchWorldSnapshot());
       
@@ -766,7 +768,7 @@ const VillageExplorer = () => {
                 <option value="">Speak generally</option>
                 {audibleResidents.map((resident) => <option key={resident.id} value={resident.id}>{resident.name}</option>)}
               </select>
-              <span>{selectedResidentId ? 'They may answer according to their own circumstances.' : 'Nearby residents may hear you; nobody is being directly addressed.'}</span>
+              <span>{selectedResidentId ? 'Acknowledgement expected; elaboration remains their choice.' : 'Nearby residents may hear you; nobody is being directly addressed.'}</span>
             </label>
             {/* Main Input Row */}
             <div className="flex gap-3">
