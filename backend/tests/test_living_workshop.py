@@ -1,8 +1,12 @@
 import json
 import unittest
 
+from causal_ledger import CausalEvent, CausalLedger
 from persistent_world import (
     _process_living_workshop,
+    actor_event_view,
+    actor_world_view,
+    apply_shared_action_command,
     founding_table_seed,
     migrate_state,
     reduce_world_tick,
@@ -14,30 +18,31 @@ def alpha34_fixture_state():
     state["schema"] = 31
     state.pop("installations", None)
     state.pop("living_workshop", None)
+    state["places"].pop("settlement-water-installation", None)
+    state["resources"].pop("seal_material", None)
+    state["resources"].pop("fasteners", None)
+    state["shared_actions"]["tools"].pop("calibrated_measure", None)
+    state["shared_actions"]["stations"].pop("settlement-water-installation", None)
     state["clock"].update({"tick": 73, "minute": 913})
     state["discoveries"]["ada"] = {
         "9,7": {"level": "surface", "discovered_tick": 7},
         "10,7": {"level": "surveyed", "discovered_tick": 12},
     }
     state["npcs"]["ada"]["inventory"]["seal_material"] = 3
-    state["shared_actions"]["ledger"].append({
-        "event_id": "alpha34-history:1:proposed",
-        "sequence": 1,
-        "tick": 72,
-        "event_type": "shared_action",
-        "actor_id": "ada",
-        "action_id": "alpha34-history",
-        "state": "proposed",
-        "intent": "preserve historical work",
-        "location": "measurement_lab",
-        "parent_event_ids": [],
-        "inputs": {},
-        "outputs": {},
-        "evidence": [{"kind": "historical_fixture"}],
-        "physical_effect": False,
-        "previous_hash": "GENESIS",
-        "event_hash": "fixture-hash",
-    })
+    ledger = CausalLedger()
+    event = ledger.append(CausalEvent(
+        event_id="alpha34-history:1:proposed",
+        sequence=1,
+        tick=72,
+        event_type="shared_action",
+        actor_id="ada",
+        action_id="alpha34-history",
+        state="proposed",
+        intent="preserve historical work",
+        location="measurement_lab",
+        evidence=[{"kind": "historical_fixture"}],
+    ))
+    state["shared_actions"]["ledger"].append(vars(event).copy())
     return state
 
 
@@ -56,8 +61,32 @@ class LivingWorkshopTests(unittest.TestCase):
             if record["definition"]["action_type"] == "repair_water_installation"
         ]
 
+    def add_player(self, state, player_id, location, *, region="settlement", measurement=0.0):
+        state["players"][player_id] = {
+            "id": player_id,
+            "name": player_id,
+            "location": list(location),
+            "current_region": region,
+            "needs": {"hydration": 65.0, "safety": 70.0},
+            "inventory": {},
+            "equipment": {},
+            "competency_records": ({
+                "measurement": {"demonstrated": measurement, "provenance": [f"fixture:{player_id}:measurement"]}
+            } if measurement else {}),
+            "relationships": {},
+            "memories": [],
+            "energy": 100.0,
+        }
+        return state["players"][player_id]
+
     def test_alpha34_save_migrates_living_workshop_without_losing_history(self):
         before = alpha34_fixture_state()
+        self.assertEqual(31, before["schema"])
+        self.assertNotIn("installations", before)
+        self.assertNotIn("living_workshop", before)
+        self.assertNotIn("settlement-water-installation", before["places"])
+        self.assertNotIn("calibrated_measure", before["shared_actions"]["tools"])
+        self.assertTrue(CausalLedger([CausalEvent(**event) for event in before["shared_actions"]["ledger"]]).verify())
         expected = {
             "clock": json.loads(json.dumps(before["clock"])),
             "discoveries": json.loads(json.dumps(before["discoveries"])),
@@ -144,6 +173,140 @@ class LivingWorkshopTests(unittest.TestCase):
         self.assertIn("declining_flow", demand["symptoms"])
         self.assertNotIn("unsafe_quality", demand["symptoms"])
         self.assertNotIn("low_pressure", demand["symptoms"])
+
+    def test_actor_views_redact_hidden_installation_state_and_unperceived_measurements(self):
+        state = self.workshop_state()
+        location = state["places"][state["installations"]["water"]["location"]]["location"]
+        state["npcs"]["ada"]["location"] = [0, 0]
+        self.add_player(state, "local-untrained", location)
+        self.add_player(state, "distant-observer", [0, 0])
+        state["installations"]["water"].update({"condition": 0.75, "contamination_index": 0.2})
+        events = _process_living_workshop(state, 1)
+        measurement_event = next(event for event in events if event["type"] == "living_workshop_measurement")
+        snapshot = {"world_id": "fixture", "revision": 1, "tick": 1, "state": state}
+
+        distant = actor_world_view(snapshot, "distant-observer")["state"]
+        local = actor_world_view(snapshot, "local-untrained")["state"]
+        distant_event = actor_event_view(measurement_event, snapshot, "distant-observer")
+        local_event = actor_event_view(measurement_event, snapshot, "local-untrained")
+
+        self.assertEqual({
+            "id": "settlement-water-installation",
+            "location": "settlement-water-installation",
+            "region": "settlement",
+        }, distant["installations"]["water"])
+        self.assertEqual([], distant["living_workshop"]["measurements"])
+        self.assertTrue(distant_event["payload"]["private"])
+        self.assertNotIn("values", distant_event["payload"])
+        self.assertEqual(["declining_flow"], local["living_workshop"]["measurements"][0]["symptoms"])
+        self.assertEqual({"flow_lpm"}, set(local["living_workshop"]["measurements"][0]["values"]))
+        self.assertNotIn("perceived_by", local["living_workshop"]["measurements"][0])
+        self.assertEqual(["declining_flow"], local_event["payload"]["symptoms"])
+        self.assertEqual({"flow_lpm"}, set(local_event["payload"]["values"]))
+
+    def test_same_coordinates_in_another_region_do_not_create_direct_perception(self):
+        state = self.workshop_state()
+        location = state["places"][state["installations"]["water"]["location"]]["location"]
+        state["npcs"]["ada"]["location"] = list(location)
+        state["npcs"]["ada"]["current_region"] = "east_ridge"
+        state["installations"]["water"]["condition"] = 0.75
+
+        _process_living_workshop(state, 1)
+
+        measurement = state["living_workshop"]["measurements"][0]
+        self.assertEqual([], measurement["perceived_by"])
+        self.assertEqual([], state["living_workshop"]["demands"])
+
+    def test_repair_command_rejects_unowned_or_forged_measurement_evidence(self):
+        state = self.workshop_state()
+        for npc in state["npcs"].values():
+            npc["location"] = [0, 0]
+        state["installations"]["water"]["condition"] = 0.75
+        _process_living_workshop(state, 1)
+        measurement = state["living_workshop"]["measurements"][0]
+        measurement["credible_recipients"] = ["orin"]
+        target_id = state["installations"]["water"]["id"]
+
+        forged = apply_shared_action_command(state, "orin", {
+            "operation": "propose",
+            "shared_action_id": "forged-water-repair",
+            "action_type": "repair_water_installation",
+            "target_id": target_id,
+            "observations": ["invented low flow"],
+            "perceived_evidence_ids": ["invented-measurement"],
+        })
+        unowned = apply_shared_action_command(state, "ada", {
+            "operation": "propose",
+            "shared_action_id": "unowned-water-repair",
+            "action_type": "repair_water_installation",
+            "target_id": target_id,
+            "observations": [measurement["id"]],
+            "perceived_evidence_ids": [measurement["id"]],
+        })
+
+        self.assertFalse(forged["accepted"])
+        self.assertIn("perceived measurement evidence", forged["reason"])
+        self.assertFalse(unowned["accepted"])
+        self.assertIn("perceived measurement evidence", unowned["reason"])
+        self.assertEqual([], self.repair_records(state))
+
+    def test_repair_command_normalizes_evidence_and_deduplicates_installation_across_ids(self):
+        state = self.workshop_state()
+        for npc in state["npcs"].values():
+            npc["location"] = [0, 0]
+        state["installations"]["water"]["condition"] = 0.75
+        _process_living_workshop(state, 1)
+        measurement = state["living_workshop"]["measurements"][0]
+        measurement["credible_recipients"] = ["ada", "orin"]
+        target_id = state["installations"]["water"]["id"]
+        first = apply_shared_action_command(state, "ada", {
+            "operation": "propose",
+            "shared_action_id": "first-water-repair",
+            "action_type": "repair_water_installation",
+            "target_id": target_id,
+            "observations": [measurement["id"]],
+            "perceived_evidence_ids": [measurement["id"]],
+        })
+        duplicate = apply_shared_action_command(state, "orin", {
+            "operation": "propose",
+            "shared_action_id": "second-water-repair",
+            "action_type": "repair_water_installation",
+            "target_id": target_id,
+            "observations": [measurement["id"]],
+            "perceived_evidence_ids": [measurement["id"]],
+        })
+
+        self.assertTrue(first["accepted"])
+        self.assertEqual([measurement["id"]], first["record"]["observations"])
+        self.assertFalse(duplicate["accepted"])
+        self.assertEqual("first-water-repair", duplicate["existing_action_id"])
+        self.assertEqual(1, len(self.repair_records(state)))
+
+    def test_processor_reconciles_a_precreated_canonical_repair_record(self):
+        state = self.workshop_state()
+        for npc in state["npcs"].values():
+            npc["location"] = [0, 0]
+        state["installations"]["water"]["condition"] = 0.75
+        _process_living_workshop(state, 1)
+        measurement = state["living_workshop"]["measurements"][0]
+        measurement["credible_recipients"] = ["ada"]
+        target_id = state["installations"]["water"]["id"]
+        precreated = apply_shared_action_command(state, "ada", {
+            "operation": "propose",
+            "shared_action_id": "precreated-water-repair",
+            "action_type": "repair_water_installation",
+            "target_id": target_id,
+            "observations": [measurement["id"]],
+            "perceived_evidence_ids": [measurement["id"]],
+        })
+        self.assertTrue(precreated["accepted"])
+
+        _process_living_workshop(state, 2)
+
+        self.assertEqual(1, len(state["living_workshop"]["demands"]))
+        self.assertEqual(1, len(state["living_workshop"]["work_orders"]))
+        self.assertEqual("precreated-water-repair", state["living_workshop"]["work_orders"][0]["canonical_action_id"])
+        self.assertEqual(1, len(self.repair_records(state)))
 
     def test_healthy_water_creates_measurement_but_no_demand(self):
         state = self.workshop_state()

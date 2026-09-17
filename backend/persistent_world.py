@@ -35,6 +35,7 @@ def _living_workshop_state_seed() -> Dict[str, Any]:
     scenario = living_workshop_seed()
     water = copy.deepcopy(scenario["installations"]["water"])
     water.update({
+        "region": "settlement",
         "condition": 1.0,
         "service_capacity_liters": 960.0,
         "remaining_service_liters": 960.0,
@@ -462,6 +463,37 @@ def _serialize_observed_tile(state: Dict[str, Any], key: str, evidence: Dict[str
     return observed
 
 
+_LIVING_WORKSHOP_SYMPTOM_VALUES = {
+    "declining_flow": "flow_lpm",
+    "excessive_leakage": "leak_rate_ml_min",
+    "unsafe_quality": "contamination_index",
+    "low_pressure": "pressure_kpa",
+    "seal_misalignment": "seal_alignment_mm",
+}
+
+
+def _project_living_workshop_measurement(measurement: Dict[str, Any], actor_id: str) -> Optional[Dict[str, Any]]:
+    """Project only the symptom channels this actor perceived or credibly received."""
+    credible = actor_id in measurement.get("credible_recipients", [])
+    directly_perceived = actor_id in measurement.get("perceived_by", [])
+    if not (credible or directly_perceived):
+        return None
+    symptoms = list(measurement.get("symptoms", [])) if credible else list(
+        measurement.get("perceived_symptoms", {}).get(actor_id, [])
+    )
+    value_fields = {_LIVING_WORKSHOP_SYMPTOM_VALUES[symptom] for symptom in symptoms if symptom in _LIVING_WORKSHOP_SYMPTOM_VALUES}
+    return {
+        "id": measurement.get("id"),
+        "tick": measurement.get("tick"),
+        "installation_id": measurement.get("installation_id"),
+        "symptoms": symptoms,
+        "values": {
+            name: value for name, value in measurement.get("values", {}).items()
+            if name in value_fields
+        },
+    }
+
+
 def actor_world_view(snapshot: Dict[str, Any], actor_id: str) -> Dict[str, Any]:
     """Return public state plus only the requesting actor's private material."""
     view = copy.deepcopy(snapshot)
@@ -494,6 +526,21 @@ def actor_world_view(snapshot: Dict[str, Any], actor_id: str) -> Dict[str, Any]:
             player.pop("memories", None)
             player.pop("competency_records", None)
     state.pop("operator_audit", None)
+    water = state.get("installations", {}).get("water")
+    if water:
+        state["installations"]["water"] = {
+            "id": water.get("id"),
+            "location": water.get("location"),
+            "region": water.get("region", "settlement"),
+        }
+    workshop = state.get("living_workshop")
+    if workshop:
+        workshop["measurements"] = [
+            projected for measurement in workshop.get("measurements", [])
+            if (projected := _project_living_workshop_measurement(measurement, actor_id)) is not None
+        ]
+        workshop.pop("water_repair_spec", None)
+        workshop.pop("last_processed_tick", None)
     shared = state.get("shared_actions", {})
     viewer = state.get("players", {}).get(actor_id, {})
     visible_action_ids = set()
@@ -529,6 +576,19 @@ def actor_event_view(event: Dict[str, Any], snapshot: Dict[str, Any], actor_id: 
         return visible
 
     state = snapshot.get("state", {})
+    if visible.get("type") == "living_workshop_measurement":
+        measurement_id = payload.get("id") if isinstance(payload, dict) else None
+        authoritative_measurement = next((
+            item for item in state.get("living_workshop", {}).get("measurements", [])
+            if item.get("id") == measurement_id
+        ), payload if isinstance(payload, dict) else {})
+        projected = _project_living_workshop_measurement(authoritative_measurement, actor_id)
+        visible["payload"] = projected or {
+            "private": True,
+            "measurement_id": measurement_id,
+            "installation_id": authoritative_measurement.get("installation_id"),
+        }
+        return visible
     shared = state.get("shared_actions", {})
     record = payload.get("record") if isinstance(payload, dict) else None
     action_id = None
@@ -2803,6 +2863,8 @@ def _process_living_workshop(state: Dict[str, Any], tick: int) -> list[Dict[str,
     instrument_symptoms = {"unsafe_quality", "low_pressure"}
     if location:
         for entity_id, entity in sorted({**state.get("npcs", {}), **state.get("players", {})}.items()):
+            if entity.get("current_region", "settlement") != water.get("region", "settlement"):
+                continue
             if _distance(entity.get("location", [-99, -99]), location) > 1:
                 continue
             actor_symptoms = set(symptoms).intersection(direct_symptoms)
@@ -2850,36 +2912,69 @@ def _process_living_workshop(state: Dict[str, Any], tick: int) -> list[Dict[str,
             evidence_by_actor.setdefault(recipient, []).append(evidence["id"])
             known_symptoms = evidence["symptoms"] if recipient in credible_recipients else evidence.get("perceived_symptoms", {}).get(recipient, evidence["symptoms"])
             symptoms_by_actor.setdefault(recipient, set()).update(known_symptoms)
+    terminal_states = {"refused", "cancelled", "failed", "needs_rework", "rejected", "retired", "lost", "commissioned"}
+    existing_repair = next((
+        item for item in state["shared_actions"]["records"].values()
+        if item.get("definition", {}).get("action_type") == "repair_water_installation"
+        and item.get("target_id") == water["id"]
+        and item.get("state") not in terminal_states
+    ), None)
+    if existing_repair and existing_repair.get("actor_id") not in evidence_by_actor:
+        existing_actor = existing_repair["actor_id"]
+        for evidence_id in existing_repair.get("perceived_evidence_ids", []):
+            evidence = next((item for item in workshop["measurements"] if item.get("id") == evidence_id), None)
+            if not evidence:
+                continue
+            credible = existing_actor in evidence.get("credible_recipients", [])
+            directly_perceived = existing_actor in evidence.get("perceived_by", [])
+            known_symptoms = evidence.get("symptoms", []) if credible else evidence.get("perceived_symptoms", {}).get(existing_actor, [])
+            if (credible or directly_perceived) and known_symptoms:
+                evidence_by_actor.setdefault(existing_actor, []).append(evidence_id)
+                symptoms_by_actor.setdefault(existing_actor, set()).update(known_symptoms)
     if not evidence_by_actor:
         return emitted
-    decisions = [
-        (_living_workshop_decision(state, actor_id, evidence_ids), actor_id)
-        for actor_id, evidence_ids in sorted(evidence_by_actor.items())
-    ]
-    decision, proposer_id = max(decisions, key=lambda item: (item[0]["total"], item[1]))
-    perceived_evidence_ids = list(evidence_by_actor[proposer_id])
-    demand_id = "living-workshop:water-service-demand"
-    action_id = "living-workshop:water-repair:1"
-    work_order_id = "living-workshop:water-work-order:1"
-    proposal = apply_shared_action_command(state, proposer_id, {
-        "operation": "propose",
-        "shared_action_id": action_id,
-        "action_type": "repair_water_installation",
-        "target_id": water["id"],
-        "intent": "restore measured water flow and quality",
-        "observations": perceived_evidence_ids,
-        "perceived_evidence_ids": perceived_evidence_ids,
-        "autonomous_origin": True,
-    })
-    if not proposal.get("accepted"):
-        workshop["recent_outcomes"].append({
-            "tick": tick,
-            "kind": "demand_proposal_blocked",
-            "actor_id": proposer_id,
+    if existing_repair:
+        proposer_id = existing_repair["actor_id"]
+        if proposer_id not in evidence_by_actor:
+            return emitted
+        perceived_evidence_ids = list(evidence_by_actor[proposer_id])
+        decision = _living_workshop_decision(state, proposer_id, perceived_evidence_ids)
+        action_id = existing_repair["id"]
+        action_record = existing_repair
+    else:
+        decisions = [
+            (_living_workshop_decision(state, actor_id, evidence_ids), actor_id)
+            for actor_id, evidence_ids in sorted(evidence_by_actor.items())
+        ]
+        decision, proposer_id = max(decisions, key=lambda item: (item[0]["total"], item[1]))
+        perceived_evidence_ids = list(evidence_by_actor[proposer_id])
+        action_sequence = 1
+        action_id = f"living-workshop:water-repair:{action_sequence}"
+        while action_id in state["shared_actions"]["records"]:
+            action_sequence += 1
+            action_id = f"living-workshop:water-repair:{action_sequence}"
+        proposal = apply_shared_action_command(state, proposer_id, {
+            "operation": "propose",
+            "shared_action_id": action_id,
+            "action_type": "repair_water_installation",
+            "target_id": water["id"],
+            "intent": "restore measured water flow and quality",
+            "observations": perceived_evidence_ids,
             "perceived_evidence_ids": perceived_evidence_ids,
-            "reason": proposal.get("reason", "canonical proposal rejected"),
+            "autonomous_origin": True,
         })
-        return emitted
+        if not proposal.get("accepted"):
+            workshop["recent_outcomes"].append({
+                "tick": tick,
+                "kind": "demand_proposal_blocked",
+                "actor_id": proposer_id,
+                "perceived_evidence_ids": perceived_evidence_ids,
+                "reason": proposal.get("reason", "canonical proposal rejected"),
+            })
+            return emitted
+        action_record = state["shared_actions"]["records"][action_id]
+    demand_id = "living-workshop:water-service-demand"
+    work_order_id = "living-workshop:water-work-order:1"
     demand = {
         "id": demand_id,
         "kind": "water_installation_service",
@@ -2900,7 +2995,7 @@ def _process_living_workshop(state: Dict[str, Any], tick: int) -> list[Dict[str,
         "candidate_ids": sorted(evidence_by_actor),
         "assigned_actor_id": None,
         "verifier_id": None,
-        "terms": {"provisional_cu_milli": proposal["record"]["definition"]["provisional_cu_milli"]},
+        "terms": {"provisional_cu_milli": action_record["definition"]["provisional_cu_milli"]},
         "decision_explanation": decision,
         "blockers": [],
         "canonical_action_id": action_id,
@@ -3282,6 +3377,36 @@ def apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: D
             if not target_id or target_id != water.get("id"):
                 return {"accepted": False, "reason": "water repair requires the durable Living Workshop installation"}
             location = str(water.get("location", ""))
+            perceived_evidence_ids = [
+                str(item)[:160] for item in command.get("perceived_evidence_ids", [])
+                if str(item).strip()
+            ][:16]
+            if not perceived_evidence_ids or observations != perceived_evidence_ids:
+                return {"accepted": False, "reason": "water repair observations must be perceived measurement evidence IDs"}
+            measurements = {
+                item.get("id"): item for item in state.get("living_workshop", {}).get("measurements", [])
+                if item.get("installation_id") == target_id
+            }
+            for evidence_id in perceived_evidence_ids:
+                evidence = measurements.get(evidence_id)
+                credible = evidence and actor_id in evidence.get("credible_recipients", [])
+                directly_perceived = evidence and actor_id in evidence.get("perceived_by", [])
+                known_symptoms = evidence.get("symptoms", []) if credible else evidence.get("perceived_symptoms", {}).get(actor_id, []) if evidence else []
+                if not evidence or not (credible or directly_perceived) or not known_symptoms:
+                    return {"accepted": False, "reason": f"water repair requires perceived measurement evidence: {evidence_id}"}
+            terminal_states = {"refused", "cancelled", "failed", "needs_rework", "rejected", "retired", "lost", "commissioned"}
+            existing_repair = next((
+                item for item in shared["records"].values()
+                if item.get("definition", {}).get("action_type") == "repair_water_installation"
+                and item.get("target_id") == target_id
+                and item.get("state") not in terminal_states
+            ), None)
+            if existing_repair:
+                return {
+                    "accepted": False,
+                    "reason": "an active water-installation repair already exists",
+                    "existing_action_id": existing_repair["id"],
+                }
         elif action_type == "deposit_material":
             target_id = str(command.get("resource", "")).strip()
             amount = command.get("amount")
@@ -3306,10 +3431,11 @@ def apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: D
             definition = _shared_action_definition_from(water_installation_repair(WaterInstallationSpec(**state["living_workshop"]["water_repair_spec"])))
         else:
             definition = _shared_action_definition(action_type)
-        perceived_evidence_ids = [
-            str(item)[:160] for item in command.get("perceived_evidence_ids", observations)
-            if str(item).strip()
-        ][:16]
+        if action_type != "repair_water_installation":
+            perceived_evidence_ids = [
+                str(item)[:160] for item in command.get("perceived_evidence_ids", observations)
+                if str(item).strip()
+            ][:16]
         record = {
             "id": shared_action_id, "definition": definition, "actor_id": actor_id,
             "actor_kind": "human" if actor_id in state["players"] else "ai",
