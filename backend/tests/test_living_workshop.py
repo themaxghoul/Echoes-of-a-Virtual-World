@@ -204,6 +204,56 @@ class LivingWorkshopTests(unittest.TestCase):
         self.assertEqual(["declining_flow"], local_event["payload"]["symptoms"])
         self.assertEqual({"flow_lpm"}, set(local_event["payload"]["values"]))
 
+    def test_derived_demand_views_follow_the_viewers_measurement_channels(self):
+        state = self.workshop_state()
+        location = state["places"][state["installations"]["water"]["location"]]["location"]
+        self.add_player(state, "local-untrained", location)
+        self.add_player(state, "distant-untrained", [0, 0])
+        state["installations"]["water"].update({"condition": 1.0, "contamination_index": 0.2})
+
+        events = _process_living_workshop(state, 1)
+        demand_event = next(event for event in events if event["type"] == "living_workshop_demand_created")
+        demand = state["living_workshop"]["demands"][0]
+        evidence_id = demand["perceived_evidence_ids"][0]
+        self.assertEqual("ada", demand["proposer_id"])
+        self.assertEqual(["unsafe_quality"], demand["symptoms"])
+        state["living_workshop"]["recent_outcomes"].append({
+            "tick": 1,
+            "kind": "inspection_follow_up",
+            "actor_id": "ada",
+            "perceived_evidence_ids": [evidence_id],
+            "reason": "unsafe_quality requires another instrument reading",
+        })
+        snapshot = {"world_id": "fixture", "revision": 1, "tick": 1, "state": state}
+
+        authorized_snapshot = actor_world_view(snapshot, "ada")
+        authorized_event = actor_event_view(demand_event, snapshot, "ada")
+        authorized_workshop = authorized_snapshot["state"]["living_workshop"]
+        authorized_projection = json.dumps({
+            "living_workshop": authorized_workshop,
+            "event": authorized_event,
+        })
+        self.assertEqual(["unsafe_quality"], authorized_workshop["demands"][0]["symptoms"])
+        self.assertEqual([evidence_id], authorized_workshop["work_orders"][0]["perceived_evidence_ids"])
+        self.assertEqual([evidence_id], authorized_workshop["recent_outcomes"][0]["perceived_evidence_ids"])
+        self.assertEqual([evidence_id], authorized_event["payload"]["perceived_evidence_ids"])
+        self.assertIn("unsafe_quality", authorized_projection)
+        self.assertIn(evidence_id, authorized_projection)
+        for viewer_id in ("local-untrained", "distant-untrained"):
+            hidden_snapshot = actor_world_view(snapshot, viewer_id)
+            hidden_event = actor_event_view(demand_event, snapshot, viewer_id)
+            hidden_workshop = hidden_snapshot["state"]["living_workshop"]
+            hidden_projection = json.dumps({
+                "living_workshop": hidden_workshop,
+                "event": hidden_event,
+            })
+            self.assertTrue(hidden_workshop["demands"][0]["private"])
+            self.assertTrue(hidden_workshop["work_orders"][0]["private"])
+            self.assertTrue(hidden_workshop["recent_outcomes"][0]["private"])
+            self.assertNotIn("unsafe_quality", hidden_projection)
+            self.assertNotIn(evidence_id, hidden_projection)
+            self.assertTrue(hidden_event["payload"]["private"])
+
     def test_same_coordinates_in_another_region_do_not_create_direct_perception(self):
         state = self.workshop_state()
         location = state["places"][state["installations"]["water"]["location"]]["location"]

@@ -494,6 +494,86 @@ def _project_living_workshop_measurement(measurement: Dict[str, Any], actor_id: 
     }
 
 
+def _project_living_workshop_evidence(
+    workshop: Dict[str, Any], actor_id: str, evidence_ids: list[str]
+) -> tuple[list[str], list[str]]:
+    """Return only referenced evidence and symptoms available through this actor's channels."""
+    measurements = {item.get("id"): item for item in workshop.get("measurements", [])}
+    visible_ids: list[str] = []
+    visible_symptoms: set[str] = set()
+    for evidence_id in evidence_ids:
+        measurement = measurements.get(evidence_id)
+        projected = _project_living_workshop_measurement(measurement, actor_id) if measurement else None
+        if projected is None:
+            continue
+        visible_ids.append(evidence_id)
+        visible_symptoms.update(projected.get("symptoms", []))
+    return visible_ids, sorted(visible_symptoms)
+
+
+def _project_living_workshop_demand(
+    workshop: Dict[str, Any], demand: Dict[str, Any], actor_id: str
+) -> Dict[str, Any]:
+    public_fields = {
+        "id", "kind", "installation_id", "created_tick", "status", "proposer_id",
+        "work_order_id", "canonical_action_id",
+    }
+    projected = {name: copy.deepcopy(value) for name, value in demand.items() if name in public_fields}
+    visible_ids, visible_symptoms = _project_living_workshop_evidence(
+        workshop, actor_id, list(demand.get("perceived_evidence_ids", []))
+    )
+    if visible_ids:
+        projected["symptoms"] = visible_symptoms
+        projected["perceived_evidence_ids"] = visible_ids
+    else:
+        projected["private"] = True
+    return projected
+
+
+def _project_living_workshop_order(
+    workshop: Dict[str, Any], order: Dict[str, Any], actor_id: str
+) -> Dict[str, Any]:
+    public_fields = {
+        "id", "status", "created_tick", "proposer_id", "assigned_actor_id", "verifier_id",
+        "terms", "blockers", "canonical_action_id",
+    }
+    projected = {name: copy.deepcopy(value) for name, value in order.items() if name in public_fields}
+    visible_ids, _ = _project_living_workshop_evidence(
+        workshop, actor_id, list(order.get("perceived_evidence_ids", []))
+    )
+    if visible_ids:
+        projected["perceived_evidence_ids"] = visible_ids
+        if len(visible_ids) == len(order.get("perceived_evidence_ids", [])):
+            projected["candidate_ids"] = copy.deepcopy(order.get("candidate_ids", []))
+            explanation = copy.deepcopy(order.get("decision_explanation", {}))
+            explanation["perceived_evidence_ids"] = visible_ids
+            projected["decision_explanation"] = explanation
+        else:
+            projected["private"] = True
+    else:
+        projected["private"] = True
+    return projected
+
+
+def _project_living_workshop_outcome(
+    workshop: Dict[str, Any], outcome: Dict[str, Any], actor_id: str
+) -> Dict[str, Any]:
+    evidence_ids = list(outcome.get("perceived_evidence_ids", []))
+    visible_ids, _ = _project_living_workshop_evidence(workshop, actor_id, evidence_ids)
+    if (evidence_ids and len(visible_ids) == len(evidence_ids)) or (
+        not evidence_ids and outcome.get("actor_id") == actor_id
+    ):
+        projected = copy.deepcopy(outcome)
+        if evidence_ids:
+            projected["perceived_evidence_ids"] = visible_ids
+        return projected
+    return {
+        name: copy.deepcopy(value)
+        for name, value in outcome.items()
+        if name in {"tick", "kind", "actor_id"}
+    } | {"private": True}
+
+
 def actor_world_view(snapshot: Dict[str, Any], actor_id: str) -> Dict[str, Any]:
     """Return public state plus only the requesting actor's private material."""
     view = copy.deepcopy(snapshot)
@@ -535,9 +615,22 @@ def actor_world_view(snapshot: Dict[str, Any], actor_id: str) -> Dict[str, Any]:
         }
     workshop = state.get("living_workshop")
     if workshop:
+        authoritative_workshop = snapshot.get("state", {}).get("living_workshop", {})
         workshop["measurements"] = [
-            projected for measurement in workshop.get("measurements", [])
+            projected for measurement in authoritative_workshop.get("measurements", [])
             if (projected := _project_living_workshop_measurement(measurement, actor_id)) is not None
+        ]
+        workshop["demands"] = [
+            _project_living_workshop_demand(authoritative_workshop, demand, actor_id)
+            for demand in authoritative_workshop.get("demands", [])
+        ]
+        workshop["work_orders"] = [
+            _project_living_workshop_order(authoritative_workshop, order, actor_id)
+            for order in authoritative_workshop.get("work_orders", [])
+        ]
+        workshop["recent_outcomes"] = [
+            _project_living_workshop_outcome(authoritative_workshop, outcome, actor_id)
+            for outcome in authoritative_workshop.get("recent_outcomes", [])
         ]
         workshop.pop("water_repair_spec", None)
         workshop.pop("last_processed_tick", None)
@@ -588,6 +681,37 @@ def actor_event_view(event: Dict[str, Any], snapshot: Dict[str, Any], actor_id: 
             "measurement_id": measurement_id,
             "installation_id": authoritative_measurement.get("installation_id"),
         }
+        return visible
+    if visible.get("type") == "living_workshop_demand_created":
+        workshop = state.get("living_workshop", {})
+        demand_id = payload.get("demand_id") if isinstance(payload, dict) else None
+        work_order_id = payload.get("work_order_id") if isinstance(payload, dict) else None
+        authoritative_demand = next((
+            item for item in workshop.get("demands", []) if item.get("id") == demand_id
+        ), {})
+        authoritative_order = next((
+            item for item in workshop.get("work_orders", []) if item.get("id") == work_order_id
+        ), {})
+        evidence_ids = list(authoritative_demand.get(
+            "perceived_evidence_ids", authoritative_order.get("perceived_evidence_ids", [])
+        ))
+        visible_ids, _ = _project_living_workshop_evidence(workshop, actor_id, evidence_ids)
+        if visible_ids:
+            visible["payload"]["perceived_evidence_ids"] = visible_ids
+            if len(visible_ids) == len(evidence_ids):
+                explanation = copy.deepcopy(authoritative_order.get("decision_explanation", {}))
+                explanation["perceived_evidence_ids"] = visible_ids
+                visible["payload"]["decision_explanation"] = explanation
+            else:
+                visible["payload"].pop("decision_explanation", None)
+                visible["payload"]["private"] = True
+        else:
+            visible["payload"] = {
+                "private": True,
+                "demand_id": demand_id,
+                "work_order_id": work_order_id,
+                "canonical_action_id": payload.get("canonical_action_id") if isinstance(payload, dict) else None,
+            }
         return visible
     shared = state.get("shared_actions", {})
     record = payload.get("record") if isinstance(payload, dict) else None
