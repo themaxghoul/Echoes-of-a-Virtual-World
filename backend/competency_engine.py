@@ -31,6 +31,13 @@ DOMAINS = {
 
 DIRECT_ACTION_PERSPECTIVES = {"isometric", "first_person", "vr"}
 TERMINAL_EVIDENCE_STATES = {"verified", "commissioned"}
+# Roles are explicit: later asset lifecycle authors need not be the performer.
+PERFORMER_STATES = {
+    "proposed", "awaiting_acceptances", "accepted", "refused", "reserved",
+    "cancelled", "in_progress", "interrupted", "failed", "submitted",
+}
+INDEPENDENT_REVIEW_STATES = {"verified", "needs_rework", "rejected", "commissioned"}
+ASSET_LIFECYCLE_STATES = {"maintained", "degraded", "retired", "lost"}
 
 
 def clamp(value: float) -> float:
@@ -127,12 +134,19 @@ def _require_ledger_evidence(
     action_history = [event for event in ledger.events if event.action_id == action_id]
     if not action_history or action_history[0].state != "proposed":
         raise ValueError("ledger action does not belong to competency profile")
-    if any(
-        event.actor_id != profile.entity_id
-        for event in action_history
-        if event.state not in TERMINAL_EVIDENCE_STATES
-    ):
-        raise ValueError("ledger action history does not belong to competency profile")
+    for event in action_history:
+        if event.state in PERFORMER_STATES:
+            if event.actor_id != profile.entity_id:
+                raise ValueError("ledger action history does not belong to competency profile")
+        elif event.state in INDEPENDENT_REVIEW_STATES:
+            # Validate every review, not only the selected evidence: commissioning
+            # cannot make an earlier self-verification independent.
+            if not event.actor_id:
+                raise ValueError("evidence identity is required")
+            if event.actor_id == profile.entity_id:
+                raise ValueError("evidence must be independently attributed")
+        elif event.state not in ASSET_LIFECYCLE_STATES:
+            raise ValueError("unknown action lifecycle role")
     for evidence_id in evidence_ids:
         if not isinstance(evidence_id, str) or not evidence_id.strip():
             raise ValueError("evidence ID is required")
@@ -144,10 +158,6 @@ def _require_ledger_evidence(
             raise ValueError(f"evidence {evidence_id} does not match action {action_id}")
         if event.state not in TERMINAL_EVIDENCE_STATES:
             raise ValueError("evidence must be verified or commissioned")
-        if not event.actor_id:
-            raise ValueError("evidence identity is required")
-        if event.actor_id == profile.entity_id:
-            raise ValueError("evidence must be independently attributed")
 
 
 def record_practice_evidence(

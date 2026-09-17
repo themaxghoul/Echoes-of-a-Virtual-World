@@ -35,6 +35,20 @@ def verified_ledger(action_id, evidence_id, actor_id="operator", verifier_id="in
     return ledger
 
 
+def lifecycle_ledger(states_and_actors):
+    ledger = CausalLedger()
+    prior = None
+    for sequence, (state, actor_id) in enumerate(states_and_actors, 1):
+        prior = ledger.append(CausalEvent(
+            event_id=f"proof-{sequence}", sequence=sequence, tick=sequence,
+            event_type="action", actor_id=actor_id, action_id="calibrate-1",
+            state=state, intent="calibrate gauge", location="workbench",
+            parent_event_ids=[prior.event_id] if prior else [],
+            previous_hash=prior.event_hash if prior else "GENESIS",
+        ))
+    return ledger
+
+
 class CompetencyEngineTests(unittest.TestCase):
     def test_study_builds_theory_without_embodied_skill(self):
         item = study(CompetencyProfile("reader"), "physics", "book-1", 1.0)
@@ -165,6 +179,85 @@ class CompetencyEngineTests(unittest.TestCase):
         )
         self.assertGreater(recorded.demonstrated, 0)
         self.assertIn("evidence:commissioned-proof", recorded.evidence)
+
+    def test_independent_commission_cannot_certify_self_verified_work(self):
+        work = [(state, "operator") for state in (
+            "proposed", "accepted", "reserved", "in_progress", "submitted", "verified",
+        )]
+        ledger = lifecycle_ledger(work + [("commissioned", "inspector")])
+        self.assertTrue(ledger.verify())
+        for adapter in ("practice", "legacy"):
+            with self.subTest(adapter=adapter):
+                profile = CompetencyProfile("operator")
+                with self.assertRaisesRegex(ValueError, "independently attributed"):
+                    if adapter == "practice":
+                        record_practice_evidence(
+                            profile, "measurement", "calibrate-1", ["proof-7"],
+                            True, 1.0, ledger=ledger,
+                        )
+                    else:
+                        record_demonstrated_outcome(
+                            profile, "measurement",
+                            "verified-action:calibrate-1:evidence:proof-7", 1.0,
+                            ledger=ledger,
+                        )
+                self.assertEqual({}, profile.competencies)
+
+    def test_independent_rework_review_allows_subsequently_verified_practice(self):
+        work = [(state, "operator") for state in (
+            "proposed", "accepted", "reserved", "in_progress", "submitted",
+        )]
+        ledger = lifecycle_ledger(work + [
+            ("needs_rework", "first-inspector"), ("reserved", "operator"),
+            ("in_progress", "operator"), ("submitted", "operator"),
+            ("verified", "second-inspector"),
+        ])
+        self.assertTrue(ledger.verify())
+        recorded = record_practice_evidence(
+            CompetencyProfile("operator"), "measurement", "calibrate-1",
+            ["proof-10"], True, 1.0, ledger=ledger,
+        )
+        self.assertGreater(recorded.demonstrated, 0)
+        self.assertIn("evidence:proof-10", recorded.evidence)
+
+    def test_self_authored_rework_review_cannot_certify_practice(self):
+        work = [(state, "operator") for state in (
+            "proposed", "accepted", "reserved", "in_progress", "submitted",
+            "needs_rework", "reserved", "in_progress", "submitted",
+        )]
+        ledger = lifecycle_ledger(work + [("verified", "inspector")])
+        self.assertTrue(ledger.verify())
+        profile = CompetencyProfile("operator")
+        with self.assertRaisesRegex(ValueError, "independently attributed"):
+            record_practice_evidence(
+                profile, "measurement", "calibrate-1", ["proof-10"],
+                True, 1.0, ledger=ledger,
+            )
+        self.assertEqual({}, profile.competencies)
+
+    def test_later_lifecycle_authors_do_not_change_original_practice_ownership(self):
+        work = [(state, "operator") for state in (
+            "proposed", "accepted", "reserved", "in_progress", "submitted",
+        )]
+        verified_work = work + [("verified", "inspector"), ("commissioned", "inspector")]
+        for later_states in (
+            [("maintained", "maintainer")],
+            [("degraded", "observer")],
+            [("degraded", "observer"), ("maintained", "maintainer"),
+             ("commissioned", "inspector")],
+            [("retired", "custodian")],
+            [("lost", "observer")],
+        ):
+            for evidence_id in ("proof-6", "proof-7"):
+                with self.subTest(later_states=later_states, evidence_id=evidence_id):
+                    ledger = lifecycle_ledger(verified_work + later_states)
+                    self.assertTrue(ledger.verify())
+                    recorded = record_practice_evidence(
+                        CompetencyProfile("operator"), "measurement", "calibrate-1",
+                        [evidence_id], True, 1.0, ledger=ledger,
+                    )
+                    self.assertGreater(recorded.demonstrated, 0)
+                    self.assertIn(f"evidence:{evidence_id}", recorded.evidence)
 
     def test_unverified_practice_cannot_increase_demonstrated_competence(self):
         profile = CompetencyProfile("operator")
