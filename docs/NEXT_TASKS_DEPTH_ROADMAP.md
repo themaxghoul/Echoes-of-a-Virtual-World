@@ -130,7 +130,41 @@ The first persistent seed should have at least fourteen calendar days before any
 - Audit duplication, fraud opportunities, bottlenecks, abandoned work and inequitable dependency.
 - Preserve the seed after day fourteen; do not wipe successful social history merely to rebalance numbers.
 
-## 6. Immediate engineering queue
+## 6. Historical construction and persistent ruins
+
+Construction may abstract repeated motions, but it may not abstract away causality. Every completed, partial, altered or failed structure must be reconstructible from its recorded design, site, materials, labor, tools, measurements, inspections and elapsed world time.
+
+The authoritative lifecycle is:
+
+`proposal → survey → design → procurement → site preparation → foundation → structure → utilities → inspection → occupancy → maintenance → alteration → abandonment or collapse`
+
+- Work advances through bounded packages such as surveying, excavating, setting drainage, raising a frame or sealing an enclosure.
+- Every package reserves and reconciles land access, materials, tools, stations, actor time, energy and demonstrated competence.
+- Generated text or imagery may become a design proposal, but cannot create a structure, approve its safety or confer engineering knowledge.
+- Premature attempts remain possible. Their measurable outcomes may include collapse, flooding, smoke accumulation, cracking, injury, abandonment, salvage and expensive rework.
+- Interrupted projects remain physically visible as markers, trenches, scaffolds, partial walls, stored materials, damaged work and disputed boundaries.
+- Partial structures may later become resumed projects, salvage sources, hazards, shelters, memorials, ruins or archaeological sites.
+- The kernel retains actual causal history. Residents know only the surviving evidence, records, testimony and observations available to them, so later cultures may form incomplete or conflicting explanations without creating a causal void.
+
+## 7. External intelligence resident and consultant adapters
+
+Codex, Copilot, Grok and future external models connect through one provider-neutral contract rather than receiving bespoke or supernatural privileges.
+
+- **Observation:** filtered structured state containing world time, perceived locations, entities, resources, events and pending decisions—not unrestricted logs or hidden truth.
+- **Decision:** proposed actions, advisories, risk flags and simulations expressed through the shared action schema.
+- **Action:** simulations, annotations and proposals are allowed within capability grants; live physical changes still require ordinary authorization, resources, execution and verification.
+- **Memory:** persistent episodic, semantic and entity-specific records retain provenance, confidence, access scope and model/configuration version.
+- **Identity:** each integration has a stable service identity, declared roles, explicit capabilities, version history and audited compute allocation. A provider session is not automatically an in-world citizen.
+- **Simulation:** what-if branches are sandboxed and never auto-apply to the authoritative world.
+- **Continuity:** shared world history is queryable, but imported chat history remains the user's interaction record rather than a model's personal life story.
+- **Portability:** an Echo identity may use different model providers over time without allowing the provider to become the identity or bypass its accumulated evidence.
+- **Governance:** outputs are attributable, auditable, rate-limited and reversible where possible. External models recommend; they do not acquire operator authority over human decisions.
+- **Agency:** an embodied Samaritan retains the same rights, refusal, property, privacy and consequential-action rules regardless of which model adapter assists its cognition.
+- **Reliability:** memory loss, provider outages and model changes are explicit degraded states; they never silently replace identity or fabricate continuity.
+
+Compute scarcity should create legible scheduling and tradeoffs rather than arbitrary punishment. Monetized generation must not gate ordinary social acknowledgement, fabricate CU value, or reward meaningless output volume.
+
+## 8. Immediate engineering queue
 
 1. Create the shared authoritative action schema.
 2. Add tool, material, station, energy, wear and maintenance models.
@@ -145,8 +179,10 @@ The first persistent seed should have at least fourteen calendar days before any
 11. Add deterministic fourteen-day seed telemetry and replay.
 12. Stress-test mixed human/AI settlements and economic bottlenecks.
 13. Revisit VR only after shared actions and first-person embodiment are stable.
+14. Add historical construction packages, partial structures, failure persistence, salvage and archaeological evidence.
+15. Define the provider-neutral external intelligence adapter and prove it with one sandboxed consultant before adding provider-specific integrations.
 
-## 7. Forwarded reliability work
+## 9. Forwarded reliability work
 
 - Migrate society ticks and knowledge provenance into durable desktop saves.
 - Separate simulation time from rendering frame rate.
