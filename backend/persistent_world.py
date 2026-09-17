@@ -16,6 +16,9 @@ from typing import Any, Dict, Iterable, Optional
 
 from action_engine import COMMUNAL_MEAL_PREPARATION, MEASUREMENT_TOOL_CALIBRATION, MECHANICAL_PUMP_REPAIR, material_custody_transfer, site_resource_extraction
 from causal_ledger import CausalEvent, CausalLedger
+from competency_engine import Competency, record_practice_evidence
+from scenarios.living_workshop import WaterInstallationSpec, living_workshop_seed, water_installation_repair
+from society_engine import Agent, DecisionContext, DecisionOption, score_option
 from terrain_engine import FrontierGrid
 
 
@@ -23,8 +26,37 @@ NPC_MEMORY_LIMIT = 250
 SOCIAL_MEMORY_KINDS = {"social_exchange"}
 
 
-SCHEMA_VERSION = 31
+SCHEMA_VERSION = 32
 DEFAULT_WORLD_ID = "founders-settlement"
+
+
+def _living_workshop_state_seed() -> Dict[str, Any]:
+    """Build fresh durable state from the scenario catalog without hiding a diagnosis."""
+    scenario = living_workshop_seed()
+    water = copy.deepcopy(scenario["installations"]["water"])
+    water.update({
+        "condition": 1.0,
+        "service_capacity_liters": 960.0,
+        "remaining_service_liters": 960.0,
+        "service_draw_liters_per_tick": 1.0,
+        "deterioration_per_tick": 0.00025,
+        "contamination_index": 0.02,
+        "measurement_history": [],
+        "maintenance_interval_ticks": 96,
+        "last_maintenance_tick": 0,
+        "next_maintenance_tick": 96,
+    })
+    return {
+        "installations": {"water": water},
+        "living_workshop": {
+            "demands": [],
+            "work_orders": [],
+            "measurements": [],
+            "recent_outcomes": [],
+            "water_repair_spec": copy.deepcopy(scenario["water_repair_spec"]),
+            "last_processed_tick": None,
+        },
+    }
 
 
 def founding_table_seed(now_ms: int) -> Dict[str, Any]:
@@ -69,6 +101,7 @@ def founding_table_seed(now_ms: int) -> Dict[str, Any]:
     npcs["cal"]["equipment"]["axe"] = {"condition": 0.9, "reserved_by": None, "provenance": "founding-tool-allocation:axe-1"}
     npcs["orin"]["equipment"]["pick"] = {"condition": 0.9, "reserved_by": None, "provenance": "founding-tool-allocation:pick-1"}
     npcs["nyra"]["equipment"]["farm_tools"] = {"condition": 0.9, "reserved_by": None, "provenance": "founding-tool-allocation:farm-tools-1"}
+    workshop = _living_workshop_state_seed()
     return {
         "schema": SCHEMA_VERSION,
         "name": "Founders' Settlement",
@@ -88,9 +121,10 @@ def founding_table_seed(now_ms: int) -> Dict[str, Any]:
             "clinic": {"location": [7, 5], "status": "temporary"},
             "warehouse": {"location": [5, 11], "status": "temporary"},
             "meeting_hall": {"location": [8, 5], "status": "available"},
+            "settlement-water-installation": {"location": [14, 10], "status": "operational"},
             "unclaimed_land": {"bounds": [0, 0, 18, 18], "homestead_claims": []},
         },
-        "resources": {"raw_food": 84, "safe_meals": 0, "water": 60, "tested_water": 0, "fuel": 32, "timber": 30, "stone": 24, "containers": 18, "tools": 12, "reference_strip": 4},
+        "resources": {"raw_food": 84, "safe_meals": 0, "water": 60, "tested_water": 0, "fuel": 32, "timber": 30, "stone": 24, "containers": 18, "tools": 12, "reference_strip": 4, "seal_material": 8, "fasteners": 16},
         "resource_sites": {
             "tool-counter": {"id": "tool-counter", "type": "store", "region": "settlement", "location": [7, 9], "name": "Dev's tool counter", "clerk": "dev", "stock": {"axe": 3, "pick": 2, "shovel": 2, "bucket": 4, "wrench": 2, "farm_tools": 2, "seed": 16, "feed": 12}, "history": []},
             "well-site": {"id": "well-site", "type": "well", "region": "settlement", "location": [11, 13], "name": "Shallow well site", "progress": 0, "stock": 0, "capacity": 24, "history": []},
@@ -138,8 +172,8 @@ def founding_table_seed(now_ms: int) -> Dict[str, Any]:
         "technology": {"tool_catalog": {}, "validated_designs": []},
         "shared_actions": {
             "records": {}, "ledger": [], "demands": [],
-            "tools": {"marked_measure": {"condition": 0.6, "reserved_by": None}, "cooking_pot": {"condition": 0.9, "reserved_by": None}, "food_thermometer": {"condition": 0.9, "reserved_by": None}, "maintenance_wrench": {"condition": 0.9, "reserved_by": None}},
-            "stations": {"measurement_bench": {"place": "measurement_lab", "reserved_by": None}, "communal_hearth": {"place": "communal_kitchen", "reserved_by": None}, "instruction_table": {"place": "meeting_hall", "reserved_by": None}},
+            "tools": {"marked_measure": {"condition": 0.6, "reserved_by": None}, "calibrated_measure": {"condition": 0.9, "reserved_by": None}, "cooking_pot": {"condition": 0.9, "reserved_by": None}, "food_thermometer": {"condition": 0.9, "reserved_by": None}, "maintenance_wrench": {"condition": 0.9, "reserved_by": None}},
+            "stations": {"measurement_bench": {"place": "measurement_lab", "reserved_by": None}, "communal_hearth": {"place": "communal_kitchen", "reserved_by": None}, "instruction_table": {"place": "meeting_hall", "reserved_by": None}, "settlement-water-installation": {"place": "settlement-water-installation", "reserved_by": None}},
             "reservations": {}, "actor_commitments": {}, "unverified_outputs": {}, "commissioned_outputs": {},
             "valuation_accounts_milli": {"treasury": 0}, "valuation_claims": [],
             "canonical_cooking": True,
@@ -152,6 +186,7 @@ def founding_table_seed(now_ms: int) -> Dict[str, Any]:
         "consequences": [],
         "operator_audit": [],
         "causality": {"perceptions": [], "pending_reactions": [], "completed_reactions": []},
+        **workshop,
         "created_at_ms": now_ms,
     }
 
@@ -318,6 +353,20 @@ def migrate_state(state: Dict[str, Any]) -> Dict[str, Any]:
     shared["valuation_accounts_milli"].setdefault("treasury", 0)
     shared.setdefault("valuation_claims", [])
     shared.setdefault("canonical_cooking", True)
+    workshop_seed = _living_workshop_state_seed()
+    installations = state.setdefault("installations", {})
+    water = installations.setdefault("water", {})
+    for key, value in workshop_seed["installations"]["water"].items():
+        water.setdefault(key, copy.deepcopy(value))
+    workshop = state.setdefault("living_workshop", {})
+    for key, value in workshop_seed["living_workshop"].items():
+        workshop.setdefault(key, copy.deepcopy(value))
+    water_location = str(water["location"])
+    state.setdefault("places", {}).setdefault(water_location, {"location": [14, 10], "status": "operational"})
+    shared["tools"].setdefault("calibrated_measure", {"condition": 0.9, "reserved_by": None})
+    shared["stations"].setdefault(water_location, {"place": water_location, "reserved_by": None})
+    state.setdefault("resources", {}).setdefault("seal_material", 8)
+    state["resources"].setdefault("fasteners", 16)
     state.setdefault("resources", {}).setdefault("reference_strip", 4)
     seeded_sites = founding_table_seed(state.get("created_at_ms", 0))["resource_sites"]
     state.setdefault("resource_sites", {})
@@ -2063,8 +2112,18 @@ def _process_maintenance(state: Dict[str, Any], tick: int) -> list[Dict[str, Any
     """Project maintenance demand into canonical shared actions; never repair here."""
     emitted: list[Dict[str, Any]] = []
     orders = state["institutions"]["governance"]["maintenance_orders"]
+    workshop_installation_id = state.get("installations", {}).get("water", {}).get("id")
     for order in orders:
         if order["status"] != "open":
+            continue
+        if order.get("site_id") == workshop_installation_id:
+            projected = next((item for item in state.get("living_workshop", {}).get("work_orders", []) if item.get("status") != "resolved"), None)
+            order.update({
+                "status": "projected_to_living_workshop",
+                "canonical_action_id": projected.get("canonical_action_id") if projected else None,
+                "closed_tick": tick,
+                "closure_reason": "Living Workshop owns water-installation repair demand",
+            })
             continue
         site = state["resource_sites"].get(order["site_id"])
         pump = site.get("installed_pump") if site else None
@@ -2647,6 +2706,222 @@ def _advance_travel_routes(state: Dict[str, Any], tick: int) -> list[Dict[str, A
     return emitted
 
 
+def _living_workshop_decision(
+    state: Dict[str, Any], actor_id: str, evidence_ids: list[str]
+) -> Dict[str, Any]:
+    """Score only actor-known inputs and return an inspectable explanation."""
+    entity = _shared_entity(state, actor_id)
+    actor = Agent(actor_id)
+    actor.needs["hydration"] = max(0.0, min(1.0, float(entity.get("needs", {}).get("hydration", 70.0)) / 100.0))
+    actor.needs["safety"] = max(0.0, min(1.0, float(entity.get("needs", {}).get("safety", 70.0)) / 100.0))
+    actor.goals = list(entity.get("goals", []))
+    actor.relationships = dict(entity.get("relationships", {}))
+    actor.inventory = {name: float(amount) for name, amount in entity.get("inventory", {}).items() if isinstance(amount, (int, float))}
+    actor.personality = dict(entity.get("personality", {}))
+    actor.perceptions = set(evidence_ids)
+    demonstrated = _shared_competence(entity, "mechanical_repair")
+    actor.competency_profile.competencies["mechanical_repair"] = Competency(
+        "mechanical_repair",
+        theory=demonstrated,
+        observation=demonstrated,
+        procedure=demonstrated,
+        embodied=demonstrated,
+        reproducibility=demonstrated,
+        evidence=list(entity.get("competency_records", {}).get("mechanical_repair", {}).get("provenance", [])),
+    )
+    option = DecisionOption(
+        action_id="repair_water_installation",
+        category="public_work",
+        addressed_needs={"hydration": 1.0, "safety": 0.8},
+        goal_tags={"dependable_water", "public_health"},
+        required_competence={"mechanical_repair": 0.1},
+        required_perceptions=set(evidence_ids),
+    )
+    context = DecisionContext(
+        perceived_needs={"hydration": actor.needs["hydration"], "safety": actor.needs["safety"]},
+        goals=set(actor.goals),
+        relationships=dict(actor.relationships),
+        resources=dict(actor.inventory),
+        risks={option.action_id: 0.2},
+        utilities={option.action_id: 0.8},
+        obligations={option.action_id: 0.2},
+        personality=dict(actor.personality),
+    )
+    scored = score_option(actor, option, context)
+    return {
+        "total": round(scored.total, 8),
+        "components": {name: round(value, 8) for name, value in scored.components.items()},
+        "personality": {name: round(value, 8) for name, value in scored.personality.items()},
+        "perceived_evidence_ids": list(evidence_ids),
+    }
+
+
+def _living_workshop_symptoms(values: Dict[str, float], tolerances: Dict[str, float]) -> list[str]:
+    symptoms = []
+    if values["flow_lpm"] < tolerances["minimum_flow_lpm"]:
+        symptoms.append("declining_flow")
+    if values["leak_rate_ml_min"] > tolerances["maximum_leak_rate_ml_min"]:
+        symptoms.append("excessive_leakage")
+    if values["contamination_index"] > tolerances["maximum_contamination_index"]:
+        symptoms.append("unsafe_quality")
+    if values["pressure_kpa"] < tolerances["minimum_pressure_kpa"]:
+        symptoms.append("low_pressure")
+    if values["seal_alignment_mm"] > tolerances["maximum_seal_alignment_mm"]:
+        symptoms.append("seal_misalignment")
+    return symptoms
+
+
+def _process_living_workshop(state: Dict[str, Any], tick: int) -> list[Dict[str, Any]]:
+    """Deteriorate, expose local symptoms, and project one canonical repair demand."""
+    workshop = state["living_workshop"]
+    last_processed = workshop.get("last_processed_tick")
+    if last_processed is not None and tick <= int(last_processed):
+        return []
+    elapsed = 1 if last_processed is None else max(1, tick - int(last_processed))
+    workshop["last_processed_tick"] = tick
+    water = state["installations"]["water"]
+    water["condition"] = round(max(0.0, float(water["condition"]) - float(water["deterioration_per_tick"]) * elapsed), 6)
+    water["remaining_service_liters"] = round(max(
+        0.0,
+        float(water["remaining_service_liters"]) - float(water["service_draw_liters_per_tick"]) * elapsed,
+    ), 6)
+    capacity = max(1.0, float(water["service_capacity_liters"]))
+    capacity_ratio = max(0.0, min(1.0, float(water["remaining_service_liters"]) / capacity))
+    condition = float(water["condition"])
+    values = {
+        "flow_lpm": round(14.5 * condition * (0.75 + 0.25 * capacity_ratio), 6),
+        "leak_rate_ml_min": round(8.0 + (1.0 - condition) * 40.0, 6),
+        "contamination_index": round(float(water["contamination_index"]) + (1.0 - condition) * 0.08, 6),
+        "pressure_kpa": round(190.0 * condition, 6),
+        "seal_alignment_mm": round(0.15 + (1.0 - condition) * 1.2, 6),
+    }
+    symptoms = _living_workshop_symptoms(values, water["measurement_tolerances"])
+    location = _shared_action_location(state, str(water["location"]))
+    directly_perceived_by = []
+    perceived_symptoms: Dict[str, list[str]] = {}
+    direct_symptoms = {"declining_flow", "excessive_leakage", "seal_misalignment"}
+    instrument_symptoms = {"unsafe_quality", "low_pressure"}
+    if location:
+        for entity_id, entity in sorted({**state.get("npcs", {}), **state.get("players", {})}.items()):
+            if _distance(entity.get("location", [-99, -99]), location) > 1:
+                continue
+            actor_symptoms = set(symptoms).intersection(direct_symptoms)
+            if _shared_competence(entity, "measurement") >= 0.1:
+                actor_symptoms.update(set(symptoms).intersection(instrument_symptoms))
+            if actor_symptoms:
+                directly_perceived_by.append(entity_id)
+                perceived_symptoms[entity_id] = sorted(actor_symptoms)
+    measurement_id = f"living-workshop:water:measurement:{tick}"
+    measurement = {
+        "id": measurement_id,
+        "tick": tick,
+        "installation_id": water["id"],
+        "values": values,
+        "symptoms": symptoms,
+        "perceived_by": directly_perceived_by,
+        "perceived_symptoms": perceived_symptoms,
+        "credible_recipients": [],
+    }
+    workshop["measurements"].append(measurement)
+    water["measurement_history"].append(measurement_id)
+    emitted: list[Dict[str, Any]] = [{
+        "type": "living_workshop_measurement",
+        "actor_id": directly_perceived_by[0] if directly_perceived_by else "settlement-water-installation",
+        "payload": copy.deepcopy(measurement),
+    }]
+    if not symptoms:
+        return emitted
+    unresolved = next((item for item in workshop["demands"] if item.get("status") != "resolved"), None)
+    if unresolved:
+        return emitted
+
+    evidence_by_actor: Dict[str, list[str]] = {}
+    symptoms_by_actor: Dict[str, set[str]] = {}
+    freshness = int(water["maintenance_interval_ticks"])
+    for evidence in workshop["measurements"]:
+        if not evidence.get("symptoms") or tick - int(evidence.get("tick", tick)) > freshness:
+            continue
+        direct_recipients = set(evidence.get("perceived_by", []))
+        credible_recipients = set(evidence.get("credible_recipients", []))
+        recipients = direct_recipients | credible_recipients
+        for recipient in sorted(recipients):
+            if not _shared_entity(state, recipient):
+                continue
+            evidence_by_actor.setdefault(recipient, []).append(evidence["id"])
+            known_symptoms = evidence["symptoms"] if recipient in credible_recipients else evidence.get("perceived_symptoms", {}).get(recipient, evidence["symptoms"])
+            symptoms_by_actor.setdefault(recipient, set()).update(known_symptoms)
+    if not evidence_by_actor:
+        return emitted
+    decisions = [
+        (_living_workshop_decision(state, actor_id, evidence_ids), actor_id)
+        for actor_id, evidence_ids in sorted(evidence_by_actor.items())
+    ]
+    decision, proposer_id = max(decisions, key=lambda item: (item[0]["total"], item[1]))
+    perceived_evidence_ids = list(evidence_by_actor[proposer_id])
+    demand_id = "living-workshop:water-service-demand"
+    action_id = "living-workshop:water-repair:1"
+    work_order_id = "living-workshop:water-work-order:1"
+    proposal = apply_shared_action_command(state, proposer_id, {
+        "operation": "propose",
+        "shared_action_id": action_id,
+        "action_type": "repair_water_installation",
+        "target_id": water["id"],
+        "intent": "restore measured water flow and quality",
+        "observations": perceived_evidence_ids,
+        "perceived_evidence_ids": perceived_evidence_ids,
+        "autonomous_origin": True,
+    })
+    if not proposal.get("accepted"):
+        workshop["recent_outcomes"].append({
+            "tick": tick,
+            "kind": "demand_proposal_blocked",
+            "actor_id": proposer_id,
+            "perceived_evidence_ids": perceived_evidence_ids,
+            "reason": proposal.get("reason", "canonical proposal rejected"),
+        })
+        return emitted
+    demand = {
+        "id": demand_id,
+        "kind": "water_installation_service",
+        "installation_id": water["id"],
+        "created_tick": tick,
+        "status": "action_proposed",
+        "symptoms": sorted(symptoms_by_actor[proposer_id]),
+        "proposer_id": proposer_id,
+        "perceived_evidence_ids": perceived_evidence_ids,
+        "work_order_id": work_order_id,
+        "canonical_action_id": action_id,
+    }
+    order = {
+        "id": work_order_id,
+        "status": "proposed",
+        "created_tick": tick,
+        "proposer_id": proposer_id,
+        "candidate_ids": sorted(evidence_by_actor),
+        "assigned_actor_id": None,
+        "verifier_id": None,
+        "terms": {"provisional_cu_milli": proposal["record"]["definition"]["provisional_cu_milli"]},
+        "decision_explanation": decision,
+        "blockers": [],
+        "canonical_action_id": action_id,
+        "perceived_evidence_ids": perceived_evidence_ids,
+    }
+    workshop["demands"].append(demand)
+    workshop["work_orders"].append(order)
+    emitted.append({
+        "type": "living_workshop_demand_created",
+        "actor_id": proposer_id,
+        "payload": {
+            "demand_id": demand_id,
+            "work_order_id": work_order_id,
+            "canonical_action_id": action_id,
+            "perceived_evidence_ids": perceived_evidence_ids,
+            "decision_explanation": copy.deepcopy(decision),
+        },
+    })
+    return emitted
+
+
 def reduce_world_tick(state: Dict[str, Any], tick: int) -> list[Dict[str, Any]]:
     # Every reducer observes the same authoritative tick. Previously helpers
     # reading state.clock could lag the loop argument during offline catch-up.
@@ -2657,6 +2932,7 @@ def reduce_world_tick(state: Dict[str, Any], tick: int) -> list[Dict[str, Any]]:
     emitted.extend(_advance_autonomous_shared_actions(state, tick))
     emitted.extend(_process_shared_action_demand(state, tick))
     emitted.extend(_process_shared_extraction_demand(state, tick))
+    emitted.extend(_process_living_workshop(state, tick))
     emitted.extend(_process_public_discourse(state, tick))
     emitted.extend(_advance_resource_sites(state, tick))
     emitted.extend(_process_research(state, tick))
@@ -2851,6 +3127,16 @@ def _shared_action_location(state: Dict[str, Any], location_id: str) -> Optional
     if location_id.startswith("resource_site:"):
         site = state.get("resource_sites", {}).get(location_id.split(":", 1)[1])
         return list(site.get("location", [])) if site else None
+    installation = next(
+        (
+            item for item in state.get("installations", {}).values()
+            if item.get("id") == location_id or item.get("location") == location_id
+        ),
+        None,
+    )
+    if installation:
+        installation_place = state.get("places", {}).get(str(installation.get("location")), {})
+        return list(installation_place.get("location", [])) or None
     return None
 
 
@@ -2860,6 +3146,8 @@ def _shared_action_perceptions(state: Dict[str, Any], entity: Dict[str, Any], re
     if target and _distance(entity.get("location", [-99, -99]), target) <= 1:
         if record.get("definition", {}).get("execution_model") == "condition_restoration":
             channels.update({"mechanical_detail", "instrumentation"})
+        if record.get("definition", {}).get("execution_model") == "water_installation_repair":
+            channels.update({"spatial_layout", "surface_detail", "instrumentation"})
         if record.get("definition", {}).get("execution_model") == "finite_site_extraction":
             site = state.get("resource_sites", {}).get(record.get("target_id"))
             if site and entity.get("current_region", "settlement") == site.get("region"):
@@ -2921,6 +3209,7 @@ def _shared_action_definition(action_type: str) -> Dict[str, Any]:
         "minimum_verifier_competence": definition.minimum_verifier_competence,
         "input_custody": definition.input_custody,
         "output_custody": definition.output_custody,
+        "execution_parameters": copy.deepcopy(definition.execution_parameters),
     }
 
 
@@ -2953,6 +3242,7 @@ def _shared_action_definition_from(definition) -> Dict[str, Any]:
         "execution_model": definition.execution_model, "verification_threshold": definition.verification_threshold,
         "verifier_competence_domain": definition.verifier_competence_domain, "minimum_verifier_competence": definition.minimum_verifier_competence,
         "input_custody": definition.input_custody, "output_custody": definition.output_custody,
+        "execution_parameters": copy.deepcopy(definition.execution_parameters),
     }
 
 
@@ -2971,7 +3261,7 @@ def apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: D
         if record:
             return {"accepted": False, "reason": "shared action already exists"}
         action_type = command.get("action_type")
-        if action_type not in {MEASUREMENT_TOOL_CALIBRATION.action_type, COMMUNAL_MEAL_PREPARATION.action_type, MECHANICAL_PUMP_REPAIR.action_type, "extract_site_resource", "deposit_material"}:
+        if action_type not in {MEASUREMENT_TOOL_CALIBRATION.action_type, COMMUNAL_MEAL_PREPARATION.action_type, MECHANICAL_PUMP_REPAIR.action_type, "repair_water_installation", "extract_site_resource", "deposit_material"}:
             return {"accepted": False, "reason": "unsupported canonical action type"}
         observations = [str(item)[:120] for item in command.get("observations", []) if str(item).strip()][:16]
         if not observations:
@@ -2986,6 +3276,12 @@ def apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: D
             site = state.get("resource_sites", {}).get(target_id)
             if not site or not site.get("installed_pump"):
                 return {"accepted": False, "reason": "pump repair requires an existing installed pump target"}
+        elif action_type == "repair_water_installation":
+            target_id = str(command.get("target_id", ""))
+            water = state.get("installations", {}).get("water", {})
+            if not target_id or target_id != water.get("id"):
+                return {"accepted": False, "reason": "water repair requires the durable Living Workshop installation"}
+            location = str(water.get("location", ""))
         elif action_type == "deposit_material":
             target_id = str(command.get("resource", "")).strip()
             amount = command.get("amount")
@@ -3002,12 +3298,24 @@ def apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: D
                 return {"accepted": False, "reason": "extraction requires a supported finite resource site"}
             if site.get("stock", 0) < 1:
                 return {"accepted": False, "reason": "resource site is depleted"}
-        definition = _site_extraction_definition(site) if action_type == "extract_site_resource" else _material_transfer_definition(target_id, amount) if action_type == "deposit_material" else _shared_action_definition(action_type)
+        if action_type == "extract_site_resource":
+            definition = _site_extraction_definition(site)
+        elif action_type == "deposit_material":
+            definition = _material_transfer_definition(target_id, amount)
+        elif action_type == "repair_water_installation":
+            definition = _shared_action_definition_from(water_installation_repair(WaterInstallationSpec(**state["living_workshop"]["water_repair_spec"])))
+        else:
+            definition = _shared_action_definition(action_type)
+        perceived_evidence_ids = [
+            str(item)[:160] for item in command.get("perceived_evidence_ids", observations)
+            if str(item).strip()
+        ][:16]
         record = {
             "id": shared_action_id, "definition": definition, "actor_id": actor_id,
             "actor_kind": "human" if actor_id in state["players"] else "ai",
             "intent": str(command.get("intent", "restore trustworthy measurement"))[:240],
             "target_id": target_id, "location": location, "observations": observations,
+            "perceived_evidence_ids": perceived_evidence_ids,
             "state": "proposed", "proposed_tick": state["clock"]["tick"], "ledger_event_ids": [],
             "samples": [], "output": {}, "failure_reason": None, "verifier_id": None,
             "autonomous_origin": bool(command.get("autonomous_origin", False)) and actor_id in state["npcs"],
@@ -3668,6 +3976,13 @@ def _advance_autonomous_shared_actions(state: Dict[str, Any], tick: int) -> list
     for record in sorted(state["shared_actions"]["records"].values(), key=lambda item: item["id"]):
         if not record.get("autonomous_origin") or record.get("actor_kind") != "ai" or record["state"] in {"commissioned", "failed", "refused", "needs_rework"}:
             continue
+        if record.get("definition", {}).get("execution_model") == "water_installation_repair":
+            work_order = next((
+                item for item in state.get("living_workshop", {}).get("work_orders", [])
+                if item.get("canonical_action_id") == record["id"]
+            ), None)
+            if not work_order or work_order.get("assigned_actor_id") != record.get("actor_id"):
+                continue
         actor = _shared_entity(state, record["actor_id"])
         if not actor:
             continue
@@ -3898,6 +4213,15 @@ def advance_founding_table(state: Dict[str, Any], tick: int) -> list[Dict[str, A
 
 
 def _open_pump_maintenance(state: Dict[str, Any], site: Dict[str, Any], cause: str) -> Dict[str, Any]:
+    workshop_installation_id = state.get("installations", {}).get("water", {}).get("id")
+    if site.get("id") == workshop_installation_id:
+        projected = next((item for item in state.get("living_workshop", {}).get("work_orders", []) if item.get("status") != "resolved"), None)
+        return projected or {
+            "id": "living-workshop:water-work-order:pending",
+            "site_id": workshop_installation_id,
+            "status": "managed_by_living_workshop",
+            "cause_evidence": cause,
+        }
     governance = state["institutions"]["governance"]
     existing = next((item for item in governance["maintenance_orders"] if item["site_id"] == site["id"] and item["status"] == "open"), None)
     if existing:

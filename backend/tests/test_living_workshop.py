@@ -1,0 +1,239 @@
+import json
+import unittest
+
+from persistent_world import (
+    _process_living_workshop,
+    founding_table_seed,
+    migrate_state,
+    reduce_world_tick,
+)
+
+
+def alpha34_fixture_state():
+    state = migrate_state(founding_table_seed(123_456))
+    state["schema"] = 31
+    state.pop("installations", None)
+    state.pop("living_workshop", None)
+    state["clock"].update({"tick": 73, "minute": 913})
+    state["discoveries"]["ada"] = {
+        "9,7": {"level": "surface", "discovered_tick": 7},
+        "10,7": {"level": "surveyed", "discovered_tick": 12},
+    }
+    state["npcs"]["ada"]["inventory"]["seal_material"] = 3
+    state["shared_actions"]["ledger"].append({
+        "event_id": "alpha34-history:1:proposed",
+        "sequence": 1,
+        "tick": 72,
+        "event_type": "shared_action",
+        "actor_id": "ada",
+        "action_id": "alpha34-history",
+        "state": "proposed",
+        "intent": "preserve historical work",
+        "location": "measurement_lab",
+        "parent_event_ids": [],
+        "inputs": {},
+        "outputs": {},
+        "evidence": [{"kind": "historical_fixture"}],
+        "physical_effect": False,
+        "previous_hash": "GENESIS",
+        "event_hash": "fixture-hash",
+    })
+    return state
+
+
+class LivingWorkshopTests(unittest.TestCase):
+    def workshop_state(self):
+        state = migrate_state(founding_table_seed(123_456))
+        location = state["places"][state["installations"]["water"]["location"]]["location"]
+        for npc in state["npcs"].values():
+            npc["location"] = [0, 0]
+        state["npcs"]["ada"]["location"] = list(location)
+        return state
+
+    def repair_records(self, state):
+        return [
+            record for record in state["shared_actions"]["records"].values()
+            if record["definition"]["action_type"] == "repair_water_installation"
+        ]
+
+    def test_alpha34_save_migrates_living_workshop_without_losing_history(self):
+        before = alpha34_fixture_state()
+        expected = {
+            "clock": json.loads(json.dumps(before["clock"])),
+            "discoveries": json.loads(json.dumps(before["discoveries"])),
+            "npcs": json.loads(json.dumps(before["npcs"])),
+            "resources": json.loads(json.dumps(before["resources"])),
+            "ledger": json.loads(json.dumps(before["shared_actions"]["ledger"])),
+        }
+
+        after = migrate_state(before)
+
+        self.assertEqual(32, after["schema"])
+        self.assertEqual(expected["clock"], after["clock"])
+        self.assertEqual(expected["discoveries"], after["discoveries"])
+        self.assertEqual(expected["npcs"], after["npcs"])
+        self.assertEqual(expected["resources"]["water"], after["resources"]["water"])
+        self.assertEqual(expected["ledger"], after["shared_actions"]["ledger"])
+        self.assertIn("water", after["installations"])
+        water = after["installations"]["water"]
+        self.assertIn("condition", water)
+        self.assertIn("service_capacity_liters", water)
+        self.assertIn("remaining_service_liters", water)
+        self.assertIn("measurement_history", water)
+        self.assertIn("maintenance_interval_ticks", water)
+        self.assertNotIn("diagnosis", water)
+        self.assertEqual([], after["living_workshop"]["demands"])
+        self.assertEqual([], after["living_workshop"]["work_orders"])
+        self.assertEqual([], after["living_workshop"]["measurements"])
+        self.assertEqual([], after["living_workshop"]["recent_outcomes"])
+
+    def test_declining_flow_creates_one_idempotent_evidence_backed_demand_and_action(self):
+        state = self.workshop_state()
+        water = state["installations"]["water"]
+        water["condition"] = 0.75
+
+        first_events = _process_living_workshop(state, 1)
+        second_events = _process_living_workshop(state, 2)
+
+        self.assertTrue(any(event["type"] == "living_workshop_demand_created" for event in first_events))
+        self.assertFalse(any(event["type"] == "living_workshop_demand_created" for event in second_events))
+        self.assertEqual(1, len(state["living_workshop"]["demands"]))
+        self.assertEqual(1, len(state["living_workshop"]["work_orders"]))
+        self.assertEqual(1, len(self.repair_records(state)))
+        demand = state["living_workshop"]["demands"][0]
+        order = state["living_workshop"]["work_orders"][0]
+        action = self.repair_records(state)[0]
+        evidence_ids = demand["perceived_evidence_ids"]
+        self.assertEqual(evidence_ids, order["perceived_evidence_ids"])
+        self.assertEqual(evidence_ids, action["perceived_evidence_ids"])
+        self.assertEqual(evidence_ids, action["observations"])
+        self.assertEqual(order["canonical_action_id"], action["id"])
+        self.assertIn("components", order["decision_explanation"])
+        self.assertIn("total", order["decision_explanation"])
+        self.assertIn("declining_flow", demand["symptoms"])
+        projected = json.dumps({"demand": demand, "order": order, "observations": action["observations"]})
+        self.assertNotIn("condition", projected)
+        self.assertNotIn("diagnosis", projected)
+
+    def test_unsafe_quality_creates_demand_from_local_instrument_evidence(self):
+        state = self.workshop_state()
+        water = state["installations"]["water"]
+        water["condition"] = 1.0
+        water["contamination_index"] = 0.2
+
+        _process_living_workshop(state, 1)
+
+        self.assertEqual(1, len(state["living_workshop"]["demands"]))
+        demand = state["living_workshop"]["demands"][0]
+        self.assertIn("unsafe_quality", demand["symptoms"])
+        evidence = state["living_workshop"]["measurements"][-1]
+        self.assertIn(demand["proposer_id"], evidence["perceived_by"])
+        self.assertEqual([evidence["id"]], demand["perceived_evidence_ids"])
+
+    def test_visible_flow_does_not_reveal_unmeasured_quality_to_an_untrained_observer(self):
+        state = self.workshop_state()
+        location = state["places"][state["installations"]["water"]["location"]]["location"]
+        state["npcs"]["ada"]["location"] = [0, 0]
+        state["npcs"]["orin"]["location"] = list(location)
+        state["installations"]["water"].update({"condition": 0.75, "contamination_index": 0.2})
+
+        _process_living_workshop(state, 1)
+
+        demand = state["living_workshop"]["demands"][0]
+        self.assertEqual("orin", demand["proposer_id"])
+        self.assertIn("declining_flow", demand["symptoms"])
+        self.assertNotIn("unsafe_quality", demand["symptoms"])
+        self.assertNotIn("low_pressure", demand["symptoms"])
+
+    def test_healthy_water_creates_measurement_but_no_demand(self):
+        state = self.workshop_state()
+        state["installations"]["water"].update({"condition": 1.0, "contamination_index": 0.02})
+        service_before = state["installations"]["water"]["remaining_service_liters"]
+
+        _process_living_workshop(state, 1)
+
+        self.assertLess(state["installations"]["water"]["condition"], 1.0)
+        self.assertLess(state["installations"]["water"]["remaining_service_liters"], service_before)
+        self.assertEqual(1, len(state["living_workshop"]["measurements"]))
+        self.assertEqual([], state["living_workshop"]["measurements"][0]["symptoms"])
+        self.assertEqual([], state["living_workshop"]["demands"])
+        self.assertEqual([], state["living_workshop"]["work_orders"])
+        self.assertEqual([], self.repair_records(state))
+
+    def test_hidden_symptom_waits_for_perception_or_credible_evidence(self):
+        state = self.workshop_state()
+        for npc in state["npcs"].values():
+            npc["location"] = [0, 0]
+        state["installations"]["water"]["condition"] = 0.75
+
+        _process_living_workshop(state, 1)
+
+        self.assertEqual([], state["living_workshop"]["demands"])
+        hidden_measurement = state["living_workshop"]["measurements"][-1]
+        self.assertEqual([], hidden_measurement["perceived_by"])
+        hidden_measurement["credible_recipients"] = ["ada"]
+
+        _process_living_workshop(state, 2)
+
+        self.assertEqual(1, len(state["living_workshop"]["demands"]))
+        demand = state["living_workshop"]["demands"][0]
+        self.assertEqual("ada", demand["proposer_id"])
+        self.assertIn(hidden_measurement["id"], demand["perceived_evidence_ids"])
+
+    def test_legacy_water_maintenance_does_not_open_a_second_work_order(self):
+        state = self.workshop_state()
+        water = state["installations"]["water"]
+        water["condition"] = 0.75
+        state["resource_sites"][water["id"]] = {
+            "id": water["id"],
+            "type": "well",
+            "name": "legacy projection of workshop water",
+            "region": "settlement",
+            "location": list(state["places"][water["location"]]["location"]),
+            "progress": 0,
+            "stock": 0,
+            "capacity": 24,
+            "history": [],
+            "installed_pump": {
+                "design_id": "legacy-workshop-water",
+                "installed_by": "ada",
+                "condition": 0.5,
+                "cycles": 12,
+                "status": "operational",
+                "maintenance_due": True,
+                "maintenance_history": [],
+            },
+        }
+        state["institutions"]["governance"]["maintenance_orders"].append({
+            "id": "legacy-water-maintenance",
+            "site_id": water["id"],
+            "technology_id": "legacy-workshop-water",
+            "opened_tick": 0,
+            "status": "open",
+            "condition": 0.5,
+            "cycles": 12,
+            "cause": "legacy adapter",
+            "required_inputs": {},
+            "required_tool": "wrench",
+            "assigned_to": None,
+            "assigned_tick": None,
+            "blockers": [],
+            "procurement_history": [],
+            "depletion_notices": [],
+        })
+
+        reduce_world_tick(state, 1)
+
+        repair_records = [
+            record for record in state["shared_actions"]["records"].values()
+            if record["definition"]["action_type"] in {"repair_water_installation", "repair_mechanical_pump"}
+        ]
+        self.assertEqual(["repair_water_installation"], [record["definition"]["action_type"] for record in repair_records])
+        self.assertEqual(1, len(state["living_workshop"]["work_orders"]))
+        legacy = state["institutions"]["governance"]["maintenance_orders"][0]
+        self.assertEqual("projected_to_living_workshop", legacy["status"])
+        self.assertEqual(state["living_workshop"]["work_orders"][0]["canonical_action_id"], legacy["canonical_action_id"])
+
+
+if __name__ == "__main__":
+    unittest.main()

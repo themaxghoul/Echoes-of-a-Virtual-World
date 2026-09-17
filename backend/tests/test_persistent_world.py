@@ -16,6 +16,8 @@ from persistent_world import (
     actor_world_view,
 )
 
+from backend.tests.test_living_workshop import alpha34_fixture_state
+
 
 class PersistentWorldTests(unittest.TestCase):
     def setUp(self):
@@ -1478,9 +1480,48 @@ class PersistentWorldTests(unittest.TestCase):
         import json
         connection.execute("UPDATE worlds SET state_json=? WHERE world_id=?", (json.dumps(state), self.world["world_id"]))
         migrated = self.store.snapshot()["state"]
-        self.assertEqual(migrated["schema"], 31)
+        self.assertEqual(migrated["schema"], 32)
         self.assertIn("council", migrated["institutions"])
         self.assertEqual(migrated["event"]["id"], "founding-table")
+
+    def test_alpha34_living_workshop_demand_is_idempotent_across_restart(self):
+        before = alpha34_fixture_state()
+        before["clock"]["tick"] = 0
+        before["clock"]["minute"] = 8 * 60
+        before["shared_actions"]["ledger"] = []
+        migrated = migrate_state(before)
+        location = migrated["places"][migrated["installations"]["water"]["location"]]["location"]
+        migrated["npcs"]["ada"]["location"] = list(location)
+        migrated["installations"]["water"]["condition"] = 0.75
+        with self.store.transaction() as connection:
+            connection.execute(
+                "UPDATE worlds SET tick=0, last_wall_ms=?, state_json=? WHERE world_id=?",
+                (1_000_000, json.dumps(migrated), self.world["world_id"]),
+            )
+
+        first = self.store.advance_due(now_ms=1_000_000 + 15_000, max_ticks=1)["state"]
+        self.assertEqual(1, len(first["living_workshop"]["demands"]))
+        self.assertEqual(1, len(first["living_workshop"]["work_orders"]))
+        self.assertEqual(1, sum(
+            record["definition"]["action_type"] == "repair_water_installation"
+            for record in first["shared_actions"]["records"].values()
+        ))
+
+        self.store.close()
+        self.store = PersistentWorldStore(self.path)
+        final = self.store.advance_due(now_ms=1_000_000 + 3 * 15_000, max_ticks=2)["state"]
+
+        self.assertEqual(1, len(final["living_workshop"]["demands"]))
+        self.assertEqual(1, len(final["living_workshop"]["work_orders"]))
+        self.assertEqual(1, sum(
+            record["definition"]["action_type"] == "repair_water_installation"
+            for record in final["shared_actions"]["records"].values()
+        ))
+        action = next(
+            record for record in final["shared_actions"]["records"].values()
+            if record["definition"]["action_type"] == "repair_water_installation"
+        )
+        self.assertEqual("proposed", action["state"])
 
     def test_shortage_generates_procurement_and_prevents_or_recovers_blocked_work(self):
         progressed = self.store.advance_due(now_ms=1_000_000 + 600 * 15_000, max_ticks=600)
@@ -1675,7 +1716,7 @@ class PersistentWorldTests(unittest.TestCase):
 
         observed = self.store.observed_snapshot(self.world["world_id"], "alice")
 
-        self.assertEqual(31, observed["state"]["schema"])
+        self.assertEqual(32, observed["state"]["schema"])
         self.assertEqual(64, observed["state"]["frontier"]["size"])
         self.assertTrue(observed["state"]["observed_tiles"])
         self.assertTrue(all("substrate" not in tile for tile in observed["state"]["observed_tiles"].values()))
