@@ -47,6 +47,10 @@ Every package declares:
 
 The package consumes authoritative world time. Its result is deterministic under replay from the same state, inputs and recorded uncertainty seed.
 
+Packages must remain responsive rather than documentary. Every blocked package exposes one primary reason, supporting evidence and the smallest useful recovery actions—for example sourcing material, resolving access, resting a crew, finding qualified supervision, waiting for curing or revising the design. AI crews may propose, accept, refuse, pause, abandon, rotate or adapt packages through the same Samaritan work-distribution contract used by players.
+
+Long work supports partial progress and crew rotation. Sites retain completed quantity, current condition, reserved custody and safe handoff requirements. A participant leaving does not lock the site indefinitely; reservations expire or transfer through explicit recorded actions.
+
 ## Capability progression
 
 A structure is not unlocked by possessing one iconic tool. A bunker, for example, depends on surveying, excavation, spoil handling, structural design, suitable materials, foundations, drainage, ventilation, access, utilities, sustained labor, inspection and maintenance.
@@ -91,6 +95,8 @@ Simulation compares variants, identifies contradictions and estimates behavior. 
 8. Approval of a specific design revision
 
 Failed and divergent experiments remain evidence. They may improve knowledge, revise the design, create salvage or establish that a proposed path is unsuitable. They do not silently disappear or transform into competence.
+
+Uncertainty is replayable rather than globally random. Measurement noise and execution uncertainty derive from recorded seeds, instrument condition and actor perception. Test fixtures may pin these values so deterministic replay remains debuggable without pretending that residents possess perfect measurements.
 
 ## Partial structures and failure
 
@@ -138,6 +144,20 @@ Construction creates demand for surveying, design, research, materials, logistic
 
 Concept generation may have a compute cost. Payment or compute consumption cannot make a design true, safe, canonical or physically complete. Ordinary social access and basic Samaritan acknowledgement remain outside paid generation gates.
 
+Construction activity must not wait for CU issuance. Negotiation, public provisioning, reciprocal labor, household production and treasury-funded work may proceed while CU remains a provisional analytic projection. Salvage, reuse and repair return verified material to usable custody so failed work can create productive supply as well as narrative history.
+
+## Artifact custody, rights and collaboration
+
+Every design artifact records ownership or stewardship, license, permitted collaborators, publication status and derivative lineage. A contributor may grant construction use without surrendering authorship or private source material. Multi-party revisions identify which claims and components came from each participant.
+
+Private prompts, provider context and unrelated memories are not published merely because their output contributes to a structure. A settlement may reject an artifact whose custody or license cannot support the intended use.
+
+## Competency maintenance
+
+Demonstrated evidence never disappears. Operational readiness may become stale when procedures, standards, tools or materials change, or when an actor has not practiced a precision-sensitive capability for a long period. Staleness lowers confidence or requires supervised requalification; it does not erase historical accomplishment or fabricate incompetence.
+
+Requalification uses ordinary observation, review and verified practice. The required recency depends on risk: assembling a simple shelter may tolerate older experience, while structural inspection, pressure systems or electrical work may require current evidence.
+
 ## Security and governance
 
 - Only authenticated actors may propose, accept, perform or verify work.
@@ -163,6 +183,16 @@ The isometric client renders server-owned construction state:
 
 The client may interpolate animation but cannot advance construction locally.
 
+## Onboarding and progressive disclosure
+
+The first playable construction workflow is a simple framed shelter, not a bunker. It reuses the Alpha 35 action lifecycle and proves:
+
+> need → proposal → site survey → simple design → material delivery → foundation preparation → frame package → basic inspection → usable shelter
+
+The interface initially presents the next actionable package, its reason, inputs and likely outcome. Detailed provenance, tolerances and history remain available through inspection rather than occupying the default HUD. More complex phases appear only when the structure or risk requires them.
+
+This first slice must feel useful immediately: the settlement gains shelter capacity, contributors gain evidence, visible construction changes persist and any failure leaves recoverable material or a clear next action.
+
 ## Executable invariants
 
 Tests must prove:
@@ -178,7 +208,14 @@ Tests must prove:
 - Sandboxed simulation and generated artifacts cannot mutate the live world.
 - Provisional CU remains nonspendable and evidence-derived.
 - Deterministic replay recreates the same structure state and causal history.
+- Partial work accepts a qualified crew handoff without duplicating progress or custody.
+- Reservation expiry releases an inactive site without erasing completed work.
+- The framed-shelter onboarding path exposes only the information needed for the current package while retaining full inspectable provenance.
+- Salvage from failed or abandoned work re-enters material custody exactly once.
+- Competency staleness affects readiness without deleting historical evidence.
 
 ## Sequencing boundary
 
 This system is explicitly post-Alpha 35. Alpha 35 must first complete and release the Living Workshop vertical slice, authoritative evidence-bound competency, persistent recovery, visible isometric workflow and downloadable client/server artifacts. Historical construction should reuse that proven action lifecycle rather than introducing a parallel construction engine.
+
+The first implementation plan must stop at the framed-shelter vertical slice. Bunkers, utilities beyond basic weather protection, large crews, advanced structural methods and broad archaeological gameplay remain later increments validated against the same kernel.
