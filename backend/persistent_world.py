@@ -494,6 +494,37 @@ def _project_living_workshop_measurement(measurement: Dict[str, Any], actor_id: 
     }
 
 
+def _project_water_action_channels(state: Dict[str, Any], record: Dict[str, Any], actor_id: str, value: Any) -> Any:
+    """Apply measurement perspective to every copy in records and causal evidence."""
+    if record.get("definition", {}).get("execution_model") != "water_installation_repair":
+        return copy.deepcopy(value)
+    source_ids = set(record.get("sample_measurement_ids", []) + record.get("perceived_evidence_ids", []))
+    fields, visible_ids = set(), set()
+    for measurement in state.get("living_workshop", {}).get("measurements", []):
+        if measurement.get("id") not in source_ids:
+            continue
+        projected = _project_living_workshop_measurement(measurement, actor_id)
+        if projected:
+            fields.update(projected["values"])
+            visible_ids.add(measurement["id"])
+    measurement_fields = set(_LIVING_WORKSHOP_SYMPTOM_VALUES.values())
+    def project(item):
+        if isinstance(item, list):
+            return [project(child) for child in item]
+        if not isinstance(item, dict):
+            return copy.deepcopy(item)
+        projected = {}
+        for name, child in item.items():
+            if name in measurement_fields and name not in fields:
+                continue
+            if name in {"sample_measurement_ids", "perceived_evidence_ids", "observations"} and isinstance(child, list) and all(isinstance(entry, str) for entry in child):
+                projected[name] = [entry for entry in child if entry in visible_ids]
+            else:
+                projected[name] = project(child)
+        return projected
+    return project(value)
+
+
 def _project_living_workshop_evidence(
     workshop: Dict[str, Any], actor_id: str, evidence_ids: list[str]
 ) -> tuple[list[str], list[str]]:
@@ -651,6 +682,13 @@ def actor_world_view(snapshot: Dict[str, Any], actor_id: str) -> Dict[str, Any]:
         workshop.pop("water_repair_spec", None)
         workshop.pop("last_processed_tick", None)
     shared = state.get("shared_actions", {})
+    shared["demands"] = [
+        demand if not demand.get("private_to") or actor_id in demand["private_to"] else {
+            "id": demand.get("id"), "kind": demand.get("kind"),
+            "status": demand.get("status"), "private": True,
+        }
+        for demand in shared.get("demands", [])
+    ]
     viewer = state.get("players", {}).get(actor_id, {})
     visible_action_ids = set()
     for action_id, record in list(shared.get("records", {}).items()):
@@ -659,9 +697,10 @@ def actor_world_view(snapshot: Dict[str, Any], actor_id: str) -> Dict[str, Any]:
         visible = record.get("actor_id") == actor_id or record.get("target_id") == actor_id or record.get("state") == "commissioned" or can_inspect
         if visible:
             visible_action_ids.add(action_id)
+            shared["records"][action_id] = _project_water_action_channels(snapshot["state"], record, actor_id, record)
         else:
             shared["records"][action_id] = {"id": action_id, "action_type": record.get("definition", {}).get("action_type"), "state": record.get("state"), "private": True}
-    shared["ledger"] = [event for event in shared.get("ledger", []) if event.get("action_id") in visible_action_ids]
+    shared["ledger"] = [_project_water_action_channels(snapshot["state"], snapshot["state"]["shared_actions"]["records"].get(event.get("action_id"), {}), actor_id, event) for event in shared.get("ledger", []) if event.get("action_id") in visible_action_ids]
     justice = state.get("institutions", {}).get("justice", {})
     relevant_cases = {case["id"] for case in justice.get("cases", []) if case.get("accused") == actor_id}
     relevant_reports = {report_id for case in justice.get("cases", []) if case["id"] in relevant_cases for report_id in case.get("reports", [])}
@@ -750,6 +789,8 @@ def actor_event_view(event: Dict[str, Any], snapshot: Dict[str, Any], actor_id: 
                 "action_id": action_id,
                 "state": authoritative.get("state", record.get("state") if isinstance(record, dict) else None),
             }
+        else:
+            visible["payload"] = _project_water_action_channels(state, authoritative, actor_id, visible["payload"])
     return visible
 
 
@@ -3581,6 +3622,7 @@ def apply_work_order_command(state: Dict[str, Any], actor_id: str, command: Dict
         order["terms"] = copy.deepcopy(terms)
         order["assigned_actor_id"] = None
         order["status"] = "negotiating"
+        order["requires_fresh_consent"] = False
         return {"accepted": True, "type": command["type"], "status": "proposed", "physical_change": False}
     decision = command.get("accepted")
     if not isinstance(decision, bool):
@@ -3596,6 +3638,7 @@ def apply_work_order_command(state: Dict[str, Any], actor_id: str, command: Dict
             order["assigned_actor_id"] = None
         history.append({"kind": "response", "actor_id": actor_id, "tick": state["clock"]["tick"], "status": "refused", "reason": reason, "canonical_action_id": record["id"]})
         order["status"] = "negotiating"
+        order["requires_fresh_consent"] = False
         return {"accepted": True, "type": command["type"], "status": "refused", "physical_change": False}
     if record["state"] not in {"proposed", "failed", "cancelled", "refused"}:
         return {"accepted": False, "reason": "work has already been accepted"}
@@ -3626,6 +3669,7 @@ def apply_work_order_command(state: Dict[str, Any], actor_id: str, command: Dict
     record["terms"] = copy.deepcopy(order["terms"])
     record["commitment_expires_tick"] = state["clock"]["tick"] + 24
     order.update({"status": "accepted", "assigned_actor_id": actor_id, "decision_explanation": _living_workshop_decision(state, actor_id, visible_ids)})
+    order["requires_fresh_consent"] = False
     history.append({"kind": "response", "actor_id": actor_id, "tick": state["clock"]["tick"], "status": "accepted", "reason": reason, "terms": copy.deepcopy(order["terms"]), "canonical_action_id": record["id"]})
     return {"accepted": True, "type": command["type"], "status": "accepted", "assigned_actor_id": actor_id, "canonical_action_id": record["id"], "physical_change": False}
 
@@ -3650,6 +3694,127 @@ def _route_workshop_actor(state: Dict[str, Any], entity: Dict[str, Any], record:
     return {"accepted": True, "type": "shared_action", "operation": "route", "route": copy.deepcopy(route), "physical_change": False}
 
 
+def _workshop_missing_materials(state: Dict[str, Any], record: Dict[str, Any]) -> Dict[str, int]:
+    held: Dict[str, int] = {}
+    for action_id, reservation in state["shared_actions"]["reservations"].items():
+        if action_id == record["id"] or reservation.get("input_custody", "communal_store") != "communal_store":
+            continue
+        for name, amount in reservation.get("materials", {}).items():
+            held[name] = held.get(name, 0) + int(amount)
+    return {
+        name: int(amount - (state["resources"].get(name, 0) - held.get(name, 0)))
+        for name, amount in record["definition"]["requirements"].get("materials", {}).items()
+        if state["resources"].get(name, 0) - held.get(name, 0) < amount
+    }
+
+
+def _dispatch_workshop_recovery(state: Dict[str, Any], order: Dict[str, Any], record: Dict[str, Any], actor_id: str, action: str) -> Dict[str, Any]:
+    """Turn a scored recovery choice into durable, inspectable world work."""
+    blocker_number = len(order.get("blockers", []))
+    request_id = f"recovery:{record['id']}:{blocker_number}:{action}"
+    if action in {"request_supplies", "gather", "seek_instruction"}:
+        demand_kind = {
+            "request_supplies": "water_repair_supply",
+            "gather": "water_repair_gathering",
+            "seek_instruction": "water_repair_instruction",
+        }[action]
+        request = next((item for item in state["shared_actions"]["demands"] if item.get("id") == request_id), None)
+        if request is None:
+            request = {
+                "id": request_id,
+                "kind": demand_kind,
+                "status": "requested",
+                "created_tick": state["clock"]["tick"],
+                "requester_id": actor_id,
+                "canonical_action_id": record["id"],
+                "work_order_id": order["id"],
+            }
+            if action in {"request_supplies", "gather"}:
+                request["materials"] = _workshop_missing_materials(state, record)
+            else:
+                request["domain"] = record["definition"]["requirements"]["competence_domain"]
+                request["minimum_competence"] = record["definition"]["requirements"]["minimum_competence"]
+                request["private_to"] = sorted({
+                    actor_id, order.get("proposer_id"),
+                    *(
+                        entity_id for entity_id, entity in {**state["npcs"], **state["players"]}.items()
+                        if _shared_competence(entity, request["domain"]) >= request["minimum_competence"]
+                    ),
+                } - {None})
+            state["shared_actions"]["demands"].append(request)
+        order.setdefault("recovery_history", []).append({
+            "tick": state["clock"]["tick"], "action": action, "status": "requested",
+            "request_id": request_id, "blocker_number": blocker_number,
+        })
+        return {
+            "accepted": True, "type": "shared_action", "operation": action,
+            "request": copy.deepcopy(request), "physical_change": False,
+        }
+    if action == "renegotiate" and record["state"] == "submitted":
+        request = next((item for item in state["shared_actions"]["demands"] if item.get("id") == request_id), None)
+        if request is None:
+            request = {
+                "id": request_id,
+                "kind": "water_repair_verifier",
+                "status": "requested",
+                "created_tick": state["clock"]["tick"],
+                "requester_id": actor_id,
+                "canonical_action_id": record["id"],
+                "work_order_id": order["id"],
+                "domain": record["definition"].get("verifier_competence_domain") or "measurement",
+                "minimum_competence": record["definition"].get("minimum_verifier_competence", 0.1),
+                "excluded_actor_id": actor_id,
+            }
+            state["shared_actions"]["demands"].append(request)
+        order.setdefault("negotiations", []).append({
+            "kind": "recovery_proposal", "actor_id": actor_id,
+            "tick": state["clock"]["tick"], "status": "awaiting_verifier",
+            "reason": "request independent verifier after submitted work",
+            "canonical_action_id": record["id"],
+        })
+        order["status"] = "awaiting_verifier"
+        order.setdefault("recovery_history", []).append({
+            "tick": state["clock"]["tick"], "action": action, "status": "awaiting_verifier",
+            "request_id": request_id, "blocker_number": blocker_number,
+        })
+        return {
+            "accepted": True, "type": "shared_action", "operation": action,
+            "status": "awaiting_verifier", "request": copy.deepcopy(request), "physical_change": False,
+        }
+    if action in {"renegotiate", "abandon"}:
+        if record["state"] in {"accepted", "reserved", "in_progress"}:
+            cancelled = apply_shared_action_command(state, actor_id, {
+                "operation": "cancel", "shared_action_id": record["id"],
+            })
+            if not cancelled.get("accepted"):
+                return cancelled
+        elif record["state"] not in {"cancelled", "failed"}:
+            return {"accepted": False, "reason": "stopped participant work required for recovery"}
+        if action == "renegotiate":
+            result = apply_work_order_command(state, actor_id, {
+                "type": "negotiate_work_order", "work_order_id": order["id"],
+                "terms": {"note": "reopen terms after blocker"},
+            })
+            if not result.get("accepted"):
+                return result
+            status = "negotiating"
+        else:
+            order["status"] = "abandoned"
+            order["assigned_actor_id"] = None
+            order["requires_fresh_consent"] = True
+            _release_shared_reservation(state, record)
+            status = "abandoned"
+        order.setdefault("recovery_history", []).append({
+            "tick": state["clock"]["tick"], "action": action, "status": status,
+            "blocker_number": blocker_number,
+        })
+        return {
+            "accepted": True, "type": "shared_action", "operation": action,
+            "status": status, "physical_change": False,
+        }
+    return {"accepted": False, "reason": "unsupported workshop recovery action"}
+
+
 def apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: Dict[str, Any]) -> Dict[str, Any]:
     command = {**command, "shared_action_id": str(command.get("shared_action_id", "")).strip()[:96], "operation": str(command.get("operation", "")).strip()}
     record = state["shared_actions"]["records"].get(command.get("shared_action_id"))
@@ -3658,6 +3823,11 @@ def apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: D
     if is_water:
         order = _workshop_order_for(state, record["id"])
         entity = _shared_entity(state, actor_id)
+        if operation in {"request_supplies", "gather", "seek_instruction", "renegotiate", "abandon"}:
+            available = {item.get("action") for item in order.get("recovery_options", [])} if order else set()
+            if not entity or not order or order.get("assigned_actor_id") != actor_id or order.get("status") != "blocked" or operation not in available:
+                return {"accepted": False, "reason": "blocked participating actor recovery choice required"}
+            return _dispatch_workshop_recovery(state, order, record, actor_id, operation)
         if operation == "rest":
             if not entity or record["actor_id"] != actor_id or record["state"] not in {"accepted", "failed", "cancelled"}:
                 return {"accepted": False, "reason": "only a stopped participant may choose rest"}
@@ -3666,6 +3836,13 @@ def apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: D
                 return {"accepted": False, "reason": "actor already committed to another action"}
             _release_shared_reservation(state, record)
             entity["workshop_rest"] = {"action_id": record["id"], "started_tick": state["clock"]["tick"], "last_tick": state["clock"]["tick"], "until_tick": state["clock"]["tick"] + 6}
+            if order:
+                blocker_number = len(order.get("blockers", []))
+                if not any(item.get("action") == "rest" and item.get("blocker_number") == blocker_number for item in order.get("recovery_history", [])):
+                    order.setdefault("recovery_history", []).append({
+                        "tick": state["clock"]["tick"], "action": "rest", "status": "resting",
+                        "blocker_number": blocker_number,
+                    })
             return {"accepted": True, "type": "shared_action", "operation": "rest", "physical_change": False}
         if operation == "cancel" and entity and record["actor_id"] == actor_id and record["state"] == "in_progress":
             now_tick = state["clock"]["tick"]
@@ -3675,6 +3852,8 @@ def apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: D
             event = _append_shared_action_event(state, record, "cancelled", actor_id)
             if order:
                 order["status"] = "cancelled"
+                order["assigned_actor_id"] = None
+                order["requires_fresh_consent"] = True
             return {"accepted": True, "type": "shared_action", "operation": "cancel", "record": copy.deepcopy(record), "causal_event": event, "physical_change": False}
         if operation in {"accept", "refuse"} and order:
             return apply_work_order_command(state, actor_id, {"type": "respond_work_order", "work_order_id": order["id"], "accepted": operation == "accept", "reason": command.get("reason", "")})
@@ -3707,6 +3886,9 @@ def apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: D
             _release_shared_reservation(state, record)
         elif result.get("accepted") and order:
             order["status"] = record["state"]
+            if operation == "cancel":
+                order["assigned_actor_id"] = None
+                order["requires_fresh_consent"] = True
         return result
     return _apply_shared_action_command(state, actor_id, command)
 
@@ -3989,6 +4171,7 @@ def _apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: 
             # readings cannot create authoritative measurements.
             latest = next((item for item in reversed(state["living_workshop"]["measurements"]) if item["installation_id"] == record["target_id"]), None)
             normalized = [copy.deepcopy(latest["values"])] if latest else []
+            record["sample_measurement_ids"] = [latest["id"]] if latest else []
             samples = []
         for sample in samples:
             if not isinstance(sample, dict):
@@ -4597,6 +4780,29 @@ def _advance_workshop_order(state: Dict[str, Any], order: Dict[str, Any], tick: 
     order["last_advanced_tick"] = tick
     record = state["shared_actions"]["records"][order["canonical_action_id"]]
     actor_id = order.get("assigned_actor_id")
+    if order.get("requires_fresh_consent"):
+        return []
+    if order.get("status") == "blocked" and actor_id in state["npcs"] and order.get("recovery_options"):
+        blocker_number = len(order.get("blockers", []))
+        dispatched = next((
+            item for item in reversed(order.get("recovery_history", []))
+            if item.get("blocker_number") == blocker_number
+        ), None)
+        if dispatched:
+            actor = state["npcs"][actor_id]
+            if dispatched.get("action") != "rest" or actor.get("workshop_rest"):
+                return []
+            if actor.get("energy", 0) < record["definition"]["requirements"]["energy"]:
+                return []
+            dispatched["status"] = "completed"
+            dispatched["completed_tick"] = tick
+            order["status"] = record["state"]
+        recovery_action = order["recovery_options"][0]["action"]
+        if not dispatched:
+            result = apply_shared_action_command(state, actor_id, {"operation": recovery_action, "shared_action_id": record["id"]})
+            return [{"type": "shared_action_recovery", "actor_id": actor_id, "payload": result}]
+    if record["state"] == "submitted":
+        return _prepare_workshop_verifier(state, order, record)
     if not actor_id:
         refused = {item["actor_id"] for item in order.get("negotiations", []) if item.get("status") == "refused"}
         candidates = [candidate for candidate in order["candidate_ids"] if candidate in state["npcs"] and candidate not in refused and not _shared_commitment(state, candidate)]
@@ -4631,30 +4837,36 @@ def _advance_workshop_order(state: Dict[str, Any], order: Dict[str, Any], tick: 
         if actor.get("energy", 0) >= record["definition"]["requirements"]["energy"]:
             result = apply_work_order_command(state, actor_id, {"type": "respond_work_order", "work_order_id": order["id"], "accepted": True, "reason": "rescore repair after blocker"})
             return [{"type": "work_order_response", "actor_id": actor_id, "payload": result}]
-    elif record["state"] == "submitted":
-        candidates = []
-        for verifier_id, verifier in state["npcs"].items():
-            commitment = _shared_commitment(state, verifier_id)
-            if verifier_id != actor_id and _shared_competence(verifier, "measurement") >= record["definition"]["minimum_verifier_competence"] and (not commitment or commitment.get("action_id") == record["id"]):
-                candidates.append(verifier_id)
-        if not candidates:
-            _workshop_block(state, record, "no independent competent verifier available", code="independent_verifier_unavailable")
-            _release_shared_reservation(state, record)
-            return []
-        order["verifier_id"] = max(candidates, key=lambda candidate: (_shared_competence(state["npcs"][candidate], "measurement"), candidate))
-        verifier = state["npcs"][order["verifier_id"]]
-        _claim_shared_commitment(state, verifier["id"], record["id"], "verifier")
-        route = verifier.get("route")
-        if not route or route.get("action_id") != record["id"] or route.get("status") in {"blocked", "cancelled"}:
-            result = _route_workshop_actor(state, verifier, record)
-            if not result["accepted"]:
-                _workshop_block(state, record, result["reason"])
-                _release_shared_reservation(state, record)
-        return []
     if not operation:
         return []
     result = apply_shared_action_command(state, actor_id, {"operation": operation, "shared_action_id": record["id"]})
     return [{"type": "shared_action_autonomous_transition", "actor_id": actor_id, "payload": {"action_id": record["id"], "operation": operation, "accepted": result["accepted"], "reason": result.get("reason")}}]
+
+
+def _prepare_workshop_verifier(state: Dict[str, Any], order: Dict[str, Any], record: Dict[str, Any]) -> list[Dict[str, Any]]:
+    candidates = []
+    for verifier_id, verifier in {**state["npcs"], **state["players"]}.items():
+        commitment = _shared_commitment(state, verifier_id)
+        if verifier_id != record["actor_id"] and _shared_competence(verifier, "measurement") >= record["definition"]["minimum_verifier_competence"] and (not commitment or commitment.get("action_id") == record["id"]):
+            candidates.append(verifier_id)
+    if not candidates:
+        order["verifier_id"] = None
+        _workshop_block(state, record, "no independent competent verifier available", code="independent_verifier_unavailable")
+        _release_shared_reservation(state, record)
+        return []
+    order["verifier_id"] = max(candidates, key=lambda candidate: (_shared_competence(_shared_entity(state, candidate), "measurement"), candidate))
+    verifier = _shared_entity(state, order["verifier_id"])
+    if verifier["id"] in state["players"]:
+        order["status"] = "awaiting_verifier_consent"
+        return []
+    _claim_shared_commitment(state, verifier["id"], record["id"], "verifier")
+    route = verifier.get("route")
+    if not route or route.get("action_id") != record["id"] or route.get("status") in {"blocked", "cancelled"}:
+        result = _route_workshop_actor(state, verifier, record)
+        if not result["accepted"]:
+            _workshop_block(state, record, result["reason"])
+            _release_shared_reservation(state, record)
+    return []
 
 
 def _advance_autonomous_shared_actions(state: Dict[str, Any], tick: int) -> list[Dict[str, Any]]:
