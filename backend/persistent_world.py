@@ -498,29 +498,37 @@ def _project_water_action_channels(state: Dict[str, Any], record: Dict[str, Any]
     """Apply measurement perspective to every copy in records and causal evidence."""
     if record.get("definition", {}).get("execution_model") != "water_installation_repair":
         return copy.deepcopy(value)
-    source_ids = set(record.get("sample_measurement_ids", []) + record.get("perceived_evidence_ids", []))
-    fields, visible_ids = set(), set()
+    sample_ids = list(record.get("sample_measurement_ids", []))
+    source_ids = set(sample_ids + record.get("perceived_evidence_ids", []))
+    fields_by_measurement, visible_ids = {}, set()
     for measurement in state.get("living_workshop", {}).get("measurements", []):
         if measurement.get("id") not in source_ids:
             continue
         projected = _project_living_workshop_measurement(measurement, actor_id)
         if projected:
-            fields.update(projected["values"])
+            fields_by_measurement[measurement["id"]] = set(projected["values"])
             visible_ids.add(measurement["id"])
     measurement_fields = set(_LIVING_WORKSHOP_SYMPTOM_VALUES.values())
-    def project(item):
+    measurement_lists = {"samples", "pre_repair_measurements", "post_repair_measurements"}
+
+    def project(item, measurement_id=None):
         if isinstance(item, list):
-            return [project(child) for child in item]
+            return [project(child, measurement_id) for child in item]
         if not isinstance(item, dict):
             return copy.deepcopy(item)
         projected = {}
         for name, child in item.items():
-            if name in measurement_fields and name not in fields:
+            if name in measurement_fields and name not in fields_by_measurement.get(measurement_id, set()):
                 continue
             if name in {"sample_measurement_ids", "perceived_evidence_ids", "observations"} and isinstance(child, list) and all(isinstance(entry, str) for entry in child):
                 projected[name] = [entry for entry in child if entry in visible_ids]
+            elif name in measurement_lists and isinstance(child, list):
+                projected[name] = [
+                    project(entry, sample_ids[index] if index < len(sample_ids) else None)
+                    for index, entry in enumerate(child)
+                ]
             else:
-                projected[name] = project(child)
+                projected[name] = project(child, measurement_id)
         return projected
     return project(value)
 
@@ -621,6 +629,30 @@ def _project_living_workshop_outcome(
     } | {"private": True}
 
 
+def _shared_action_visible_to_actor(state: Dict[str, Any], record: Dict[str, Any], actor_id: str) -> bool:
+    if record.get("actor_id") == actor_id or record.get("target_id") == actor_id or record.get("state") == "commissioned":
+        return True
+    viewer = _shared_entity(state, actor_id) or {}
+    action_place = _shared_action_location(state, record.get("location", "")) or [-999, -999]
+    return (
+        viewer.get("current_region", "settlement") == "settlement"
+        and _distance(viewer.get("location", [-99, -99]), action_place) <= 1
+    )
+
+
+def _project_shared_demand(state: Dict[str, Any], demand: Dict[str, Any], actor_id: str) -> Dict[str, Any]:
+    audience_allowed = not demand.get("private_to") or actor_id in demand["private_to"]
+    action_id = demand.get("canonical_action_id")
+    record = state.get("shared_actions", {}).get("records", {}).get(action_id) if action_id else None
+    action_visible = not record or _shared_action_visible_to_actor(state, record, actor_id)
+    if audience_allowed and action_visible:
+        return copy.deepcopy(demand)
+    return {
+        "id": demand.get("id"), "kind": demand.get("kind"),
+        "status": demand.get("status"), "private": True,
+    }
+
+
 def actor_world_view(snapshot: Dict[str, Any], actor_id: str) -> Dict[str, Any]:
     """Return public state plus only the requesting actor's private material."""
     view = copy.deepcopy(snapshot)
@@ -683,18 +715,12 @@ def actor_world_view(snapshot: Dict[str, Any], actor_id: str) -> Dict[str, Any]:
         workshop.pop("last_processed_tick", None)
     shared = state.get("shared_actions", {})
     shared["demands"] = [
-        demand if not demand.get("private_to") or actor_id in demand["private_to"] else {
-            "id": demand.get("id"), "kind": demand.get("kind"),
-            "status": demand.get("status"), "private": True,
-        }
-        for demand in shared.get("demands", [])
+        _project_shared_demand(snapshot["state"], demand, actor_id)
+        for demand in snapshot["state"].get("shared_actions", {}).get("demands", [])
     ]
-    viewer = state.get("players", {}).get(actor_id, {})
     visible_action_ids = set()
     for action_id, record in list(shared.get("records", {}).items()):
-        action_place = state.get("places", {}).get(record.get("location"), {}).get("location", [-999, -999])
-        can_inspect = viewer.get("current_region", "settlement") == "settlement" and _distance(viewer.get("location", [-99, -99]), action_place) <= 1
-        visible = record.get("actor_id") == actor_id or record.get("target_id") == actor_id or record.get("state") == "commissioned" or can_inspect
+        visible = _shared_action_visible_to_actor(snapshot["state"], record, actor_id)
         if visible:
             visible_action_ids.add(action_id)
             shared["records"][action_id] = _project_water_action_channels(snapshot["state"], record, actor_id, record)
@@ -718,12 +744,25 @@ def actor_world_view(snapshot: Dict[str, Any], actor_id: str) -> Dict[str, Any]:
 def actor_event_view(event: Dict[str, Any], snapshot: Dict[str, Any], actor_id: str) -> Dict[str, Any]:
     """Redact event evidence using the same perspective boundary as snapshots."""
     visible = copy.deepcopy(event)
+    state = snapshot.get("state", {})
+    demands = {item.get("id"): item for item in state.get("shared_actions", {}).get("demands", [])}
+
+    def project_requests(value):
+        if isinstance(value, list):
+            return [project_requests(item) for item in value]
+        if not isinstance(value, dict):
+            return copy.deepcopy(value)
+        demand = demands.get(value.get("id"))
+        if demand and demand.get("canonical_action_id"):
+            return _project_shared_demand(state, demand, actor_id)
+        return {name: project_requests(child) for name, child in value.items()}
+
+    visible["payload"] = project_requests(visible.get("payload", {}))
     payload = visible.get("payload", {})
     if visible.get("type") == "conduct_reported" and payload.get("accused") != actor_id:
         visible["payload"] = {"private": True, "conduct_id": payload.get("conduct_id")}
         return visible
 
-    state = snapshot.get("state", {})
     if visible.get("type") == "living_workshop_measurement":
         measurement_id = payload.get("id") if isinstance(payload, dict) else None
         authoritative_measurement = next((
@@ -779,11 +818,7 @@ def actor_event_view(event: Dict[str, Any], snapshot: Dict[str, Any], actor_id: 
         action_id = payload["event"].get("action_id")
     authoritative = shared.get("records", {}).get(action_id, {}) if action_id else {}
     if action_id:
-        viewer = state.get("players", {}).get(actor_id, {})
-        action_place = state.get("places", {}).get(authoritative.get("location"), {}).get("location", [-999, -999])
-        at_action = viewer.get("current_region", "settlement") == "settlement" and _distance(viewer.get("location", [-99, -99]), action_place) <= 1
-        owns_action = authoritative.get("actor_id", record.get("actor_id") if isinstance(record, dict) else None) == actor_id or authoritative.get("target_id") == actor_id
-        if not (owns_action or authoritative.get("state") == "commissioned" or at_action):
+        if not _shared_action_visible_to_actor(state, authoritative or record or {}, actor_id):
             visible["payload"] = {
                 "private": True,
                 "action_id": action_id,
@@ -1690,6 +1725,54 @@ def _create_instruction_opportunity(state: Dict[str, Any], tick: int, domain: st
     state["shared_actions"]["records"][lesson_id] = instruction_record
     _append_shared_action_event(state, instruction_record, "proposed", teacher_id, evidence=[{"kind": "verified_source_record", "id": source_evidence}])
     _remember_consequence(state, tick, f"verified-work:{source_evidence}", f"teaching-order:{lesson_id}", [teacher_id, learner["id"]])
+    return lesson
+
+
+def _create_requested_instruction(state: Dict[str, Any], tick: int, request: Dict[str, Any], source_order_id: str) -> Optional[Dict[str, Any]]:
+    """Bind a recovery request to the existing consented instruction workflow."""
+    learner_id = request["requester_id"]
+    domain = request["domain"]
+    minimum = max(0.15, float(request.get("minimum_competence", 0.15)))
+    candidates = []
+    for teacher_id, teacher in sorted({**state["npcs"], **state["players"]}.items()):
+        provenance = teacher.get("competency_records", {}).get(domain, {}).get("provenance", [])
+        if teacher_id != learner_id and provenance and _shared_competence(teacher, domain) >= minimum:
+            candidates.append((_shared_competence(teacher, domain), teacher_id, provenance[-1]))
+    if not candidates:
+        return None
+    _, teacher_id, source_evidence = max(candidates, key=lambda item: (item[0], item[1]))
+    lesson_number = len(state["education"]["teaching_orders"]) + 1
+    lesson_id = f"teaching-{lesson_number}"
+    while lesson_id in state["shared_actions"]["records"]:
+        lesson_number += 1
+        lesson_id = f"teaching-{lesson_number}"
+    lesson = {
+        "id": lesson_id, "domain": domain, "status": "proposed", "created_tick": tick,
+        "instructor": teacher_id, "learner": learner_id, "source_order_id": source_order_id,
+        "source_evidence": source_evidence, "required_ticks": 4,
+        "history": [{"tick": tick, "status": "proposed", "recovery_request_id": request["id"]}],
+        "consent": {teacher_id: "proposed", learner_id: "pending"}, "canonical_action_id": lesson_id,
+    }
+    state["education"]["teaching_orders"].append(lesson)
+    instruction_record = {
+        "id": lesson_id, "definition": {
+            "action_type": "conduct_instruction_session", "execution_model": "instruction_session",
+            "requirements": {"materials": {}, "tools": {}, "station": "instruction_table", "energy": 1,
+                             "competence_domain": domain, "minimum_competence": minimum,
+                             "perception_channels": ["language", "records"], "duration_ticks": 4},
+            "output_item": "instruction_record", "output_amount": 1, "provisional_cu_milli": 0,
+            "verification_tolerance": 0.0, "verification_threshold": 0.0,
+            "verifier_competence_domain": None, "minimum_verifier_competence": 0.0,
+        },
+        "actor_id": teacher_id, "actor_kind": "human" if teacher_id in state["players"] else "ai",
+        "intent": f"teach {domain} for blocked water repair", "target_id": learner_id,
+        "location": "meeting_hall", "observations": [source_evidence], "state": "proposed",
+        "proposed_tick": tick, "ledger_event_ids": [], "samples": [], "output": {},
+        "failure_reason": None, "verifier_id": None, "autonomous_origin": False,
+    }
+    state["shared_actions"]["records"][lesson_id] = instruction_record
+    _append_shared_action_event(state, instruction_record, "proposed", teacher_id, evidence=[{"kind": "verified_source_record", "id": source_evidence}])
+    _remember_consequence(state, tick, f"water-repair-recovery:{request['id']}", f"teaching-order:{lesson_id}", [teacher_id, learner_id])
     return lesson
 
 
@@ -3671,6 +3754,12 @@ def apply_work_order_command(state: Dict[str, Any], actor_id: str, command: Dict
     order.update({"status": "accepted", "assigned_actor_id": actor_id, "decision_explanation": _living_workshop_decision(state, actor_id, visible_ids)})
     order["requires_fresh_consent"] = False
     history.append({"kind": "response", "actor_id": actor_id, "tick": state["clock"]["tick"], "status": "accepted", "reason": reason, "terms": copy.deepcopy(order["terms"]), "canonical_action_id": record["id"]})
+    recovery = next((item for item in reversed(order.get("recovery_history", [])) if item.get("action") == "renegotiate" and item.get("status") == "negotiating"), None)
+    if recovery:
+        recovery.update({"status": "completed", "completed_tick": state["clock"]["tick"], "assigned_actor_id": actor_id})
+        blocker_number = recovery.get("blocker_number", 0)
+        if 0 < blocker_number <= len(order.get("blockers", [])):
+            order["blockers"][blocker_number - 1].update({"status": "recovered", "recovered_tick": state["clock"]["tick"]})
     return {"accepted": True, "type": command["type"], "status": "accepted", "assigned_actor_id": actor_id, "canonical_action_id": record["id"], "physical_change": False}
 
 
@@ -3742,6 +3831,7 @@ def _dispatch_workshop_recovery(state: Dict[str, Any], order: Dict[str, Any], re
                     ),
                 } - {None})
             state["shared_actions"]["demands"].append(request)
+        record["recovery_pending"] = request_id
         order.setdefault("recovery_history", []).append({
             "tick": state["clock"]["tick"], "action": action, "status": "requested",
             "request_id": request_id, "blocker_number": blocker_number,
@@ -3803,16 +3893,177 @@ def _dispatch_workshop_recovery(state: Dict[str, Any], order: Dict[str, Any], re
             order["assigned_actor_id"] = None
             order["requires_fresh_consent"] = True
             _release_shared_reservation(state, record)
-            status = "abandoned"
+            status = "completed"
         order.setdefault("recovery_history", []).append({
             "tick": state["clock"]["tick"], "action": action, "status": status,
             "blocker_number": blocker_number,
+            **({"outcome": "abandoned", "completed_tick": state["clock"]["tick"]} if action == "abandon" else {}),
         })
         return {
             "accepted": True, "type": "shared_action", "operation": action,
             "status": status, "physical_change": False,
         }
     return {"accepted": False, "reason": "unsupported workshop recovery action"}
+
+
+def _complete_workshop_recovery(state: Dict[str, Any], order: Dict[str, Any], record: Dict[str, Any], history: Dict[str, Any], request: Dict[str, Any], tick: int) -> list[Dict[str, Any]]:
+    request.update({"status": "completed", "completed_tick": tick})
+    history.update({"status": "completed", "completed_tick": tick})
+    blocker_number = history.get("blocker_number", 0)
+    if 0 < blocker_number <= len(order.get("blockers", [])):
+        order["blockers"][blocker_number - 1].update({"status": "recovered", "recovered_tick": tick})
+    record.pop("recovery_pending", None)
+    if record["state"] == "accepted":
+        record["commitment_expires_tick"] = tick + 24
+    order["status"] = record["state"]
+    return [{
+        "type": "shared_action_recovery_completed", "actor_id": order.get("assigned_actor_id"),
+        "payload": {"operation": history["action"], "action_id": record["id"], "request": copy.deepcopy(request)},
+    }]
+
+
+def _record_workshop_recovery_transfer(state: Dict[str, Any], record: Dict[str, Any], request: Dict[str, Any], actor_id: str, *, kind: str, inputs: Dict[str, Any], outputs: Dict[str, Any]) -> None:
+    """Record a bounded recovery transfer as its own completed causal action."""
+    transfer_number = len(request.setdefault("transfer_action_ids", [])) + 1
+    action_id = f"{request['id']}:transfer:{transfer_number}"
+    transfer = {
+        "id": action_id,
+        "definition": {
+            "action_type": kind, "execution_model": "water_repair_recovery_transfer",
+            "requirements": {"materials": {}, "tools": {}, "station": None, "energy": 0,
+                             "competence_domain": "logistics", "minimum_competence": 0,
+                             "perception_channels": [], "duration_ticks": 1},
+            "output_item": "water_repair_materials", "output_amount": sum(outputs.get("communal_materials", {}).values()),
+            "provisional_cu_milli": 0, "verification_tolerance": 0,
+            "verification_threshold": 0, "verifier_competence_domain": None,
+            "minimum_verifier_competence": 0,
+        },
+        "actor_id": actor_id, "actor_kind": "human" if actor_id in state["players"] else "ai",
+        "intent": f"resolve material blocker for {record['id']}",
+        "target_id": record["target_id"], "location": record["location"],
+        "observations": [request["id"]], "perceived_evidence_ids": [],
+        "state": "proposed", "proposed_tick": state["clock"]["tick"],
+        "ledger_event_ids": [], "samples": [], "output": copy.deepcopy(outputs),
+        "failure_reason": None, "verifier_id": None, "autonomous_origin": False,
+    }
+    state["shared_actions"]["records"][action_id] = transfer
+    request["transfer_action_ids"].append(action_id)
+    _append_shared_action_event(state, transfer, "proposed", actor_id, evidence=[{"kind": "recovery_request", "id": request["id"], "parent_action_id": record["id"]}])
+    _append_shared_action_event(state, transfer, "accepted", actor_id)
+    _append_shared_action_event(state, transfer, "reserved", actor_id, inputs=inputs)
+    _append_shared_action_event(state, transfer, "in_progress", actor_id)
+    _append_shared_action_event(state, transfer, "submitted", actor_id, inputs=inputs, outputs=outputs, evidence=[{"kind": kind, "request_id": request["id"], **copy.deepcopy(outputs)}], physical=True)
+    verifier_id = next(entity_id for entity_id in sorted({**state["npcs"], **state["players"]}) if entity_id != actor_id)
+    transfer["verifier_id"] = verifier_id
+    _append_shared_action_event(state, transfer, "verified", verifier_id, evidence=[{"kind": "independent_recovery_transfer_count"}])
+    _append_shared_action_event(state, transfer, "commissioned", verifier_id)
+
+
+def _process_workshop_recovery(state: Dict[str, Any], order: Dict[str, Any], record: Dict[str, Any], history: Dict[str, Any], tick: int) -> list[Dict[str, Any]]:
+    request = next((
+        item for item in state["shared_actions"]["demands"]
+        if item.get("id") == history.get("request_id")
+    ), None)
+    if not request or request.get("status") == "completed":
+        return []
+    if request.get("kind") == "water_repair_supply":
+        missing = _workshop_missing_materials(state, record)
+        transfers = request.setdefault("transfers", [])
+        for supplier_id, supplier in sorted(state["npcs"].items()):
+            if not missing or not supplier.get("autonomous", False):
+                break
+            supplied = {}
+            inventory = supplier.setdefault("inventory", {})
+            for material, amount in list(missing.items()):
+                moved = min(int(amount), int(inventory.get(material, 0)))
+                if moved <= 0:
+                    continue
+                inventory[material] -= moved
+                state["resources"][material] = state["resources"].get(material, 0) + moved
+                supplied[material] = moved
+            if supplied:
+                transfers.append({"supplier_id": supplier_id, "materials": supplied})
+                _record_workshop_recovery_transfer(
+                    state, record, request, supplier_id,
+                    kind="water_repair_supply_transfer",
+                    inputs={"supplier_inventory": copy.deepcopy(supplied)},
+                    outputs={"communal_materials": copy.deepcopy(supplied)},
+                )
+                missing = _workshop_missing_materials(state, record)
+        if not _workshop_missing_materials(state, record):
+            return _complete_workshop_recovery(state, order, record, history, request, tick)
+    if request.get("kind") == "water_repair_gathering":
+        missing = _workshop_missing_materials(state, record)
+        gathered = request.setdefault("gathered", {})
+        for site_id, site in sorted(state.get("resource_sites", {}).items()):
+            stock = site.get("stock")
+            if not isinstance(stock, dict):
+                continue
+            moved_from_site = {}
+            for material, amount in list(missing.items()):
+                moved = min(int(amount), int(stock.get(material, 0)))
+                if moved <= 0:
+                    continue
+                stock[material] -= moved
+                state["resources"][material] = state["resources"].get(material, 0) + moved
+                gathered[material] = gathered.get(material, 0) + moved
+                moved_from_site[material] = moved
+            if moved_from_site:
+                site.setdefault("history", []).append({
+                    "tick": tick, "actor": order.get("assigned_actor_id"),
+                    "operation": "water_repair_recovery_gathering", "materials": moved_from_site,
+                    "canonical_action_id": record["id"],
+                })
+                _record_workshop_recovery_transfer(
+                    state, record, request, order.get("assigned_actor_id"),
+                    kind="water_repair_recovery_gathering",
+                    inputs={"site_id": site_id, "site_materials": copy.deepcopy(moved_from_site)},
+                    outputs={"communal_materials": copy.deepcopy(moved_from_site)},
+                )
+                missing = _workshop_missing_materials(state, record)
+            if not missing:
+                break
+        if not _workshop_missing_materials(state, record):
+            actor = _shared_entity(state, order.get("assigned_actor_id", ""))
+            if actor:
+                actor["energy"] = round(max(0, actor.get("energy", 0) - 1), 2)
+            return _complete_workshop_recovery(state, order, record, history, request, tick)
+    if request.get("kind") == "water_repair_instruction":
+        lesson = next((
+            item for item in state["education"]["teaching_orders"]
+            if item.get("id") == request.get("teaching_order_id")
+        ), None)
+        if lesson is None:
+            lesson = _create_requested_instruction(state, tick, request, order["id"])
+            if lesson:
+                request.update({"status": "instruction_active", "teaching_order_id": lesson["id"]})
+                history["status"] = "instruction_active"
+            return []
+        if lesson.get("status") != "completed":
+            return []
+        practice = next((
+            item for item in state["education"]["practice_orders"]
+            if item.get("source_instruction_id") == lesson["id"]
+        ), None)
+        supervisor = _shared_entity(state, lesson["instructor"])
+        target = _shared_action_location(state, record["location"])
+        if not practice or not supervisor or not target:
+            return []
+        if practice.get("status") == "awaiting_real_work":
+            practice.update({"status": "assigned_real_work", "work_order_id": record["id"], "assigned_tick": tick})
+            practice.setdefault("history", []).append({"tick": tick, "status": "assigned_real_work", "work_order_id": record["id"]})
+            record.update({"practice_order_id": practice["id"], "supervisor_id": supervisor["id"]})
+        if supervisor.get("current_region", "settlement") != state["installations"]["water"].get("region", "settlement"):
+            return []
+        if _distance(supervisor.get("location", [-99, -99]), target) > 1:
+            supervisor["location"] = _move_for_legacy(state, supervisor, target, owner_action_id=record["id"])
+            request["status"] = "supervisor_traveling"
+            history["status"] = "supervisor_traveling"
+            return []
+        return _complete_workshop_recovery(state, order, record, history, request, tick)
+    if request.get("kind") == "water_repair_verifier" and _workshop_verifier_candidates(state, record):
+        return _complete_workshop_recovery(state, order, record, history, request, tick)
+    return []
 
 
 def apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: Dict[str, Any]) -> Dict[str, Any]:
@@ -4582,7 +4833,7 @@ def _process_shared_actions(state: Dict[str, Any], tick: int) -> list[Dict[str, 
         if tick >= rest["until_tick"]:
             entity.pop("workshop_rest", None)
     for record in sorted(shared["records"].values(), key=lambda item: item["id"]):
-        if record["state"] == "accepted" and tick >= record.get("commitment_expires_tick", float("inf")):
+        if record["state"] == "accepted" and not record.get("recovery_pending") and tick >= record.get("commitment_expires_tick", float("inf")):
             _append_shared_action_event(state, record, "cancelled", record["actor_id"], evidence=[{"kind": "acceptance_expired"}])
             _workshop_block(state, record, "accepted actor commitment expired", code="reservation_expired")
             continue
@@ -4782,6 +5033,16 @@ def _advance_workshop_order(state: Dict[str, Any], order: Dict[str, Any], tick: 
     actor_id = order.get("assigned_actor_id")
     if order.get("requires_fresh_consent"):
         return []
+    pending_recovery = next((
+        item for item in reversed(order.get("recovery_history", []))
+        if item.get("request_id") and item.get("status") != "completed"
+    ), None)
+    if pending_recovery:
+        recovery_events = _process_workshop_recovery(state, order, record, pending_recovery, tick)
+        if recovery_events:
+            return recovery_events
+        if pending_recovery.get("status") != "completed":
+            return []
     if order.get("status") == "blocked" and actor_id in state["npcs"] and order.get("recovery_options"):
         blocker_number = len(order.get("blockers", []))
         dispatched = next((
@@ -4789,14 +5050,21 @@ def _advance_workshop_order(state: Dict[str, Any], order: Dict[str, Any], tick: 
             if item.get("blocker_number") == blocker_number
         ), None)
         if dispatched:
+            if dispatched.get("action") != "rest" and dispatched.get("status") not in {"completed", "abandoned", "negotiating"}:
+                recovery_events = _process_workshop_recovery(state, order, record, dispatched, tick)
+                if recovery_events:
+                    return recovery_events
+                if dispatched.get("status") != "completed":
+                    return []
             actor = state["npcs"][actor_id]
-            if dispatched.get("action") != "rest" or actor.get("workshop_rest"):
+            if dispatched.get("action") == "rest" and actor.get("workshop_rest"):
                 return []
-            if actor.get("energy", 0) < record["definition"]["requirements"]["energy"]:
+            if dispatched.get("action") == "rest" and actor.get("energy", 0) < record["definition"]["requirements"]["energy"]:
                 return []
-            dispatched["status"] = "completed"
-            dispatched["completed_tick"] = tick
-            order["status"] = record["state"]
+            if dispatched.get("action") == "rest" and dispatched.get("status") != "completed":
+                dispatched["status"] = "completed"
+                dispatched["completed_tick"] = tick
+                order["status"] = record["state"]
         recovery_action = order["recovery_options"][0]["action"]
         if not dispatched:
             result = apply_shared_action_command(state, actor_id, {"operation": recovery_action, "shared_action_id": record["id"]})
@@ -4843,12 +5111,17 @@ def _advance_workshop_order(state: Dict[str, Any], order: Dict[str, Any], tick: 
     return [{"type": "shared_action_autonomous_transition", "actor_id": actor_id, "payload": {"action_id": record["id"], "operation": operation, "accepted": result["accepted"], "reason": result.get("reason")}}]
 
 
-def _prepare_workshop_verifier(state: Dict[str, Any], order: Dict[str, Any], record: Dict[str, Any]) -> list[Dict[str, Any]]:
+def _workshop_verifier_candidates(state: Dict[str, Any], record: Dict[str, Any]) -> list[str]:
     candidates = []
     for verifier_id, verifier in {**state["npcs"], **state["players"]}.items():
         commitment = _shared_commitment(state, verifier_id)
         if verifier_id != record["actor_id"] and _shared_competence(verifier, "measurement") >= record["definition"]["minimum_verifier_competence"] and (not commitment or commitment.get("action_id") == record["id"]):
             candidates.append(verifier_id)
+    return candidates
+
+
+def _prepare_workshop_verifier(state: Dict[str, Any], order: Dict[str, Any], record: Dict[str, Any]) -> list[Dict[str, Any]]:
+    candidates = _workshop_verifier_candidates(state, record)
     if not candidates:
         order["verifier_id"] = None
         _workshop_block(state, record, "no independent competent verifier available", code="independent_verifier_unavailable")
