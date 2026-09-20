@@ -1,8 +1,10 @@
 import json
 import copy
 import unittest
+import persistent_world
 
 from causal_ledger import CausalEvent, CausalLedger
+from economy.ledger import provisional_valuation_claim
 from persistent_world import (
     _process_living_workshop,
     _process_shared_actions,
@@ -53,6 +55,199 @@ def alpha34_fixture_state():
 
 
 class LivingWorkshopTests(unittest.TestCase):
+    def submitted_repair(self):
+        state, order = self.negotiated_state()
+        state["npcs"]["orin"]["location"] = [0, 0]
+        state["npcs"]["mira"]["location"] = list(state["npcs"]["ada"]["location"])
+        action_id = self.reserve_repair(state, order)
+        result = apply_shared_action_command(state, "ada", {"operation": "execute", "shared_action_id": action_id})
+        self.assertTrue(result["accepted"], result)
+        record = state["shared_actions"]["records"][action_id]
+        state["clock"]["tick"] = record["execution_due_tick"]
+        _process_shared_actions(state, record["execution_due_tick"])
+        self.assertEqual("submitted", record["state"])
+        return state, record
+
+    def test_water_verification_rejects_invalid_identity_presence_and_participation(self):
+        for invalid in ("performer", "supervisor", "absent", "other-region", "unqualified", "no-provenance", "broken-instrument"):
+            with self.subTest(invalid=invalid):
+                state, record = self.submitted_repair()
+                verifier = "mira"
+                if invalid == "performer": verifier = "ada"
+                if invalid == "supervisor": record["supervisor_id"] = "mira"
+                if invalid == "absent": state["npcs"]["mira"]["location"] = [0, 0]
+                if invalid == "other-region": state["npcs"]["mira"]["current_region"] = "east_ridge"
+                if invalid == "unqualified": state["npcs"]["mira"]["competency_records"]["measurement"]["demonstrated"] = 0
+                if invalid == "no-provenance": state["npcs"]["mira"]["competency_records"]["measurement"]["provenance"] = []
+                if invalid == "broken-instrument": state["shared_actions"]["tools"]["calibrated_measure"]["condition"] = 0
+                before = copy.deepcopy(state["shared_actions"]["ledger"])
+                result = apply_shared_action_command(state, verifier, {"operation": "verify", "shared_action_id": record["id"], "actor_id": "mira", "passed": True})
+                self.assertFalse(result["accepted"])
+                self.assertEqual(before, state["shared_actions"]["ledger"])
+
+    def test_unwitnessed_repair_changes_world_but_not_bystander_memory(self):
+        state, record = self.submitted_repair()
+        self.assertGreater(state["installations"]["water"].get("flow_lpm", 0), 12)
+        for actor_id, expected in (("ada", True), ("mira", True), ("orin", False)):
+            memories = [m for m in state["npcs"][actor_id]["memories"] if m.get("action_id") == record["id"]]
+            self.assertEqual(expected, bool(memories))
+            for memory in memories:
+                self.assertTrue({"source_event_ids", "perceived_channels", "confidence", "importance", "relevance", "belief", "contradictions"}.issubset(memory))
+
+    def test_verified_water_receipt_is_filtered_valuation_only_and_teaches_from_evidence(self):
+        state, record = self.submitted_repair()
+        before = copy.deepcopy(state["shared_actions"]["valuation_accounts_milli"])
+        wallets = copy.deepcopy(state["economy"])
+        competence = state["npcs"]["ada"]["competency_records"]["mechanical_repair"]["demonstrated"]
+        result = apply_shared_action_command(state, "mira", {"operation": "verify", "shared_action_id": record["id"]})
+        self.assertTrue(result["accepted"], result)
+        self.assertEqual("verified", record["state"])
+        self.assertGreater(state["npcs"]["ada"]["competency_records"]["mechanical_repair"]["demonstrated"], competence)
+        verify_id = result["causal_event"]["event_id"]
+        self.assertIn(verify_id, state["npcs"]["ada"]["competency_records"]["mechanical_repair"]["provenance"])
+        result = apply_shared_action_command(state, "mira", {"operation": "commission", "shared_action_id": record["id"]})
+        self.assertTrue(result["accepted"], result)
+        self.assertEqual(before, state["shared_actions"]["valuation_accounts_milli"])
+        self.assertEqual(wallets, state["economy"])
+        receipt = persistent_world.living_workshop_receipt(state, record["id"], "mira")
+        self.assertGreater(receipt["provisional_cu"]["milli"], 0)
+        self.assertFalse(receipt["provisional_cu"]["spendable"])
+        self.assertEqual(0, sum(p["delta_milli"] for p in receipt["provisional_cu"]["postings"]))
+        self.assertTrue(receipt["measurements"])
+        self.assertEqual("mira", receipt["verifier"])
+        distant = persistent_world.living_workshop_receipt(state, record["id"], "dev")
+        self.assertEqual([], distant["measurements"])
+        self.assertEqual("mira", distant["verifier"])
+        self.assertNotIn("deterministic_inputs", json.dumps(distant))
+        self.assertNotIn("diagnosis", json.dumps(distant))
+
+    def test_failed_independent_check_records_research_value_without_competency_gain(self):
+        state, record = self.submitted_repair()
+        before = copy.deepcopy(state["npcs"]["ada"]["competency_records"])
+        state["installations"]["water"]["contamination_index"] = 0.8
+        result = apply_shared_action_command(state, "mira", {"operation": "verify", "shared_action_id": record["id"], "samples": [{"contamination_index": 0}], "passed": True})
+        self.assertTrue(result["accepted"], result)
+        self.assertEqual("needs_rework", record["state"])
+        self.assertEqual(before, state["npcs"]["ada"]["competency_records"])
+        receipt = persistent_world.living_workshop_receipt(state, record["id"], "mira")
+        self.assertGreater(receipt["provisional_cu"]["milli"], 0)
+        self.assertEqual("failed_research", receipt["provisional_cu"]["kind"])
+        self.assertEqual({"treasury": 0}, state["shared_actions"]["valuation_accounts_milli"])
+
+    def test_correction_appends_contradiction_without_rewriting_evidence(self):
+        state, record = self.submitted_repair()
+        verified = apply_shared_action_command(state, "mira", {"operation": "verify", "shared_action_id": record["id"]})
+        self.assertTrue(verified["accepted"], verified)
+        before = copy.deepcopy(state["shared_actions"]["ledger"])
+        corrected = apply_shared_action_command(state, "mira", {"operation": "correct_evidence", "shared_action_id": record["id"], "source_event_id": verified["causal_event"]["event_id"], "belief": "The prior reading should be independently repeated."})
+        self.assertTrue(corrected["accepted"], corrected)
+        self.assertEqual(before, state["shared_actions"]["ledger"][:-1])
+        self.assertTrue(CausalLedger([CausalEvent(**e) for e in state["shared_actions"]["ledger"]]).verify())
+        memory = state["npcs"]["mira"]["memories"][-1]
+        self.assertIn(verified["causal_event"]["event_id"], memory["contradictions"])
+
+    def test_commission_rechecks_verifier_presence(self):
+        state, record = self.submitted_repair()
+        self.assertTrue(apply_shared_action_command(state, "mira", {"operation": "verify", "shared_action_id": record["id"]})["accepted"])
+        state["npcs"]["mira"]["location"] = [0, 0]
+        self.assertFalse(apply_shared_action_command(state, "mira", {"operation": "commission", "shared_action_id": record["id"]})["accepted"])
+
+    def test_credible_communication_creates_only_heard_subjective_memory(self):
+        state, record = self.submitted_repair()
+        source_id = record["ledger_event_ids"][-1]
+        state["npcs"]["orin"]["location"] = list(state["npcs"]["ada"]["location"])
+        physical = copy.deepcopy(state["installations"])
+        report = apply_shared_action_command(state, "ada", {"operation": "communicate_evidence", "shared_action_id": record["id"], "source_event_id": source_id, "belief": "The repair is finished but still needs review."})
+        self.assertTrue(report["accepted"], report)
+        memory = state["npcs"]["orin"]["memories"][-1]
+        self.assertIn(source_id, memory["source_event_ids"])
+        self.assertEqual(["language"], memory["perceived_channels"])
+        self.assertLess(memory["confidence"], 1)
+        self.assertFalse(any(m.get("action_id") == record["id"] for m in state["npcs"]["dev"]["memories"]))
+        self.assertEqual(physical, state["installations"])
+        forged = apply_shared_action_command(state, "dev", {"operation": "communicate_evidence", "shared_action_id": record["id"], "source_event_id": source_id, "belief": "I witnessed it."})
+        self.assertFalse(forged["accepted"])
+
+    def test_receipts_and_views_do_not_disclose_hidden_evidence_after_commission(self):
+        state, record = self.submitted_repair()
+        self.assertTrue(apply_shared_action_command(state, "mira", {"operation": "verify", "shared_action_id": record["id"]})["accepted"])
+        self.assertTrue(apply_shared_action_command(state, "mira", {"operation": "commission", "shared_action_id": record["id"]})["accepted"])
+        state["operator_audit"].append({"secret": "private operator data"})
+        snapshot = {"world_id": "test", "revision": 1, "tick": 6, "state": state}
+        view = actor_world_view(snapshot, "dev")["state"]
+        rendered = json.dumps(view["shared_actions"])
+        self.assertNotIn("deterministic_inputs", rendered)
+        self.assertNotIn("repair_quality", rendered)
+        self.assertNotIn("event_perception", rendered)
+        self.assertNotIn("private operator data", json.dumps(view))
+        receipt = persistent_world.living_workshop_receipt(state, record["id"], "dev")
+        self.assertEqual("commissioned", receipt["result"])
+        self.assertEqual([], receipt["measurements"])
+
+    def test_autonomous_repair_verifies_and_commissions_using_real_verifier(self):
+        state, order = self.negotiated_state()
+        state["npcs"]["mira"]["location"] = list(state["npcs"]["ada"]["location"])
+        for tick in range(2, 30):
+            state["clock"]["tick"] = tick
+            _advance_travel_routes(state, tick)
+            _process_shared_actions(state, tick)
+            _advance_autonomous_shared_actions(state, tick)
+        record = state["shared_actions"]["records"][order["canonical_action_id"]]
+        self.assertEqual("commissioned", record["state"])
+        self.assertNotEqual(record["actor_id"], record["verifier_id"])
+        self.assertEqual("resolved", order["status"])
+        self.assertEqual("resolved", state["living_workshop"]["demands"][0]["status"])
+
+    def test_valuation_factors_affect_balanced_claims_without_account_access(self):
+        factors = {"negotiated_milli": 100, "public_priority": 1, "material_cost_milli": 100,
+                   "labor_cost_milli": 100, "precision": 1, "durability": 1, "utility": 1,
+                   "evidence_quality": 1, "reproducibility": 1}
+        for name, value, expected in (("negotiated_milli", 200, 400), ("material_cost_milli", 200, 400),
+                                      ("labor_cost_milli", 200, 400), ("public_priority", 0.5, 150),
+                                      ("precision", 0.5, 150), ("durability", 0.5, 150),
+                                      ("utility", 0.5, 150), ("evidence_quality", 0.5, 150), ("reproducibility", 0.5, 150)):
+            with self.subTest(factor=name):
+                claim = provisional_valuation_claim("repair", "ada", "verification", {**factors, name: value})
+                self.assertEqual(expected, claim["milli"])
+                self.assertEqual(0, sum(post["delta_milli"] for post in claim["postings"]))
+                self.assertFalse(claim["spendable"])
+        for invalid in (float("nan"), -1, True, "100"):
+            with self.assertRaises(ValueError):
+                provisional_valuation_claim("repair", "ada", "verification", {**factors, "precision": invalid})
+
+    def test_human_verifier_uses_same_gates_and_duplicate_review_has_no_effect(self):
+        state, record = self.submitted_repair()
+        self.add_player(state, "human-verifier", state["npcs"]["mira"]["location"], measurement=0.3)
+        self.assertEqual(0.3, state["npcs"]["ada"]["competency_records"]["mechanical_repair"]["demonstrated"])
+        original = copy.deepcopy(state["shared_actions"]["ledger"])
+        reviewed = apply_shared_action_command(state, "human-verifier", {"operation": "verify", "shared_action_id": record["id"]})
+        self.assertTrue(reviewed["accepted"], reviewed)
+        self.assertEqual(original, state["shared_actions"]["ledger"][:len(original)])
+        before = copy.deepcopy(state)
+        self.assertFalse(apply_shared_action_command(state, "human-verifier", {"operation": "verify", "shared_action_id": record["id"]})["accepted"])
+        self.assertEqual(before, state)
+        self.assertTrue(apply_shared_action_command(state, "human-verifier", {"operation": "commission", "shared_action_id": record["id"]})["accepted"])
+        self.assertEqual(1, len(state["shared_actions"]["valuation_claims"]))
+
+    def test_rejected_review_can_reopen_negotiation_without_rewriting_history(self):
+        state, record = self.submitted_repair()
+        state["installations"]["water"]["contamination_index"] = 0.8
+        self.assertTrue(apply_shared_action_command(state, "mira", {"operation": "verify", "shared_action_id": record["id"]})["accepted"])
+        old_history = copy.deepcopy(state["shared_actions"]["ledger"])
+        order = state["living_workshop"]["work_orders"][0]
+        accepted = self.respond(state, order)
+        self.assertTrue(accepted["accepted"], accepted)
+        self.assertNotEqual(record["id"], order["canonical_action_id"])
+        self.assertEqual(old_history, state["shared_actions"]["ledger"][:len(old_history)])
+
+    def test_subjective_memory_is_not_a_mutable_alias_of_causal_evidence(self):
+        state, record = self.submitted_repair()
+        before = copy.deepcopy(state["shared_actions"]["ledger"])
+        state["npcs"]["ada"]["memories"][-1]["perceived_channels"].append("imagined")
+        self.assertEqual(before, state["shared_actions"]["ledger"])
+        self.assertTrue(CausalLedger([CausalEvent(**event) for event in state["shared_actions"]["ledger"]]).verify())
+
+
     def negotiated_state(self, actor_id="ada"):
         state = self.workshop_state()
         water = state["installations"]["water"]
@@ -228,7 +423,7 @@ class LivingWorkshopTests(unittest.TestCase):
         self.assertEqual("ada", order["assigned_actor_id"])
         self.assertEqual("submitted", state["shared_actions"]["records"][order["canonical_action_id"]]["state"])
         self.assertEqual("independent_verifier_unavailable", order["blockers"][-1]["code"])
-        self.assertEqual(0.75 - 0.00025, state["installations"]["water"]["condition"])
+        self.assertGreater(state["installations"]["water"]["condition"], 0.75)
 
     def test_rest_is_timed_and_allows_human_and_ai_to_retry(self):
         for actor_id in ("ada", "player-worker"):
@@ -516,6 +711,13 @@ class LivingWorkshopTests(unittest.TestCase):
         self.assertEqual(lesson["canonical_action_id"], consent_event["action_id"])
         self.assertEqual("orin", consent_event["actor_id"])
         self.assertTrue(any(item.get("kind") == "instructor_consent" and item.get("decision") == "accepted" for item in consent_event["evidence"]))
+        state["npcs"]["mira"]["location"] = list(state["npcs"]["ada"]["location"])
+        verified = apply_shared_action_command(state, "mira", {"operation": "verify", "shared_action_id": action_id})
+        self.assertTrue(verified["accepted"], verified)
+        commissioned = apply_shared_action_command(state, "mira", {"operation": "commission", "shared_action_id": action_id})
+        self.assertTrue(commissioned["accepted"], commissioned)
+        self.assertEqual("completed", practice["status"])
+        self.assertIn(verified["causal_event"]["event_id"], state["npcs"]["ada"]["competency_records"]["mechanical_repair"]["provenance"])
 
     def test_supervised_repair_execution_rechecks_traceable_supervisor_consent(self):
         state, order = self.negotiated_state()

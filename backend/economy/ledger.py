@@ -10,6 +10,31 @@ from pathlib import Path
 from typing import Any, Dict, Iterable
 
 
+def provisional_valuation_claim(action_id: str, actor_id: str, evidence_event: str,
+                                factors: Dict[str, Any], *, failed_research: bool = False) -> Dict[str, Any]:
+    """Pure valuation projection, deliberately disconnected from account posting APIs."""
+    names = ("negotiated_milli", "public_priority", "material_cost_milli", "labor_cost_milli",
+             "precision", "durability", "utility", "evidence_quality", "reproducibility")
+    if not action_id or not actor_id or not evidence_event or any(name not in factors for name in names):
+        raise ValueError("Traceable valuation factors and evidence are required")
+    import math
+    if any(isinstance(factors[name], bool) or not isinstance(factors[name], (int, float))
+           or not math.isfinite(factors[name]) or factors[name] < 0 for name in names):
+        raise ValueError("Valuation factors must be finite nonnegative numbers")
+    quality = factors["precision"] * factors["evidence_quality"] * factors["reproducibility"]
+    base = factors["negotiated_milli"] + factors["material_cost_milli"] + factors["labor_cost_milli"]
+    benefit = 0.1 if failed_research else factors["durability"] * factors["utility"]
+    amount = max(0, round(base * factors["public_priority"] * quality * benefit))
+    return {
+        "action_id": action_id, "actor_id": actor_id, "evidence_event": evidence_event,
+        "kind": "failed_research" if failed_research else "verified_repair",
+        "milli": amount, "amount_milli": amount, "spendable": False,
+        "factors": dict(factors),
+        "postings": [{"valuation_id": "public-benefit", "delta_milli": -amount},
+                     {"valuation_id": f"contribution:{actor_id}", "delta_milli": amount}],
+    }
+
+
 class LedgerError(RuntimeError):
     pass
 

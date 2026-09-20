@@ -76,11 +76,16 @@ class CausalLedger:
         action_history = [item for item in self.events if item.action_id == event.action_id]
         if action_history:
             prior_state = action_history[-1].state
-            if event.state not in ACTION_TRANSITIONS.get(prior_state, set()):
+            if event.event_type == "evidence_correction":
+                corrected = [item.get("corrects_event_id") for item in event.evidence if item.get("belief")]
+                if (event.state != prior_state or event.physical_effect or event.inputs or event.outputs
+                        or not corrected or any(parent not in event.parent_event_ids or self.by_id[parent].action_id != event.action_id for parent in corrected)):
+                    raise ValueError("Corrections must cite existing same-action evidence without changing state")
+            elif event.state not in ACTION_TRANSITIONS.get(prior_state, set()):
                 raise ValueError(f"Invalid action transition: {prior_state} -> {event.state}")
             if action_history[-1].event_id not in event.parent_event_ids:
                 raise ValueError("A state transition must cite the prior action event")
-        elif event.state != "proposed":
+        elif event.state != "proposed" or event.event_type == "evidence_correction":
             raise ValueError("An action lineage must begin as proposed")
         if event.physical_effect and event.state not in {"submitted", "verified", "commissioned", "maintained", "degraded", "failed", "lost"}:
             raise ValueError("Physical effects cannot occur before work is performed")
