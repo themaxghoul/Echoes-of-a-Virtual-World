@@ -377,11 +377,23 @@ class LivingWorkshopTests(unittest.TestCase):
         requests = [item for item in state["shared_actions"]["demands"] if item.get("kind") == "water_repair_supply"]
         self.assertEqual(1, len(requests))
 
-    def test_supply_recovery_is_fulfilled_and_repair_resumes_without_manual_state_repair(self):
+    def test_supply_recovery_does_not_remotely_mutate_an_occupied_supplier(self):
         state, order = self.negotiated_state()
         self.assertTrue(self.respond(state, order)["accepted"])
         state["resources"]["seal_material"] = 0
         state["npcs"]["dev"]["inventory"]["seal_material"] = 2
+        state["npcs"]["dev"]["location"] = list(state["places"]["measurement_lab"]["location"])
+        state["npcs"]["dev"]["competency_records"]["measurement"] = {
+            "demonstrated": 0.3, "provenance": ["fixture:verified-calibration"],
+        }
+        occupied = apply_shared_action_command(state, "dev", {
+            "operation": "propose", "shared_action_id": "dev-existing-work",
+            "action_type": "calibrate_measurement_tool", "observations": ["visible drift"],
+        })
+        self.assertTrue(occupied["accepted"], occupied)
+        self.assertTrue(apply_shared_action_command(state, "dev", {
+            "operation": "accept", "shared_action_id": "dev-existing-work",
+        })["accepted"])
         action_id = order["canonical_action_id"]
         self.assertTrue(apply_shared_action_command(state, "ada", {"operation": "route", "shared_action_id": action_id})["accepted"])
         self.assertFalse(apply_shared_action_command(state, "ada", {"operation": "reserve", "shared_action_id": action_id})["accepted"])
@@ -391,17 +403,12 @@ class LivingWorkshopTests(unittest.TestCase):
             _advance_autonomous_shared_actions(state, tick)
 
         request = next(item for item in state["shared_actions"]["demands"] if item.get("kind") == "water_repair_supply")
-        self.assertEqual("completed", request["status"])
-        self.assertEqual([{"supplier_id": "dev", "materials": {"seal_material": 2}}], request["transfers"])
-        self.assertEqual(0, state["npcs"]["dev"]["inventory"]["seal_material"])
-        self.assertEqual(2, state["resources"]["seal_material"])
-        self.assertEqual("completed", order["recovery_history"][-1]["status"])
-        self.assertEqual("reserved", state["shared_actions"]["records"][action_id]["state"])
-        transfer_events = [event for event in state["shared_actions"]["ledger"] if any(item.get("kind") == "water_repair_supply_transfer" for item in event.get("evidence", []))]
-        self.assertEqual(1, len(transfer_events))
-        transfer_event = transfer_events[0]
-        self.assertEqual("dev", transfer_event["actor_id"])
-        self.assertTrue(transfer_event["physical_effect"])
+        self.assertEqual("requested", request["status"])
+        self.assertEqual(2, state["npcs"]["dev"]["inventory"]["seal_material"])
+        self.assertEqual(0, state["resources"]["seal_material"])
+        self.assertEqual("requested", order["recovery_history"][-1]["status"])
+        self.assertEqual("accepted", state["shared_actions"]["records"][action_id]["state"])
+        self.assertFalse(any(":transfer:" in event["action_id"] for event in state["shared_actions"]["ledger"]))
 
     def test_gathering_and_instruction_recovery_dispatch_real_requests(self):
         for recovery_action, demand_kind in (
@@ -442,12 +449,13 @@ class LivingWorkshopTests(unittest.TestCase):
                     self.assertNotIn("domain", unrelated_event["payload"]["request"])
                     self.assertNotIn("requester_id", unrelated_event["payload"]["request"])
 
-    def test_gathering_recovery_consumes_bounded_stock_and_resumes_repair(self):
+    def test_gathering_recovery_does_not_bypass_a_reserved_site(self):
         state, order = self.negotiated_state()
         self.assertTrue(self.respond(state, order)["accepted"])
         state["resources"]["seal_material"] = 0
         cache = state["resource_sites"]["tool-counter"]
         cache["stock"]["seal_material"] = 2
+        cache["reserved_by"] = "other-canonical-action"
         action_id = order["canonical_action_id"]
         self.assertTrue(apply_shared_action_command(state, "ada", {"operation": "route", "shared_action_id": action_id})["accepted"])
         self.assertFalse(apply_shared_action_command(state, "ada", {"operation": "reserve", "shared_action_id": action_id})["accepted"])
@@ -459,17 +467,12 @@ class LivingWorkshopTests(unittest.TestCase):
             _advance_autonomous_shared_actions(state, tick)
 
         request = next(item for item in state["shared_actions"]["demands"] if item.get("kind") == "water_repair_gathering")
-        self.assertEqual("completed", request["status"])
-        self.assertEqual({"seal_material": 2}, request["gathered"])
-        self.assertEqual(0, cache["stock"]["seal_material"])
-        self.assertEqual(2, state["resources"]["seal_material"])
-        self.assertEqual(action_id, cache["history"][-1]["canonical_action_id"])
-        self.assertEqual("reserved", state["shared_actions"]["records"][action_id]["state"])
-        gathering_events = [event for event in state["shared_actions"]["ledger"] if any(item.get("kind") == "water_repair_recovery_gathering" for item in event.get("evidence", []))]
-        self.assertEqual(1, len(gathering_events))
-        gathering_event = gathering_events[0]
-        self.assertEqual("ada", gathering_event["actor_id"])
-        self.assertTrue(gathering_event["physical_effect"])
+        self.assertEqual("requested", request["status"])
+        self.assertEqual(2, cache["stock"]["seal_material"])
+        self.assertEqual(0, state["resources"]["seal_material"])
+        self.assertEqual("requested", order["recovery_history"][-1]["status"])
+        self.assertEqual("accepted", state["shared_actions"]["records"][action_id]["state"])
+        self.assertFalse(any(":transfer:" in event["action_id"] for event in state["shared_actions"]["ledger"]))
 
     def test_instruction_recovery_completes_instruction_and_resumes_supervised_repair(self):
         state, order = self.negotiated_state()
@@ -486,10 +489,10 @@ class LivingWorkshopTests(unittest.TestCase):
             state["clock"]["tick"] = tick
             _advance_travel_routes(state, tick)
             _process_shared_actions(state, tick)
+            if state["shared_actions"]["records"][action_id]["state"] == "submitted":
+                break
             _advance_autonomous_shared_actions(state, tick)
             _process_teaching(state, tick)
-            if state["shared_actions"]["records"][action_id]["state"] == "reserved":
-                break
 
         request = next(item for item in state["shared_actions"]["demands"] if item.get("kind") == "water_repair_instruction")
         self.assertEqual("completed", request["status"])
@@ -499,7 +502,53 @@ class LivingWorkshopTests(unittest.TestCase):
         self.assertEqual("assigned_real_work", practice["status"])
         self.assertEqual(action_id, practice["work_order_id"])
         self.assertEqual(practice["id"], state["shared_actions"]["records"][action_id]["practice_order_id"])
-        self.assertEqual("reserved", state["shared_actions"]["records"][action_id]["state"])
+        record = state["shared_actions"]["records"][action_id]
+        self.assertEqual("submitted", record["state"])
+        self.assertEqual(practice["id"], record["supervised_execution"]["practice_order_id"])
+        self.assertEqual("orin", record["supervised_execution"]["supervisor_id"])
+        supervisor_commitment = state["shared_actions"]["actor_commitments"]["orin"]
+        self.assertEqual(action_id, supervisor_commitment["action_id"])
+        self.assertEqual("supervisor", supervisor_commitment["role"])
+        submitted = next(event for event in reversed(state["shared_actions"]["ledger"]) if event["action_id"] == action_id and event["state"] == "submitted")
+        supervision = next(item for item in submitted["evidence"] if item.get("kind") == "qualified_supervision")
+        self.assertEqual("orin", supervision["supervisor_id"])
+        consent_event = next(event for event in state["shared_actions"]["ledger"] if event["event_id"] == supervision["supervisor_consent_event_id"])
+        self.assertEqual(lesson["canonical_action_id"], consent_event["action_id"])
+        self.assertEqual("orin", consent_event["actor_id"])
+        self.assertTrue(any(item.get("kind") == "instructor_consent" and item.get("decision") == "accepted" for item in consent_event["evidence"]))
+
+    def test_supervised_repair_execution_rechecks_traceable_supervisor_consent(self):
+        state, order = self.negotiated_state()
+        self.assertTrue(self.respond(state, order)["accepted"])
+        state["npcs"]["ada"]["competency_records"]["mechanical_repair"] = {"demonstrated": 0.0, "provenance": []}
+        state["npcs"]["orin"]["competency_records"]["mechanical_repair"] = {"demonstrated": 0.3, "provenance": ["fixture:orin-verified-repair"]}
+        action_id = order["canonical_action_id"]
+        self.assertTrue(apply_shared_action_command(state, "ada", {"operation": "route", "shared_action_id": action_id})["accepted"])
+        self.assertFalse(apply_shared_action_command(state, "ada", {"operation": "reserve", "shared_action_id": action_id})["accepted"])
+        self.assertTrue(apply_shared_action_command(state, "ada", {"operation": "seek_instruction", "shared_action_id": action_id})["accepted"])
+
+        for tick in range(2, 80):
+            state["clock"]["tick"] = tick
+            _advance_travel_routes(state, tick)
+            _process_shared_actions(state, tick)
+            _advance_autonomous_shared_actions(state, tick)
+            _process_teaching(state, tick)
+            if state["shared_actions"]["records"][action_id]["state"] == "in_progress":
+                break
+
+        record = state["shared_actions"]["records"][action_id]
+        self.assertEqual("in_progress", record["state"])
+        practice = next(item for item in state["education"]["practice_orders"] if item["id"] == record["practice_order_id"])
+        lesson = next(item for item in state["education"]["teaching_orders"] if item["id"] == practice["source_instruction_id"])
+        lesson["consent"]["orin"] = "refused"
+        due_tick = record["execution_due_tick"]
+        state["clock"]["tick"] = due_tick
+
+        _process_shared_actions(state, due_tick)
+
+        self.assertEqual("failed", record["state"])
+        self.assertEqual("insufficient demonstrated competence or verified supervision", record["failure_reason"])
+        self.assertNotIn(record["definition"]["output_item"], state["shared_actions"]["unverified_outputs"].get("ada", {}))
 
     def test_renegotiation_and_abandonment_recovery_change_workflow_state(self):
         for recovery_action, expected_status, fresh_consent in (
@@ -612,6 +661,52 @@ class LivingWorkshopTests(unittest.TestCase):
         self.assertEqual([], projected["sample_measurement_ids"])
         self.assertNotIn("flow_lpm", projected["samples"][0])
         self.assertNotIn("flow_lpm", projected["output"]["pre_repair_measurements"][0])
+
+    def test_retry_events_keep_attempt_local_measurement_permissions(self):
+        state = self.workshop_state()
+        water = state["installations"]["water"]
+        water["condition"] = 0.75
+        state["npcs"]["ada"]["competency_records"]["mechanical_repair"] = {
+            "demonstrated": 0.3, "provenance": ["fixture:verified-repair"],
+        }
+        location = state["places"][water["location"]]["location"]
+        viewer = self.add_player(state, "intermittent-observer", [0, 0])
+        state["clock"]["tick"] = 1
+        _process_living_workshop(state, 1)
+        first_measurement_id = state["living_workshop"]["measurements"][-1]["id"]
+        order = state["living_workshop"]["work_orders"][0]
+        action_id = self.reserve_repair(state, order)
+        first = apply_shared_action_command(state, "ada", {"operation": "execute", "shared_action_id": action_id})
+        self.assertTrue(first["accepted"], first)
+        state["npcs"]["ada"]["energy"] = 0
+        first_due = state["shared_actions"]["records"][action_id]["execution_due_tick"]
+        state["clock"]["tick"] = first_due
+        _process_shared_actions(state, first_due)
+        self.assertEqual("failed", state["shared_actions"]["records"][action_id]["state"])
+
+        state["npcs"]["ada"]["energy"] = 80
+        viewer["location"] = list(location)
+        second_tick = first_due + 1
+        state["clock"]["tick"] = second_tick
+        _process_living_workshop(state, second_tick)
+        second_measurement_id = state["living_workshop"]["measurements"][-1]["id"]
+        self.assertNotEqual(first_measurement_id, second_measurement_id)
+        self.assertTrue(self.respond(state, order)["accepted"])
+        self.assertTrue(apply_shared_action_command(state, "ada", {"operation": "route", "shared_action_id": action_id})["accepted"])
+        self.assertTrue(apply_shared_action_command(state, "ada", {"operation": "reserve", "shared_action_id": action_id})["accepted"])
+        second = apply_shared_action_command(state, "ada", {"operation": "execute", "shared_action_id": action_id})
+        self.assertTrue(second["accepted"], second)
+
+        snapshot = {"world_id": "fixture", "revision": 1, "tick": second_tick, "state": state}
+        ledger = actor_world_view(snapshot, "intermittent-observer")["state"]["shared_actions"]["ledger"]
+        attempts = [event for event in ledger if event["action_id"] == action_id and event["state"] == "in_progress"]
+        self.assertEqual(2, len(attempts))
+        first_sample = attempts[0]["evidence"][0]["samples"][0]
+        second_sample = attempts[1]["evidence"][0]["samples"][0]
+        self.assertNotIn("flow_lpm", first_sample)
+        self.assertIn("flow_lpm", second_sample)
+        self.assertEqual([], attempts[0]["inputs"]["sample_measurement_ids"])
+        self.assertEqual([second_measurement_id], attempts[1]["inputs"]["sample_measurement_ids"])
 
     def test_deliberate_cancellation_stays_cancelled_through_autonomous_ticks(self):
         state, order = self.negotiated_state()

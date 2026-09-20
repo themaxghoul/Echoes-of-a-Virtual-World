@@ -498,12 +498,8 @@ def _project_water_action_channels(state: Dict[str, Any], record: Dict[str, Any]
     """Apply measurement perspective to every copy in records and causal evidence."""
     if record.get("definition", {}).get("execution_model") != "water_installation_repair":
         return copy.deepcopy(value)
-    sample_ids = list(record.get("sample_measurement_ids", []))
-    source_ids = set(sample_ids + record.get("perceived_evidence_ids", []))
     fields_by_measurement, visible_ids = {}, set()
     for measurement in state.get("living_workshop", {}).get("measurements", []):
-        if measurement.get("id") not in source_ids:
-            continue
         projected = _project_living_workshop_measurement(measurement, actor_id)
         if projected:
             fields_by_measurement[measurement["id"]] = set(projected["values"])
@@ -511,11 +507,16 @@ def _project_water_action_channels(state: Dict[str, Any], record: Dict[str, Any]
     measurement_fields = set(_LIVING_WORKSHOP_SYMPTOM_VALUES.values())
     measurement_lists = {"samples", "pre_repair_measurements", "post_repair_measurements"}
 
-    def project(item, measurement_id=None):
+    def project(item, measurement_id=None, inherited_sample_ids=None):
         if isinstance(item, list):
-            return [project(child, measurement_id) for child in item]
+            return [project(child, measurement_id, inherited_sample_ids) for child in item]
         if not isinstance(item, dict):
             return copy.deepcopy(item)
+        local_sample_ids = item.get("sample_measurement_ids")
+        if not isinstance(local_sample_ids, list) or not all(isinstance(entry, str) for entry in local_sample_ids):
+            event_inputs = item.get("inputs", {})
+            local_sample_ids = event_inputs.get("sample_measurement_ids") if isinstance(event_inputs, dict) else None
+        sample_ids = list(local_sample_ids) if isinstance(local_sample_ids, list) else list(inherited_sample_ids or [])
         projected = {}
         for name, child in item.items():
             if name in measurement_fields and name not in fields_by_measurement.get(measurement_id, set()):
@@ -524,11 +525,11 @@ def _project_water_action_channels(state: Dict[str, Any], record: Dict[str, Any]
                 projected[name] = [entry for entry in child if entry in visible_ids]
             elif name in measurement_lists and isinstance(child, list):
                 projected[name] = [
-                    project(entry, sample_ids[index] if index < len(sample_ids) else None)
+                    project(entry, sample_ids[index] if index < len(sample_ids) else None, sample_ids)
                     for index, entry in enumerate(child)
                 ]
             else:
-                projected[name] = project(child, measurement_id)
+                projected[name] = project(child, measurement_id, sample_ids)
         return projected
     return project(value)
 
@@ -3437,6 +3438,57 @@ def _shared_competence(entity: Dict[str, Any], domain: str) -> float:
     return float(record.get("demonstrated", 0.0))
 
 
+def _qualified_shared_action_supervision(
+    state: Dict[str, Any], entity: Dict[str, Any], record: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
+    """Return traceable supervision only while every real-work gate remains true."""
+    requirements = record["definition"]["requirements"]
+    practice = next((
+        item for item in state.get("education", {}).get("practice_orders", [])
+        if item.get("id") == record.get("practice_order_id")
+    ), None)
+    supervisor = _shared_entity(state, record.get("supervisor_id", ""))
+    instruction = next((
+        item for item in state.get("education", {}).get("teaching_orders", [])
+        if practice and item.get("id") == practice.get("source_instruction_id")
+    ), None)
+    consent_event = next((
+        event for event in reversed(state.get("shared_actions", {}).get("ledger", []))
+        if instruction and event.get("action_id") == instruction.get("canonical_action_id")
+        and event.get("actor_id") == record.get("supervisor_id")
+        and any(
+            evidence.get("kind") == "instructor_consent" and evidence.get("decision") == "accepted"
+            for evidence in event.get("evidence", [])
+        )
+    ), None)
+    learning = entity.get("competency_records", {}).get(requirements["competence_domain"], {})
+    target = _shared_action_location(state, record.get("location", ""))
+    commitment = _shared_commitment(state, record.get("supervisor_id", ""))
+    water = state.get("installations", {}).get("water", {})
+    if not (
+        practice and practice.get("status") == "assigned_real_work"
+        and practice.get("learner") == entity.get("id")
+        and practice.get("supervisor") == record.get("supervisor_id")
+        and practice.get("work_order_id") == record.get("id")
+        and instruction and instruction.get("consent", {}).get(record.get("supervisor_id")) == "accepted"
+        and consent_event
+        and supervisor and target
+        and _shared_competence(supervisor, requirements["competence_domain"]) >= requirements["minimum_competence"]
+        and supervisor.get("current_region", "settlement") == water.get("region", "settlement")
+        and _distance(supervisor.get("location", [-99, -99]), target) <= 1
+        and min(float(learning.get("theory", 0)), float(learning.get("observation", 0)), float(learning.get("procedure", 0))) > 0
+        and commitment and commitment.get("action_id") == record.get("id")
+        and commitment.get("role") == "supervisor"
+    ):
+        return None
+    return {
+        "practice_order_id": practice["id"],
+        "supervisor_id": supervisor["id"],
+        "supervisor_competence": _shared_competence(supervisor, requirements["competence_domain"]),
+        "supervisor_consent_event_id": consent_event["event_id"],
+    }
+
+
 def _shared_commitment(state: Dict[str, Any], entity_id: str) -> Optional[Dict[str, Any]]:
     return state.get("shared_actions", {}).get("actor_commitments", {}).get(entity_id)
 
@@ -3922,43 +3974,6 @@ def _complete_workshop_recovery(state: Dict[str, Any], order: Dict[str, Any], re
     }]
 
 
-def _record_workshop_recovery_transfer(state: Dict[str, Any], record: Dict[str, Any], request: Dict[str, Any], actor_id: str, *, kind: str, inputs: Dict[str, Any], outputs: Dict[str, Any]) -> None:
-    """Record a bounded recovery transfer as its own completed causal action."""
-    transfer_number = len(request.setdefault("transfer_action_ids", [])) + 1
-    action_id = f"{request['id']}:transfer:{transfer_number}"
-    transfer = {
-        "id": action_id,
-        "definition": {
-            "action_type": kind, "execution_model": "water_repair_recovery_transfer",
-            "requirements": {"materials": {}, "tools": {}, "station": None, "energy": 0,
-                             "competence_domain": "logistics", "minimum_competence": 0,
-                             "perception_channels": [], "duration_ticks": 1},
-            "output_item": "water_repair_materials", "output_amount": sum(outputs.get("communal_materials", {}).values()),
-            "provisional_cu_milli": 0, "verification_tolerance": 0,
-            "verification_threshold": 0, "verifier_competence_domain": None,
-            "minimum_verifier_competence": 0,
-        },
-        "actor_id": actor_id, "actor_kind": "human" if actor_id in state["players"] else "ai",
-        "intent": f"resolve material blocker for {record['id']}",
-        "target_id": record["target_id"], "location": record["location"],
-        "observations": [request["id"]], "perceived_evidence_ids": [],
-        "state": "proposed", "proposed_tick": state["clock"]["tick"],
-        "ledger_event_ids": [], "samples": [], "output": copy.deepcopy(outputs),
-        "failure_reason": None, "verifier_id": None, "autonomous_origin": False,
-    }
-    state["shared_actions"]["records"][action_id] = transfer
-    request["transfer_action_ids"].append(action_id)
-    _append_shared_action_event(state, transfer, "proposed", actor_id, evidence=[{"kind": "recovery_request", "id": request["id"], "parent_action_id": record["id"]}])
-    _append_shared_action_event(state, transfer, "accepted", actor_id)
-    _append_shared_action_event(state, transfer, "reserved", actor_id, inputs=inputs)
-    _append_shared_action_event(state, transfer, "in_progress", actor_id)
-    _append_shared_action_event(state, transfer, "submitted", actor_id, inputs=inputs, outputs=outputs, evidence=[{"kind": kind, "request_id": request["id"], **copy.deepcopy(outputs)}], physical=True)
-    verifier_id = next(entity_id for entity_id in sorted({**state["npcs"], **state["players"]}) if entity_id != actor_id)
-    transfer["verifier_id"] = verifier_id
-    _append_shared_action_event(state, transfer, "verified", verifier_id, evidence=[{"kind": "independent_recovery_transfer_count"}])
-    _append_shared_action_event(state, transfer, "commissioned", verifier_id)
-
-
 def _process_workshop_recovery(state: Dict[str, Any], order: Dict[str, Any], record: Dict[str, Any], history: Dict[str, Any], tick: int) -> list[Dict[str, Any]]:
     request = next((
         item for item in state["shared_actions"]["demands"]
@@ -3966,67 +3981,12 @@ def _process_workshop_recovery(state: Dict[str, Any], order: Dict[str, Any], rec
     ), None)
     if not request or request.get("status") == "completed":
         return []
-    if request.get("kind") == "water_repair_supply":
-        missing = _workshop_missing_materials(state, record)
-        transfers = request.setdefault("transfers", [])
-        for supplier_id, supplier in sorted(state["npcs"].items()):
-            if not missing or not supplier.get("autonomous", False):
-                break
-            supplied = {}
-            inventory = supplier.setdefault("inventory", {})
-            for material, amount in list(missing.items()):
-                moved = min(int(amount), int(inventory.get(material, 0)))
-                if moved <= 0:
-                    continue
-                inventory[material] -= moved
-                state["resources"][material] = state["resources"].get(material, 0) + moved
-                supplied[material] = moved
-            if supplied:
-                transfers.append({"supplier_id": supplier_id, "materials": supplied})
-                _record_workshop_recovery_transfer(
-                    state, record, request, supplier_id,
-                    kind="water_repair_supply_transfer",
-                    inputs={"supplier_inventory": copy.deepcopy(supplied)},
-                    outputs={"communal_materials": copy.deepcopy(supplied)},
-                )
-                missing = _workshop_missing_materials(state, record)
+    if request.get("kind") in {"water_repair_supply", "water_repair_gathering"}:
+        # Recovery requests advertise an unmet need; they never teleport stock or
+        # invent consent, custody, routes, competence, or verification. Existing
+        # canonical extraction/deposit actions must put materials in communal
+        # custody before this request may complete.
         if not _workshop_missing_materials(state, record):
-            return _complete_workshop_recovery(state, order, record, history, request, tick)
-    if request.get("kind") == "water_repair_gathering":
-        missing = _workshop_missing_materials(state, record)
-        gathered = request.setdefault("gathered", {})
-        for site_id, site in sorted(state.get("resource_sites", {}).items()):
-            stock = site.get("stock")
-            if not isinstance(stock, dict):
-                continue
-            moved_from_site = {}
-            for material, amount in list(missing.items()):
-                moved = min(int(amount), int(stock.get(material, 0)))
-                if moved <= 0:
-                    continue
-                stock[material] -= moved
-                state["resources"][material] = state["resources"].get(material, 0) + moved
-                gathered[material] = gathered.get(material, 0) + moved
-                moved_from_site[material] = moved
-            if moved_from_site:
-                site.setdefault("history", []).append({
-                    "tick": tick, "actor": order.get("assigned_actor_id"),
-                    "operation": "water_repair_recovery_gathering", "materials": moved_from_site,
-                    "canonical_action_id": record["id"],
-                })
-                _record_workshop_recovery_transfer(
-                    state, record, request, order.get("assigned_actor_id"),
-                    kind="water_repair_recovery_gathering",
-                    inputs={"site_id": site_id, "site_materials": copy.deepcopy(moved_from_site)},
-                    outputs={"communal_materials": copy.deepcopy(moved_from_site)},
-                )
-                missing = _workshop_missing_materials(state, record)
-            if not missing:
-                break
-        if not _workshop_missing_materials(state, record):
-            actor = _shared_entity(state, order.get("assigned_actor_id", ""))
-            if actor:
-                actor["energy"] = round(max(0, actor.get("energy", 0) - 1), 2)
             return _complete_workshop_recovery(state, order, record, history, request, tick)
     if request.get("kind") == "water_repair_instruction":
         lesson = next((
@@ -4336,18 +4296,10 @@ def _apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: 
         missing_channels = sorted(set(requirements["perception_channels"]) - _shared_action_perceptions(state, entity, record))
         if missing_channels:
             return {"accepted": False, "reason": f"missing authoritative perception: {', '.join(missing_channels)}"}
+        supervision = None
         if _shared_competence(entity, requirements["competence_domain"]) < requirements["minimum_competence"]:
-            practice = next((item for item in state["education"]["practice_orders"] if item["id"] == record.get("practice_order_id")), None)
-            supervisor = _shared_entity(state, record.get("supervisor_id", ""))
-            learning = entity.get("competency_records", {}).get(requirements["competence_domain"], {})
-            supervised_ready = bool(
-                practice and practice.get("status") == "assigned_real_work" and supervisor
-                and _shared_competence(supervisor, requirements["competence_domain"]) >= requirements["minimum_competence"]
-                and _shared_action_location(state, record["location"])
-                and _distance(supervisor.get("location", [-99, -99]), _shared_action_location(state, record["location"])) <= 1
-                and min(float(learning.get("theory", 0)), float(learning.get("observation", 0)), float(learning.get("procedure", 0))) > 0
-            )
-            if not supervised_ready:
+            supervision = _qualified_shared_action_supervision(state, entity, record)
+            if not supervision:
                 reason = "insufficient demonstrated competence or verified supervision" if record.get("practice_order_id") else "insufficient demonstrated competence"
                 return {"accepted": False, "reason": reason}
         material_source = entity.setdefault("inventory", {}) if record["definition"].get("input_custody") == "actor_inventory" else state["resources"]
@@ -4406,6 +4358,8 @@ def _apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: 
             "expires_tick": state["clock"]["tick"] + max(24, requirements["duration_ticks"] + 8),
             "actor_time": {"actor_id": actor_id, "duration_ticks": requirements["duration_ticks"]},
         }
+        if supervision:
+            reservation["qualified_supervision"] = copy.deepcopy(supervision)
         shared["reservations"][shared_action_id] = reservation
         record["reserved_tick"] = state["clock"]["tick"]
         event = _append_shared_action_event(state, record, "reserved", actor_id, inputs=reservation)
@@ -4456,7 +4410,11 @@ def _apply_shared_action_command(state: Dict[str, Any], actor_id: str, command: 
         record["last_work_tick"] = state["clock"]["tick"]
         record["execution_due_tick"] = state["clock"]["tick"] + requirements["duration_ticks"]
         shared["reservations"][record["id"]]["expires_tick"] = record["execution_due_tick"] + 8
-        event = _append_shared_action_event(state, record, "in_progress", actor_id, evidence=[{"kind": "ordered_samples", "samples": normalized}])
+        event = _append_shared_action_event(
+            state, record, "in_progress", actor_id,
+            inputs={"sample_measurement_ids": copy.deepcopy(record.get("sample_measurement_ids", []))},
+            evidence=[{"kind": "ordered_samples", "samples": normalized}],
+        )
         return {"accepted": True, "type": "shared_action", "operation": operation, "record": copy.deepcopy(record), "causal_event": event, "physical_change": False}
     if operation == "verify":
         if record["state"] != "submitted":
@@ -4753,8 +4711,11 @@ def _water_execution_blocker(state: Dict[str, Any], record: Dict[str, Any]) -> O
         return "reservation lost before execution completed"
     if entity.get("energy", 0) < requirements["energy"]:
         return "insufficient energy"
-    if _shared_competence(entity, requirements["competence_domain"]) < requirements["minimum_competence"]:
-        return "insufficient demonstrated competence"
+    if (
+        _shared_competence(entity, requirements["competence_domain"]) < requirements["minimum_competence"]
+        and not _qualified_shared_action_supervision(state, entity, record)
+    ):
+        return "insufficient demonstrated competence or verified supervision"
     for name, amount in requirements["materials"].items():
         if state["resources"].get(name, 0) < amount:
             return f"missing materials: {name}"
@@ -4788,11 +4749,22 @@ def _process_water_repair_execution(state: Dict[str, Any], record: Dict[str, Any
         return []
     entity = _shared_entity(state, record["actor_id"])
     requirements = record["definition"]["requirements"]
+    supervision = None
+    effective_competence = _shared_competence(entity, requirements["competence_domain"])
+    if effective_competence < requirements["minimum_competence"]:
+        supervision = _qualified_shared_action_supervision(state, entity, record)
+        if supervision:
+            effective_competence = supervision["supervisor_competence"]
+            record["supervised_execution"] = {
+                "practice_order_id": supervision["practice_order_id"],
+                "supervisor_id": supervision["supervisor_id"],
+                "supervisor_consent_event_id": supervision["supervisor_consent_event_id"],
+            }
     definition = water_installation_repair(WaterInstallationSpec(**state["living_workshop"]["water_repair_spec"]))
     result = definition.execution_evaluator({
         "action_id": record["id"], "samples": record["samples"], "materials": copy.deepcopy(requirements["materials"]),
         "specification": copy.deepcopy(record["definition"]["execution_parameters"]),
-        "demonstrated_competence": _shared_competence(entity, requirements["competence_domain"]),
+        "demonstrated_competence": effective_competence,
         "tool_conditions": {name: _shared_tool_record(state, entity, name)[0]["condition"] for name in requirements["tools"]},
     })
     record["material_disposition"] = copy.deepcopy(result["material_disposition"])
@@ -4806,12 +4778,25 @@ def _process_water_repair_execution(state: Dict[str, Any], record: Dict[str, Any
     _release_shared_reservation(state, record, commitments=False)
     if not result["succeeded"]:
         record["failure_reason"] = result["failure_reason"]
-        event = _append_shared_action_event(state, record, "failed", record["actor_id"], evidence=result["evidence"], outputs={"reason": result["failure_reason"], "material_disposition": record["material_disposition"]}, physical=True)
+        event = _append_shared_action_event(
+            state, record, "failed", record["actor_id"],
+            inputs={"sample_measurement_ids": copy.deepcopy(record.get("sample_measurement_ids", []))},
+            evidence=result["evidence"],
+            outputs={"reason": result["failure_reason"], "material_disposition": record["material_disposition"]},
+            physical=True,
+        )
         _workshop_block(state, record, result["failure_reason"])
         return [{"type": "shared_action_failed", "actor_id": record["actor_id"], "payload": {"action_id": record["id"], "event": event}}]
     record.update({"output": result["output"], "submitted_tick": tick})
     state["shared_actions"]["unverified_outputs"].setdefault(record["actor_id"], {})[record["definition"]["output_item"]] = record["definition"]["output_amount"]
-    event = _append_shared_action_event(state, record, "submitted", record["actor_id"], outputs=record["output"], evidence=result["evidence"], physical=True)
+    evidence = list(result["evidence"])
+    if supervision:
+        evidence.append({"kind": "qualified_supervision", **copy.deepcopy(record["supervised_execution"])})
+    event = _append_shared_action_event(
+        state, record, "submitted", record["actor_id"],
+        inputs={"sample_measurement_ids": copy.deepcopy(record.get("sample_measurement_ids", []))},
+        outputs=record["output"], evidence=evidence, physical=True,
+    )
     order = _workshop_order_for(state, record["id"])
     if order:
         order["status"] = "submitted"
@@ -5115,7 +5100,8 @@ def _workshop_verifier_candidates(state: Dict[str, Any], record: Dict[str, Any])
     candidates = []
     for verifier_id, verifier in {**state["npcs"], **state["players"]}.items():
         commitment = _shared_commitment(state, verifier_id)
-        if verifier_id != record["actor_id"] and _shared_competence(verifier, "measurement") >= record["definition"]["minimum_verifier_competence"] and (not commitment or commitment.get("action_id") == record["id"]):
+        participated = {record["actor_id"], record.get("supervisor_id")}
+        if verifier_id not in participated and _shared_competence(verifier, "measurement") >= record["definition"]["minimum_verifier_competence"] and (not commitment or commitment.get("action_id") == record["id"]):
             candidates.append(verifier_id)
     return candidates
 
