@@ -508,12 +508,23 @@ def _project_water_action_channels(state: Dict[str, Any], record: Dict[str, Any]
             visible_ids.add(measurement["id"])
     measurement_fields = set(_LIVING_WORKSHOP_SYMPTOM_VALUES.values())
     measurement_lists = {"samples", "pre_repair_measurements", "post_repair_measurements", "post_repair_samples"}
+    action_events = {event["event_id"]: event for event in state.get("shared_actions", {}).get("ledger", []) if event.get("action_id") == record.get("id")}
+    visible_event_ids = {event_id for event_id, event in action_events.items() if _water_event_channels(event, actor_id) or
+                         event.get("event_type") == "shared_action" and event.get("state") in {"verified", "needs_rework", "commissioned"}}
 
     def project(item, measurement_id=None, inherited_sample_ids=None):
         if isinstance(item, list):
             return [project(child, measurement_id, inherited_sample_ids) for child in item if not isinstance(child, dict) or child.get("kind") != "event_perception"]
         if not isinstance(item, dict):
             return copy.deepcopy(item)
+        authoritative_event = action_events.get(item.get("event_id"))
+        if authoritative_event and not _water_event_channels(authoritative_event, actor_id):
+            if authoritative_event["event_id"] not in visible_event_ids:
+                return {"action_id": record.get("id"), "private": True}
+            # Commission makes the review result public, not its private causes,
+            # measurements, or corrections. Never copy the full event here.
+            return {name: copy.deepcopy(authoritative_event[name]) for name in
+                    ("event_id", "action_id", "event_type", "tick", "actor_id", "state")}
         local_sample_ids = item.get("sample_measurement_ids")
         if not isinstance(local_sample_ids, list) or not all(isinstance(entry, str) for entry in local_sample_ids):
             event_inputs = item.get("inputs", {})
@@ -521,11 +532,16 @@ def _project_water_action_channels(state: Dict[str, Any], record: Dict[str, Any]
         sample_ids = list(local_sample_ids) if isinstance(local_sample_ids, list) else list(inherited_sample_ids or [])
         projected = {}
         for name, child in item.items():
-            if name in {"deterministic_inputs", "deterministic_seed", "repair_quality", "diagnosis", "operator_audit", "factors"}:
+            if name in {"deterministic_inputs", "deterministic_seed", "repair_quality", "diagnosis", "operator_audit", "factors", "instrument_condition"}:
                 continue
             if name in measurement_fields and name not in fields_by_measurement.get(measurement_id, set()):
                 continue
-            if name in {"sample_measurement_ids", "verification_measurement_ids", "perceived_evidence_ids", "observations"} and isinstance(child, list) and all(isinstance(entry, str) for entry in child):
+            if name in {"ledger_event_ids", "parent_event_ids"} and isinstance(child, list):
+                projected[name] = [entry for entry in child if entry in visible_event_ids]
+            elif name == "corrects_event_id":
+                if child in visible_event_ids:
+                    projected[name] = child
+            elif name in {"sample_measurement_ids", "verification_measurement_ids", "perceived_evidence_ids", "observations"} and isinstance(child, list) and all(isinstance(entry, str) for entry in child):
                 projected[name] = [entry for entry in child if entry in visible_ids]
             elif name == "verification" and isinstance(child, dict):
                 verification_ids = item.get("verification_measurement_ids", sample_ids)
@@ -735,6 +751,7 @@ def actor_world_view(snapshot: Dict[str, Any], actor_id: str) -> Dict[str, Any]:
         else:
             shared["records"][action_id] = {"id": action_id, "action_type": record.get("definition", {}).get("action_type"), "state": record.get("state"), "private": True}
     shared["ledger"] = [_project_water_action_channels(snapshot["state"], snapshot["state"]["shared_actions"]["records"].get(event.get("action_id"), {}), actor_id, event) for event in shared.get("ledger", []) if event.get("action_id") in visible_action_ids]
+    shared["ledger"] = [event for event in shared["ledger"] if not event.get("private")]
     shared["valuation_claims"] = [
         _project_water_action_channels(snapshot["state"], snapshot["state"]["shared_actions"]["records"].get(claim.get("action_id"), {}), actor_id, claim)
         for claim in shared.get("valuation_claims", [])
@@ -4061,6 +4078,10 @@ def _water_event_channels(event: Dict[str, Any], viewer_id: str) -> list[str]:
     return list(next((item.get("viewers", {}).get(viewer_id, []) for item in event.get("evidence", []) if item.get("kind") == "event_perception"), []))
 
 
+def _water_physical_submission(event: Dict[str, Any]) -> bool:
+    return event.get("event_type") == "shared_action" and event.get("state") == "submitted" and event.get("physical_effect") is True
+
+
 def _remember_water_event(state: Dict[str, Any], record: Dict[str, Any], event: Dict[str, Any]) -> None:
     """Record a subjective observation, never a copy of the authoritative evidence."""
     correction = next((item for item in event["evidence"] if item.get("corrects_event_id")), None)
@@ -4094,17 +4115,21 @@ def _water_readings(water: Dict[str, Any]) -> Dict[str, float]:
     }
 
 
-def _water_verifier_blocker(state: Dict[str, Any], record: Dict[str, Any], actor_id: str) -> Optional[str]:
+def _water_verifier_blocker(state: Dict[str, Any], record: Dict[str, Any], actor_id: str, *, require_presence: bool = True) -> Optional[str]:
     entity = _shared_entity(state, actor_id)
     participants = {record["actor_id"], record.get("supervisor_id"), record.get("supervised_execution", {}).get("supervisor_id")}
-    participants.update(event["actor_id"] for event in state["shared_actions"]["ledger"] if event["action_id"] == record["id"] and event["state"] in {"in_progress", "submitted"})
+    participants.update(event["actor_id"] for event in state["shared_actions"]["ledger"] if event["action_id"] == record["id"] and
+                        (event.get("event_type") == "shared_action" and event["state"] == "in_progress" or _water_physical_submission(event)))
     participants.update(item.get("supervisor_id") for event in state["shared_actions"]["ledger"] if event["action_id"] == record["id"] for item in event.get("evidence", []) if item.get("kind") == "qualified_supervision")
     if not entity or actor_id in participants:
         return "verification requires an independent nonparticipant identity"
-    if "instrumentation" not in _water_event_viewers(state, record).get(actor_id, []):
-        return "verifier requires local perception and traceable measurement competence"
-    if _shared_competence(entity, "measurement") < record["definition"]["minimum_verifier_competence"]:
-        return "insufficient verifier competence"
+    if (_shared_competence(entity, "measurement") < max(0.1, record["definition"]["minimum_verifier_competence"])
+            or not entity.get("competency_records", {}).get("measurement", {}).get("provenance")):
+        return "verifier requires traceable measurement competence"
+    if entity.get("current_region", "settlement") != state["installations"]["water"].get("region", "settlement"):
+        return "verifier requires target-region perception"
+    if require_presence and "instrumentation" not in _water_event_viewers(state, record).get(actor_id, []):
+        return "verifier requires local instrument perception"
     tool = state["shared_actions"]["tools"].get("calibrated_measure", {})
     if tool.get("condition", 0) < 0.7 or tool.get("reserved_by") not in {None, record["id"]}:
         return "independent measurement requires an available calibrated instrument"
@@ -4132,6 +4157,45 @@ def _water_valuation(state: Dict[str, Any], record: Dict[str, Any], event: Dict[
     return claim
 
 
+def _project_water_valuation(state: Dict[str, Any], claim: Dict[str, Any], viewer_id: str) -> Dict[str, Any]:
+    """Authorize each factor from the evidence used for this particular claim."""
+    projected = copy.deepcopy(claim)
+    history = [event for event in state["shared_actions"]["ledger"] if event["action_id"] == claim.get("action_id")]
+    review = next((event for event in history if event["event_id"] == claim.get("evidence_event") and
+                   event.get("event_type") == "shared_action" and event["state"] in {"verified", "needs_rework"}), None)
+    permitted = {"public_priority"}
+    if review:
+        prior = [event for event in history if event["sequence"] < review["sequence"]]
+        submission = next((event for event in reversed(prior) if _water_physical_submission(event)), None)
+        acceptance = next((event for event in reversed(prior) if event.get("event_type") == "shared_action" and event["state"] == "accepted"), None)
+        if acceptance and acceptance["actor_id"] == viewer_id:
+            permitted.add("negotiated_milli")
+        if submission and "surface_detail" in _water_event_channels(submission, viewer_id):
+            if "material_disposition" in submission["outputs"]:
+                permitted.add("material_cost_milli")
+            if "consumed_ticks" in submission["outputs"]:
+                permitted.add("labor_cost_milli")
+        readings = {item["id"]: item for item in state["living_workshop"]["measurements"]}
+
+        def complete_perception(measurement_ids):
+            return bool(measurement_ids) and all(
+                measurement_id in readings and
+                set((_project_living_workshop_measurement(readings[measurement_id], viewer_id) or {}).get("values", {})) == set(_LIVING_WORKSHOP_SYMPTOM_VALUES.values())
+                for measurement_id in measurement_ids
+            )
+
+        if "instrumentation" in _water_event_channels(review, viewer_id):
+            if any("instrument_condition" in evidence for evidence in review["evidence"]):
+                permitted.add("precision")
+            if complete_perception(review.get("inputs", {}).get("sample_measurement_ids", [])):
+                permitted.update({"utility", "evidence_quality"})
+                if submission and complete_perception(submission.get("inputs", {}).get("sample_measurement_ids", [])):
+                    permitted.add("reproducibility")
+    # Durability is an authoritative model estimate, not perceived evidence.
+    projected["factors"] = {name: value for name, value in projected.get("factors", {}).items() if name in permitted}
+    return projected
+
+
 def living_workshop_receipt(state: Dict[str, Any], action_id: str, viewer_id: str) -> Dict[str, Any]:
     """A whitelist projection: public verification facts plus this viewer's evidence."""
     record = state["shared_actions"]["records"][action_id]
@@ -4143,12 +4207,9 @@ def living_workshop_receipt(state: Dict[str, Any], action_id: str, viewer_id: st
     allowed_ids = {event["event_id"] for event in visible + public_checks}
     measurement_ids = set(record.get("sample_measurement_ids", []) + record.get("verification_measurement_ids", []))
     measurements = [projected for item in state["living_workshop"]["measurements"] if item["id"] in measurement_ids and (projected := _project_living_workshop_measurement(item, viewer_id)) is not None]
-    witnessed_work = any(event["state"] == "submitted" for event in visible)
+    witnessed_work = any(_water_physical_submission(event) for event in visible)
     claims = [claim for claim in state["shared_actions"]["valuation_claims"] if claim["action_id"] == action_id]
-    claim = copy.deepcopy(claims[-1]) if claims and public_checks else {"milli": 0, "spendable": False, "postings": []}
-    # The private valuation factors include precision and durability observations.
-    if not witnessed_work:
-        claim.pop("factors", None)
+    claim = _project_water_valuation(state, claims[-1], viewer_id) if claims and public_checks else {"milli": 0, "spendable": False, "postings": []}
     provenance = [event["event_id"] for event in public_checks if event["state"] == "verified"]
     return {
         "action_id": action_id, "actor": record["actor_id"], "action": "repair_water_installation",
@@ -4191,6 +4252,7 @@ def _apply_water_review(state: Dict[str, Any], record: Dict[str, Any], actor_id:
         }
         definition = water_installation_repair(WaterInstallationSpec(**state["living_workshop"]["water_repair_spec"]))
         result = definition.verification_evaluator({"samples": [readings], "specification": record["definition"]["execution_parameters"], "material_reconciliation": record["material_disposition"]})
+        result["evidence"].append({"kind": "independent_instrument_check", "instrument_condition": state["shared_actions"]["tools"]["calibrated_measure"]["condition"]})
         state["living_workshop"]["measurements"].append(measurement)
         water["measurement_history"].append(measurement_id)
         record.update({"verification": result["verification"], "verifier_id": actor_id, "verification_measurement_ids": [measurement_id]})
@@ -5036,7 +5098,7 @@ def _process_water_repair_execution(state: Dict[str, Any], record: Dict[str, Any
     event = _append_shared_action_event(
         state, record, "submitted", record["actor_id"],
         inputs={"sample_measurement_ids": copy.deepcopy(record.get("sample_measurement_ids", []))},
-        outputs=record["output"], evidence=evidence, physical=True,
+        outputs={**record["output"], "material_disposition": copy.deepcopy(record["material_disposition"]), "consumed_ticks": record.get("consumed_ticks", 0)}, evidence=evidence, physical=True,
     )
     order = _workshop_order_for(state, record["id"])
     if order:
@@ -5344,37 +5406,49 @@ def _advance_workshop_order(state: Dict[str, Any], order: Dict[str, Any], tick: 
 
 
 def _workshop_verifier_candidates(state: Dict[str, Any], record: Dict[str, Any]) -> list[str]:
-    candidates = []
-    for verifier_id, verifier in {**state["npcs"], **state["players"]}.items():
-        commitment = _shared_commitment(state, verifier_id)
-        participated = {record["actor_id"], record.get("supervisor_id")}
-        if verifier_id not in participated and _shared_competence(verifier, "measurement") >= record["definition"]["minimum_verifier_competence"] and (not commitment or commitment.get("action_id") == record["id"]):
-            candidates.append(verifier_id)
-    return candidates
+    # Only distance is deferred to approved travel; eligibility must otherwise
+    # match the authoritative verification command before ranking a candidate.
+    return [verifier_id for verifier_id in {**state["npcs"], **state["players"]}
+            if _water_verifier_blocker(state, record, verifier_id, require_presence=False) is None]
 
 
 def _prepare_workshop_verifier(state: Dict[str, Any], order: Dict[str, Any], record: Dict[str, Any]) -> list[Dict[str, Any]]:
-    candidates = _workshop_verifier_candidates(state, record)
-    if not candidates:
-        order["verifier_id"] = None
-        _workshop_block(state, record, "no independent competent verifier available", code="independent_verifier_unavailable")
-        _release_shared_reservation(state, record)
-        return []
-    order["verifier_id"] = max(candidates, key=lambda candidate: (_shared_competence(_shared_entity(state, candidate), "measurement"), candidate))
-    verifier = _shared_entity(state, order["verifier_id"])
-    if verifier["id"] in state["players"]:
-        order["status"] = "awaiting_verifier_consent"
-        return []
-    _claim_shared_commitment(state, verifier["id"], record["id"], "verifier")
-    route = verifier.get("route")
-    if not route or route.get("action_id") != record["id"] or route.get("status") in {"blocked", "cancelled"}:
-        result = _route_workshop_actor(state, verifier, record)
-        if not result["accepted"]:
-            _workshop_block(state, record, result["reason"])
-            _release_shared_reservation(state, record)
-    elif route.get("status") == "arrived":
-        result = apply_shared_action_command(state, verifier["id"], {"operation": "verify", "shared_action_id": record["id"]})
-        return [{"type": "shared_action_autonomous_transition", "actor_id": verifier["id"], "payload": result}]
+    candidates = sorted(_workshop_verifier_candidates(state, record),
+                        key=lambda candidate: (_shared_competence(_shared_entity(state, candidate), "measurement"), candidate), reverse=True)
+    commitments = state["shared_actions"]["actor_commitments"]
+    for verifier_id, commitment in list(commitments.items()):
+        if commitment.get("action_id") == record["id"] and commitment.get("role") == "verifier" and verifier_id not in candidates:
+            del commitments[verifier_id]
+    for verifier_id in candidates:
+        order["verifier_id"] = verifier_id
+        verifier = _shared_entity(state, verifier_id)
+        if verifier_id in state["players"]:
+            order["status"] = "awaiting_verifier_consent"
+            return []
+        if _claim_shared_commitment(state, verifier_id, record["id"], "verifier"):
+            continue
+        route = verifier.get("route")
+        needs_route = (not route or route.get("action_id") != record["id"] or route.get("status") in {"blocked", "cancelled"}
+                       or route.get("status") == "arrived" and _water_verifier_blocker(state, record, verifier_id) is not None)
+        if needs_route:
+            result = _route_workshop_actor(state, verifier, record)
+            if result["accepted"]:
+                return []
+        elif route.get("status") == "arrived":
+            result = apply_shared_action_command(state, verifier_id, {"operation": "verify", "shared_action_id": record["id"]})
+            if result["accepted"]:
+                return [{"type": "shared_action_autonomous_transition", "actor_id": verifier_id, "payload": result}]
+        else:
+            return []  # Approved travel is still in progress.
+        # A failed route/check must not strand everyone behind the top score.
+        commitment = commitments.get(verifier_id, {})
+        if commitment.get("action_id") == record["id"] and commitment.get("role") == "verifier":
+            del commitments[verifier_id]
+        if (verifier.get("route") or {}).get("action_id") == record["id"]:
+            verifier["route"]["status"] = "cancelled"
+    order["verifier_id"] = None
+    _workshop_block(state, record, "no independent competent verifier available", code="independent_verifier_unavailable")
+    _release_shared_reservation(state, record)
     return []
 
 
