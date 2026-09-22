@@ -1,0 +1,10 @@
+.git
+frontend
+backend
+data
+**/__pycache__
+**/.env
+**/*.sqlite3*
+**/node_modules
+.venv
+work

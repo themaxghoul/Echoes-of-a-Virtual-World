@@ -1,0 +1,25 @@
+name: Alpha checks
+on:
+  push:
+    paths: ['alpha/**', 'cloudflare/**', 'docs/play/**', 'Dockerfile', '.github/workflows/alpha.yml']
+  pull_request:
+    paths: ['alpha/**', 'cloudflare/**', 'docs/play/**', 'Dockerfile', '.github/workflows/alpha.yml']
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r alpha/requirements-dev.txt
+      - run: python -m pytest alpha/tests -q
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: for file in docs/play/*.js; do node --check "$file"; done
+      - run: node --test alpha/tests/connection.test.mjs
+      - run: node --test cloudflare/tests/*.test.js
+      - run: docker build -t eov-alpha .
