@@ -23,6 +23,7 @@ import UnityOffload from "@/pages/UnityOffload";
 import ChatHistory from "@/pages/ChatHistory";
 import SkillsPage from "@/pages/SkillsPage";
 import CharacterCustomization from "@/pages/CharacterCustomization";
+import IsometricSettlement from "@/pages/IsometricSettlement";
 
 function App() {
   return (
@@ -36,7 +37,8 @@ function App() {
           <Route path="/create-character" element={<CharacterCreation />} />
           <Route path="/select-mode" element={<ModeSelection />} />
           <Route path="/village" element={<VillageExplorer />} />
-          <Route path="/play" element={<FirstPersonView3D />} />
+          <Route path="/play" element={<IsometricSettlement />} />
+          <Route path="/play-3d" element={<FirstPersonView3D />} />
           <Route path="/play-classic" element={<FirstPersonView />} />
           <Route path="/unity" element={<UnityOffload />} />
           <Route path="/chat-history" element={<ChatHistory />} />
