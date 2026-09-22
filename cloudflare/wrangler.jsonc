@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "echoes-world-alpha",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-09-21",
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 0.1,
+    "traces": { "enabled": true, "head_sampling_rate": 0.1 },
+  },
+  "workers_dev": true,
+  "ai": { "binding": "AI" },
+  "durable_objects": {
+    "bindings": [{ "name": "WORLD", "class_name": "World" }],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["World"] }],
+  "vars": {
+    "EOV_ORIGINS": "https://themaxghoul.github.io,http://localhost:8000,http://127.0.0.1:8000,http://localhost:8787,http://127.0.0.1:8787",
+  },
+  "assets": {
+    "directory": "../docs/play",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/health", "/ws"],
+  },
+}

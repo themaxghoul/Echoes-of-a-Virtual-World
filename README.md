@@ -1,5 +1,14 @@
 # Echoes of a Virtual World
 
+## Playable public alpha — expect bugs
+
+Choose [Story / text](https://echoes-world-alpha.echoes-world-free-runtime.workers.dev/?mode=story), [2.5D isometric](https://echoes-world-alpha.echoes-world-free-runtime.workers.dev/?mode=isometric), or [experimental first person](https://echoes-world-alpha.echoes-world-free-runtime.workers.dev/?mode=firstperson). All three use one persistent shared world; no full client download is required. [GitHub Pages mode selector](https://themaxghoul.github.io/Echoes-of-a-Virtual-World/).
+
+The free Cloudflare runtime supports a small multiplayer sandbox with exploration, gathering, construction, basic soil research, responsive Samaritans, world chat and an experimental ledger. Unity remains in development. Credits have no cash value and no BTC integration is active. Free hosting has capacity limits.
+
+**Maintainers and future coding sessions: read [the handoff](docs/HANDOFF.md).** It explains every new component, commands, deployment choices, save compatibility, verification and unfinished work. The original prototype and longer-term vision below are retained and should not be mistaken for features all implemented in this alpha.
+
+
 **Echoes of Virtuality** — A living virtual society where you begin as a founder of villages that house local LLMs. These AIs work together to build a dynamic society that exists alongside you, complete with memory, economy, merit-based recognition, and emergent storytelling.
 
 ### The Vision
