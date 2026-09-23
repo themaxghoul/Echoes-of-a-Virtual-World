@@ -59,7 +59,7 @@ python -m venv .venv
 python -m pip install -r alpha/requirements-dev.txt
 python -m pytest alpha/tests -q
 node --test cloudflare/tests/*.test.js
-node --test alpha/tests/connection.test.mjs
+node --test alpha/tests/*.test.mjs
 python cloudflare/tests/network_smoke.py
 ```
 
@@ -86,8 +86,10 @@ Cloudflare's official agent setup instructions were fetched. Fourteen Cloudflare
 
 ## Verification record
 
-- Python: 13 alpha tests passed (two dependency deprecation warnings).
-- Cloudflare: 11 Node tests passed, including failed-write retry regression.
+The persistence update is tracked in PR #8 and docs/PERSISTENT_WORLD_PLAN.md. Final Worker version: `133f0967-4ab9-4ec8-a934-193acebe7195`. Public AI dialogue, replay consistency and authenticated WebSocket snapshots passed after deployment. The production alarm fired and rescheduled; the corrected decision parser was verified against the real AI binding in an isolated test world.
+
+- Python: 14 alpha tests passed (two dependency deprecation warnings).
+- Node: 26 tests passed (23 Cloudflare, 3 browser connection/retry tests), including rollback, persistence, parsed model responses and quota handling.
 - Earlier local two-client network test passed presence, movement, chat, concurrent transfer replay, dialogue and stable membership.
 - Independent review found idle quota consumption and rolled-back position retry bugs; both were corrected.
 - Public HTTPS network test passed health, authorization, two-client presence/movement/chat, concurrent transfer replay, dialogue and stable membership. All three local browser modes inspected. Main726 story restoration adds locations, narrator/NPC conversations, saved history and XP; see STORY_RESTORATION.md.

@@ -76,7 +76,7 @@ async function api(path, data, auth = true) {
       ...(auth && token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: data === undefined ? undefined : JSON.stringify(data),
-    signal: AbortSignal.timeout(15000),
+    signal: AbortSignal.timeout(30000),
   });
   const result = await response.json();
   if (!response.ok) {

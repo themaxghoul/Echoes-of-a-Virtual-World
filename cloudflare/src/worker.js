@@ -1,6 +1,6 @@
 import { DurableObject } from "cloudflare:workers";
 import { Kernel } from "./kernel.js";
-import { generateDialogue } from "./dialogue.js";
+import { generateDialogue, AI_TIMEOUT_MS } from "./dialogue.js";
 import { Story } from "./story.js";
 import { AGENT_INTERVAL } from "./agents.js";
 import { GenerationLimit } from "./possibilities.js";
@@ -282,7 +282,10 @@ export class World extends DurableObject {
             history,
           ),
           new Promise((_, reject) => {
-            timeout = setTimeout(() => reject(Error("Dialogue timeout")), 8000);
+            timeout = setTimeout(
+              () => reject(Error("Dialogue timeout")),
+              AI_TIMEOUT_MS,
+            );
           }),
         ]);
         const enriched = { ...result, reply, dialogue: "workers-ai" };

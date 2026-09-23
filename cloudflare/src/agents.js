@@ -2,6 +2,7 @@
  * The model chooses; the simulation enforces physics and resource ownership.
  * No scripted activity rotation is presented as autonomous reasoning.
  */
+import { AI_MODEL, AI_TIMEOUT_MS } from "./dialogue.js";
 export const AGENT_INTERVAL = 2 * 60 * 60 * 1000;
 export class Agents {
   constructor(game, profiles) {
@@ -160,7 +161,7 @@ export class Agents {
     let timer;
     try {
       const response = await Promise.race([
-        ai.run("@cf/meta/llama-3.1-8b-instruct-fp8-fast", {
+        ai.run(AI_MODEL, {
           messages: [
             {
               role: "system",
@@ -171,17 +172,23 @@ export class Agents {
           max_tokens: 180,
         }),
         new Promise((_, reject) => {
-          timer = setTimeout(() => reject(Error("Reasoning timed out")), 8000);
+          timer = setTimeout(
+            () => reject(Error("Reasoning timed out")),
+            AI_TIMEOUT_MS,
+          );
         }),
       ]);
       const raw = response?.response;
-      if (typeof raw !== "string") throw Error("Missing model decision");
-      const decision = JSON.parse(
-        raw
-          .trim()
-          .replace(/^```(?:json)?\s*/, "")
-          .replace(/\s*```$/, ""),
-      );
+      if (!raw) throw Error("Missing model decision");
+      const decision =
+        typeof raw === "string"
+          ? JSON.parse(
+              raw
+                .trim()
+                .replace(/^```(?:json)?\s*/, "")
+                .replace(/\s*```$/, ""),
+            )
+          : raw;
       return this.apply(id, state.id, decision, now);
     } catch (error) {
       this.storage.exec(

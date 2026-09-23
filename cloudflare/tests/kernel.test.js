@@ -32,6 +32,31 @@ async function user(k, name) {
   return { id: await k.authenticate(session.token), token: session.token };
 }
 
+test("Workers AI parsed-object decisions use the same action validation as text JSON", async () => {
+  const s = storage(),
+    k = new Kernel(s);
+  const result = await k.agents.cycle(
+    {
+      async run() {
+        return {
+          response: {
+            action: "reflect",
+            goal: "compare meadow samples",
+            intention: "Consider evidence.",
+          },
+        };
+      },
+    },
+    Date.now(),
+  );
+  assert.equal(result.status, "applied");
+  assert.equal(
+    k.npcs().find((n) => n.id === result.agent).goal,
+    "compare meadow samples",
+  );
+  s.db.close();
+});
+
 test("instantiated terrain survives a generator change and exposes hierarchical provenance", () => {
   const s = storage(),
     k = new Kernel(s);

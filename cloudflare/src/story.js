@@ -2,6 +2,7 @@
  * Narrative travel never teleports a world avatar or changes its resources.
  */
 import { VILLAGE_LOCATIONS, NPC_DATA } from "../../docs/play/story-data.js";
+import { AI_MODEL, AI_TIMEOUT_MS } from "./dialogue.js";
 
 export const MILESTONES = [
   [0, "First Steps"],
@@ -226,7 +227,7 @@ export class Story {
       try {
         const response = await Promise.race([
           Promise.resolve().then(() =>
-            ai.run("@cf/meta/llama-3.1-8b-instruct-fp8-fast", {
+            ai.run(AI_MODEL, {
               max_tokens: 180,
               messages: [
                 {
@@ -242,11 +243,26 @@ export class Story {
             }),
           ),
           new Promise((_, reject) => {
-            timeout = setTimeout(() => reject(Error("Story timeout")), 8000);
+            timeout = setTimeout(
+              () => reject(Error("Story timeout")),
+              AI_TIMEOUT_MS,
+            );
           }),
         ]);
-        if (typeof response?.response !== "string" || !response.response.trim())
+        if (
+          typeof response?.response !== "string" ||
+          !response.response.trim()
+        ) {
+          console.warn(
+            JSON.stringify({
+              event: "story_ai_fallback",
+              kind: "response-shape",
+              responseType: typeof response?.response,
+              keys: Object.keys(response || {}),
+            }),
+          );
           return result;
+        }
         const enriched = {
           ...result,
           reply: response.response.trim().slice(0, 2000),
@@ -268,7 +284,14 @@ export class Story {
           );
         });
         result = enriched;
-      } catch {
+      } catch (error) {
+        console.warn(
+          JSON.stringify({
+            event: "story_ai_fallback",
+            kind:
+              error.message === "Story timeout" ? "timeout" : "provider-error",
+          }),
+        );
         /* The saved contextual response remains usable. */
       } finally {
         clearTimeout(timeout);

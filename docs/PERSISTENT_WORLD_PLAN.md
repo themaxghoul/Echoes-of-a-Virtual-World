@@ -1,6 +1,6 @@
 # Persistent world and agent restoration
 
-Status: implementation and local verification complete; deployed to the free Worker on 2026-09-23. Production account, world, story history and terrain comparison passed. GitHub publication and live alarm verification are the final checks.
+Status: implementation and local verification complete; deployed to the free Worker on 2026-09-23. Production account, world, story history and terrain comparison passed. Published for review in PR #8. The production alarm fired and rescheduled; its first model response exposed a parser mismatch, which is fixed in the final deployment.
 
 ## Evidence and preservation
 
@@ -22,12 +22,20 @@ Existing accounts, ledger entries, structures, world seed and frontier are retai
 
 ## Verification and limits
 
-- Node: 25 passing tests (22 Cloudflare runtime tests, two terrain retry tests, one connection freshness test).
+- Node: 26 passing tests (23 Cloudflare runtime tests, two terrain retry tests, one connection freshness test).
 - Python: 14 passing alpha tests, including the legacy async-chat regression. Two existing FastAPI/Starlette dependency deprecation warnings remain.
 - Browser: existing local account connected in isometric, first-person and story modes; the activity panel loaded. The renderers themselves were not rewritten.
-- Production deployment: `099a96db-e721-497f-b2ca-2ab3ac9ff5f1`. Existing QA account state, world seed/radius/membership, story state/history and all 256 origin-chunk tiles compared equal before/after deployment. The new hierarchical path and scheduled alarm were returned by the live API.
+- Production deployment: `133f0967-4ab9-4ec8-a934-193acebe7195`. Existing QA account state, world seed/radius/membership, story state/history and all 256 origin-chunk tiles compared equal before/after deployment. The new hierarchical path and scheduled alarm were returned by the live API.
 - Review findings fixed: global generation quota and nearby-only chunk requests; interrupted pending cycles; atomic story memory; per-player movement handling at generation exhaustion; client retry backoff.
 
 The free runtime schedules at most twelve independent reasoning attempts daily, one every two hours across Mira/Oren/Sol, within the shared fifty-call daily AI allowance. This is deliberately slow and bounded. Village story characters keep their original narrative profiles but do not receive new spatial agents. Legacy MongoDB saves, every old economy/quest router, model-negotiated diplomacy and MOTH execution are not included. Structure/room/object seeds are persisted provenance for future detail, not finished interiors.
 
 Source of truth: `cloudflare/src/kernel.js` for player state/actions, `possibilities.js` for generation and terrain persistence, `agents.js` for the decision lifecycle, `story.js` for narrative state, and `worker.js` for network/scheduling. Both graphical modes use the same kernel/chunk API. The Python `alpha/` server is an alternative older runtime, not schema-compatible with these Worker tables.
+
+## Provider verification
+
+A real Workers AI call returned an already-parsed object in `response`, rather than JSON text. The decision parser now accepts either representation and subjects both to identical action validation. The shared model is the documented `@cf/meta/llama-3.1-8b-instruct-fp8`. See [model documentation](https://developers.cloudflare.com/workers-ai/models/llama-3.1-8b-instruct-fp8/) and [structured response documentation](https://developers.cloudflare.com/workers-ai/features/json-mode/).
+
+An isolated local Durable Object using the actual Workers AI binding successfully committed Mira's independently chosen reflection about soil moisture. The public alarm fired and retained its next scheduled wake-up; the first failed decision remains honestly recorded as rejected rather than being rewritten. The corrected public deployment returned a model-generated soil-comparison answer in about five seconds, preserved its replay result, and returned authenticated WebSocket snapshots with the persisted agents. The next production autonomous decision remains on the regular two-hour schedule.
+
+Model calls have a twenty-second deadline; the browser waits thirty seconds, leaving time to receive a saved fallback. Diagnostic warnings record only error category and response shape, never player text or credentials. No paid plan was enabled.
