@@ -32,6 +32,34 @@ async function setup() {
   k.join(b.player.id);
   return { db, k, s, id: a.player.id, other: b.player.id, story: new Story(k) };
 }
+
+test("story memory and replay records commit together or both roll back", async () => {
+  const { db, k, s, id, story } = await setup(),
+    exec = s.exec.bind(s);
+  const command = {
+    type: "talk",
+    speaker: "Mira",
+    text: "Remember my forest experiment.",
+    request_id: "atomic-memory",
+  };
+  s.exec = (sql, ...args) => {
+    if (sql.startsWith("UPDATE agent_states")) throw Error("memory disk busy");
+    return exec(sql, ...args);
+  };
+  await assert.rejects(story.command(id, command), /memory disk busy/);
+  assert.equal(
+    s.exec("SELECT * FROM story_requests WHERE key=?", command.request_id)
+      .length,
+    0,
+  );
+  assert.equal(k.agents.states.get("mira").memory.length, 0);
+  s.exec = exec;
+  await story.command(id, command);
+  await story.command(id, command);
+  assert.equal(new Kernel(s).agents.states.get("mira").memory.length, 1);
+  assert.equal(story.state(id).history.length, 1);
+  db.close();
+});
 test("Main726 story restores all source locations, visits and history across restart without changing world state", async () => {
   const { db, k, id, other, story } = await setup();
   const before = structuredClone(k.player(id)),
