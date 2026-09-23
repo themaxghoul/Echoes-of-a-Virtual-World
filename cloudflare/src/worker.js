@@ -2,6 +2,8 @@ import { DurableObject } from "cloudflare:workers";
 import { Kernel } from "./kernel.js";
 import { generateDialogue } from "./dialogue.js";
 import { Story } from "./story.js";
+import { AGENT_INTERVAL } from "./agents.js";
+import { GenerationLimit } from "./possibilities.js";
 
 const json = (value, status = 200) =>
   Response.json(value, {
@@ -60,6 +62,18 @@ export class World extends DurableObject {
     if (this.limits.size > 10000)
       for (const [key, value] of this.limits)
         if (now - value.start > 3600000) this.limits.delete(key);
+  }
+  async ensureAgentAlarm() {
+    if (!this.env.AI || !this.game.world.members) return;
+    if ((await this.ctx.storage.getAlarm()) === null)
+      await this.ctx.storage.setAlarm(Date.now() + 60000);
+  }
+  async alarm() {
+    // Persist the next wake-up before model I/O; outages must not stop the loop.
+    await this.ctx.storage.setAlarm(
+      (Math.floor(Date.now() / AGENT_INTERVAL) + 1) * AGENT_INTERVAL + 1000,
+    );
+    await this.game.agents.cycle(this.env.AI);
   }
   startTick() {
     if (this.timer) return;
@@ -157,16 +171,30 @@ export class World extends DurableObject {
       }
       if (path === "/api/world" && request.method === "GET") {
         this.rate("world:" + id, 30, 10000);
+        if (!["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))
+          await this.ensureAgentAlarm();
         return json(this.game.join(id));
       }
+      if (path === "/api/agents" && request.method === "GET") {
+        this.rate("agents:" + id, 10, 10000);
+        return json({
+          agents: this.game.npcs(),
+          journal: this.game.agents.journal(),
+          nextCycle: await this.ctx.storage.getAlarm(),
+          intervalHours: 2,
+        });
+      }
       if (path === "/api/chunk" && request.method === "GET") {
-        this.rate("chunk:" + id, 120, 1000);
-        return json(
-          this.game.chunk(
-            Number(url.searchParams.get("cx")),
-            Number(url.searchParams.get("cy")),
-          ),
-        );
+        this.rate("chunk:" + id, 30, 1000);
+        const p = this.game.player(id),
+          cx = Number(url.searchParams.get("cx")),
+          cy = Number(url.searchParams.get("cy"));
+        if (
+          Math.abs(cx - Math.floor(p.x / 16)) > 2 ||
+          Math.abs(cy - Math.floor(p.y / 16)) > 2
+        )
+          throw Error("Travel closer before exploring this region.");
+        return json(this.game.chunk(cx, cy));
       }
       if (path === "/api/ledger" && request.method === "GET") {
         this.rate("ledger:" + id, 10, 10000);
@@ -197,6 +225,15 @@ export class World extends DurableObject {
       }
       return json({ detail: "Not found." }, 404);
     } catch (error) {
+      if (error instanceof GenerationLimit)
+        return json(
+          {
+            detail: error.message,
+            code: "generation_limit",
+            retryAt: (Math.floor(Date.now() / 86400000) + 1) * 86400000,
+          },
+          429,
+        );
       return json(
         { detail: error.message },
         error.message.startsWith("Too many") ? 429 : 400,

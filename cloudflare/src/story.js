@@ -17,6 +17,8 @@ export function storyPrompt(player, location, npc, world) {
     ? `You are ${npc.name}, a ${npc.role} in The Echoes.
 YOUR PERSONALITY: ${npc.personality || npc.goal}
 YOUR KNOWLEDGE DOMAINS: ${(npc.knowledge || [npc.goal]).join(", ")}
+CURRENT SIMULATION ACTIVITY: ${npc.activity || "Narrative character; no physical simulation actions are tracked."}
+CURRENT GOAL: ${npc.goal || "Choose your own conversational interests from your personality."}
 Talk like you're actually having a conversation, not reading from a script. Use contractions. React to what they say. Ask follow-up questions sometimes. Share your own thoughts and feelings. You may disagree or be busy. Don't lecture. Avoid always starting with "Ah, traveler". You have your own life and goals.`
     : `You are the narrator of The Echoes, a dark fantasy village.
 Describe what's happening right now, not a history lesson. Use short, punchy sentences mixed with longer atmospheric ones. Give NPCs distinct voices: some curt, some rambling, some joking. Focus on what the player can actually DO. Build tension through implication. Humor is welcome. Avoid long exposition, "You feel a sense of", repeated openings, or excessive drama. Keep it punchy. Make them want to type their next action.`;
@@ -179,7 +181,7 @@ export class Story {
       result = { ok: true, reply, source: turn.source };
     } else throw Error("Unknown story action.");
     // Persist the fallback first, so timeouts and duplicate requests never lose a turn.
-    this.db.transactionSync(() => {
+    this.game.atomic(() => {
       if (turn)
         result.turn_id = this.db.exec(
           "INSERT INTO story_turns(player,location,speaker,text,reply,source,created) VALUES(?,?,?,?,?,?,?) RETURNING id",
@@ -203,6 +205,12 @@ export class Story {
         payload,
         JSON.stringify(result),
       );
+      if (turn && npc?.id && this.game.agents.states.has(npc.id))
+        this.game.agents.remember(
+          npc.id,
+          `story:${result.turn_id}`,
+          `${player.name} said: ${turn.text}`,
+        );
     });
     if (!turn || !ai) return result;
     const day = new Date().toISOString().slice(0, 10);

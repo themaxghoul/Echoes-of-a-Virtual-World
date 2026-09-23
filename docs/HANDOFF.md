@@ -1,4 +1,4 @@
-# Public alpha handoff — 2026-09-21
+# Public alpha handoff — updated 2026-09-23
 
 ## Start here on another device
 
@@ -11,7 +11,7 @@ Clone this repository and read this file before modifying the alpha. The origina
 - Offline/self-hosted alternative: `alpha/` (Python/FastAPI and SQLite).
 - Architecture and execution history: [ALPHA_DESIGN.md](ALPHA_DESIGN.md), [ALPHA_PLAN.md](ALPHA_PLAN.md).
 
-Cloudflare accepted the deployment and the public HTTPS two-player network test passed. GitHub publication/Pages status is recorded below when complete.
+Cloudflare accepted the initial deployment and its public HTTPS two-player network test passed. GitHub Pages is enabled and its deployment succeeded (HTTP 200 verified). The latest persistence update and its verification are documented in PERSISTENT_WORLD_PLAN.md.
 
 ## Implemented game slice
 
@@ -19,9 +19,13 @@ Story/text, isometric canvas, and experimental first-person canvas share the sam
 
 Create a named account with a password and retain that password. There is no password recovery yet. Sessions expire after 30 days. WASD/arrows and the direction pad move; first-person arrows turn. Return to commons escapes blocked locations. Gather, build, research, chat, talk to Samaritans, propose cooperation, and transfer experimental credits through the sidebar. Chat collapses to leave more room for the world.
 
-The world starts with radius 512 tiles. Each new account's first join expands it by 32 tiles. Reconnects and mode changes do not expand it. Terrain depends on the stored seed and coordinates; chunks are generated on demand. This is one shared world, not separate personal universes. Camps, farms and labs persist, but farms/labs do not yet run production chains. Soil research is a small procedural experiment, not a validated scientific model.
+The world starts with radius 512 tiles. Each new account's first join expands it by 32 tiles. Reconnects and mode changes do not expand it. Terrain retains the original stored seed and coordinate algorithm. Chunks are instantiated on demand, then stored with versioned hierarchical seed provenance. Saved chunks are never rerolled by a replacement generator. World → region → settlement → parcel seeds are recorded; new construction adds structure, room and object seed records (these are provenance, not rendered interiors). A global limit of 1000 newly instantiated chunks per UTC day protects the free database allowance; existing chunks remain readable. Clients can request only nearby chunks. This is one shared world, not separate personal universes. Camps, farms and labs persist, but farms/labs do not yet run production chains. Soil research is a small procedural experiment, not a validated scientific model.
 
-Samaritans have role-specific dialogue and per-player conversation history. Their current movement is ambient animation, not the full legacy background autonomy service. See STORY_RESTORATION.md for the preserved source and integration boundary. Workers AI enriches HTTP conversations with remembered context, up to 50 requests per UTC day across this world. Timeout, quota exhaustion or model errors fall back to contextual responses. AI prose never executes world commands. Diplomacy is an explicit action; ordinary conversation does not mint money or grant powers.
+Mira, Oren and Sol now have persistent positions, intentions, personal supplies and bounded memories. Their former clock-driven wandering is removed. One independent model decision is scheduled every two hours across the three agents (up to 12/day); decisions can reflect, gather, research, explore or speak in the activity journal. Physics, resource ownership and allowed actions are checked by the server. A rejected or interrupted decision has no committed physical consequence. The journal reports the outcome and next scheduled cycle. This is a bounded free-runtime adaptation, not full parity with the legacy autonomy router or continuous real-time cognition. The original village characters remain narrative characters.
+
+Workers AI enriches HTTP conversations with remembered context. The shared budget is 50 calls per UTC day, including autonomous decisions. Timeout, quota exhaustion or model errors fall back to contextual conversation. Ordinary dialogue never directly executes world commands; messages to the three Samaritans can inform their later independent decisions. Diplomacy remains an explicit limited cooperation action. It is not a model-negotiated treaty engine.
+
+Harvest patches are shared and persistent: twelve available units per tile, two per harvest, one unit regenerating each minute. Moving to another patch or waiting restores access. Agent gathering consumes the same patch supply and goes into the agent's own inventory. Model output cannot award player credits or grow the world.
 
 ## Economy boundary
 
@@ -31,7 +35,7 @@ Credits are experimental in-game units with **no monetary value**. No BTC deposi
 
 Workers Free plus one SQLite Durable Object owns the persistent world. No paid subscription or Render service was created. `render.yaml` and `Dockerfile` are optional self-hosting/paid alternatives, not the selected deployment. Stay on the free plan unless the owner explicitly changes that decision.
 
-This alpha admits at most 16 distinct online accounts, 3 sockets per account, 1000 registered accounts and 10000 buildings. Those limits do not guarantee enough free quota for continuous maximum load. Movement sends at most roughly 7 messages/second; idle input heartbeats occur every 30 seconds. A server timer runs only while players are connected. Position writes batch every 10 seconds and on disconnect; an abrupt crash can roll back up to 10 seconds of movement. Ledger/action changes persist immediately.
+This alpha admits at most 16 distinct online accounts, 3 sockets per account, 1000 registered accounts and 10000 buildings. Those limits do not guarantee enough free quota for continuous maximum load. Movement sends at most roughly 7 messages/second; idle input heartbeats occur every 30 seconds. A movement timer runs only while players are connected. Durable alarms continue the limited agent schedule when players leave. Position writes batch every 10 seconds and on disconnect; an abrupt crash can roll back up to 10 seconds of movement. Ledger/action changes persist immediately.
 
 Cloudflare free allowances are shared with other applications on the account; exhausted quotas can interrupt service until reset. See [DO pricing](https://developers.cloudflare.com/durable-objects/platform/pricing/) and [Workers AI pricing](https://developers.cloudflare.com/workers-ai/platform/pricing/). Do not advertise unlimited capacity or guaranteed uptime. Account farming, moderation, recovery, richer simulation and large-world partitioning remain future work.
 
@@ -45,7 +49,7 @@ pnpm test
 pnpm exec wrangler dev
 ```
 
-Open the local Wrangler URL (usually port 8787). Local mode uses its own backend and disables remote AI calls. Local Python, local Wrangler and production saves are separate; their terrain algorithms and database schemas differ. Never copy one database into the other.
+Open the local Wrangler URL (usually port 8787). Local mode uses its own backend and disables remote conversation AI calls and automatic agent scheduling. Do not manually trigger local alarms against the remote AI binding unless intentionally testing its quota usage. Local Python, local Wrangler and production saves are separate; their terrain algorithms and database schemas differ. Never copy one database into the other.
 
 From the repository root, Python tests use an isolated virtual environment:
 

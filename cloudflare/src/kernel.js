@@ -1,5 +1,7 @@
-/** Free-tier authoritative world. No database reads in the movement/snapshot loop.
- * SQL is accessed only on startup, account operations, durable actions and batched saves.
+import { Agents } from "./agents.js";
+import { Possibilities, GenerationLimit } from "./possibilities.js";
+/** Free-tier authoritative world. Terrain stays cached after first entry.
+ * SQL is accessed on first terrain entry, startup, durable actions and batched saves.
  * One fixed Durable Object owns the world, making synchronous transactions serial.
  */
 const encode = new TextEncoder();
@@ -97,6 +99,7 @@ export class Kernel {
     this.world = {
       ...storage.exec("SELECT seed,radius,members FROM world")[0],
     };
+    this.possibilities = new Possibilities(storage, this.world.seed);
     this.buildings = storage
       .exec("SELECT data FROM buildings")
       .map((r) => JSON.parse(r.data));
@@ -106,9 +109,14 @@ export class Kernel {
       .map((r) => ({ ...JSON.parse(r.data), id: r.id }));
     this.sessions = new Map();
     this.inputs = new Map();
+    this.movementWarnings = new Map();
     this.online = new Set();
     this.dirty = new Set();
     this.sinceFlush = 0;
+    storage.exec(
+      "CREATE TABLE IF NOT EXISTS ecosystem(key TEXT PRIMARY KEY,remaining INTEGER,updated REAL)",
+    );
+    this.agents = new Agents(this, NPCS);
   }
   save(p) {
     this.storage.exec(
@@ -131,6 +139,8 @@ export class Kernel {
       return this.storage.transactionSync(fn);
     } catch (e) {
       Object.assign(this, backup);
+      this.possibilities.cache.clear();
+      this.agents.reload();
       throw e;
     }
   }
@@ -287,24 +297,7 @@ export class Kernel {
     );
   }
   terrain(x, y) {
-    x = Math.floor(x);
-    y = Math.floor(y);
-    if (Math.abs(x) < 10 && Math.abs(y) < 10) return "meadow";
-    let n =
-      (Math.imul(Math.floor(x / 6), 374761393) ^
-        Math.imul(Math.floor(y / 6), 668265263) ^
-        this.world.seed) >>>
-      0;
-    n = Math.imul(n ^ (n >>> 13), 1274126177) >>> 0;
-    n = (n ^ (n >>> 16)) >>> 0;
-    const value = n % 100;
-    return value < 9
-      ? "water"
-      : value < 17
-        ? "rock"
-        : value < 47
-          ? "forest"
-          : "meadow";
+    return this.possibilities.terrain(x, y);
   }
   chunk(cx, cy) {
     if (
@@ -314,14 +307,7 @@ export class Kernel {
       Math.abs(cy * 16) > this.world.radius + 16
     )
       throw Error("This land is beyond the current frontier.");
-    return {
-      cx,
-      cy,
-      size: 16,
-      tiles: Array.from({ length: 256 }, (_, i) =>
-        this.terrain(cx * 16 + (i % 16), cy * 16 + Math.floor(i / 16)),
-      ),
-    };
+    return this.atomic(() => this.possibilities.chunk(cx, cy));
   }
   passable(x, y) {
     return (
@@ -340,15 +326,22 @@ export class Kernel {
       if (Date.now() - input.time > 300) continue;
       const p = this.players.get(id);
       if (!p) continue;
-      const length = Math.max(1, Math.hypot(input.dx, input.dy)),
-        speed = this.terrain(p.x, p.y) === "forest" ? 4 : 6;
-      const x = p.x + (input.dx / length) * speed * dt,
-        y = p.y + (input.dy / length) * speed * dt;
       const beforeX = p.x,
         beforeY = p.y;
-      if (this.passable(x, p.y)) p.x = x;
-      if (this.passable(p.x, y)) p.y = y;
-      if (p.x !== beforeX || p.y !== beforeY) this.dirty.add(id);
+      try {
+        this.movementWarnings.delete(id);
+        const length = Math.max(1, Math.hypot(input.dx, input.dy)),
+          speed = this.terrain(p.x, p.y) === "forest" ? 4 : 6;
+        const x = p.x + (input.dx / length) * speed * dt,
+          y = p.y + (input.dy / length) * speed * dt;
+        if (this.passable(x, p.y)) p.x = x;
+        if (this.passable(p.x, y)) p.y = y;
+      } catch (error) {
+        if (!(error instanceof GenerationLimit)) throw error;
+        this.movementWarnings.set(id, error.message);
+      } finally {
+        if (p.x !== beforeX || p.y !== beforeY) this.dirty.add(id);
+      }
     }
     if (this.sinceFlush >= 10) {
       this.flush();
@@ -374,19 +367,44 @@ export class Kernel {
     if (this.dirty.has(id)) this.save(this.players.get(id));
   }
   npcs() {
-    const phase = Date.now() / 35000;
-    return NPCS.map((n, i) => ({
-      ...n,
-      x: n.home[0] + Math.sin(phase + i) * 2,
-      y: n.home[1] + Math.cos(phase + i) * 2,
-      activity:
-        n.activities[Math.floor(Date.now() / 60000 + i) % n.activities.length],
-    }));
+    return this.agents.publicStates();
+  }
+  harvest(x, y, now = Date.now()) {
+    const terrain = this.terrain(x, y);
+    if (terrain === "water") throw Error("Cannot gather on water.");
+    const key = `${Math.floor(x)},${Math.floor(y)}`;
+    const old = this.storage.exec(
+      "SELECT remaining,updated FROM ecosystem WHERE key=?",
+      key,
+    )[0];
+    // One resource regrows per minute, to a maximum of twelve per tile.
+    const elapsed = old
+      ? Math.max(0, Math.floor((now - old.updated) / 60000))
+      : 0;
+    const remaining = old ? Math.min(12, old.remaining + elapsed) : 12;
+    if (remaining < 2)
+      throw Error(
+        "This patch is depleted. Explore another tile or let it recover.",
+      );
+    const updated =
+      !old || remaining === 12 ? now : old.updated + elapsed * 60000;
+    this.storage.exec(
+      "INSERT INTO ecosystem VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET remaining=excluded.remaining,updated=excluded.updated",
+      key,
+      remaining - 2,
+      updated,
+    );
+    return terrain === "forest"
+      ? "wood"
+      : terrain === "rock"
+        ? "stone"
+        : "food";
   }
   snapshot(id) {
     const p = this.player(id);
     return {
       type: "snapshot",
+      notice: this.movementWarnings.get(id) || "",
       world: { ...this.world },
       self: p,
       players: [...this.online]
@@ -508,8 +526,7 @@ export class Kernel {
       if (Date.now() - p.lastGather < 3000)
         throw Error("Rest a moment: gathering takes three seconds.");
       const terrain = this.terrain(p.x, p.y),
-        resource =
-          terrain === "forest" ? "wood" : terrain === "rock" ? "stone" : "food";
+        resource = this.harvest(p.x, p.y);
       p[resource] += 2;
       p.lastGather = Date.now();
       this.save(p);
@@ -541,6 +558,12 @@ export class Kernel {
       if (this.buildings.length >= 10000)
         throw Error("The alpha world has reached its construction cap.");
       const b = { id: crypto.randomUUID(), owner: id, kind: data.kind, x, y };
+      const parcel = this.possibilities
+        .chunk(Math.floor(x / 16), Math.floor(y / 16))
+        .path.at(-1);
+      b.provenance = this.possibilities.child(parcel, "structure", b.id);
+      const room = this.possibilities.child(b.provenance, "room", "main");
+      this.possibilities.child(room, "object", "hearth");
       p.wood -= wood;
       p.stone -= stone;
       this.storage.exec(
@@ -622,6 +645,7 @@ export class Kernel {
       text,
       reply,
     )[0];
+    this.agents.remember(npc.id, `talk:${row.id}`, `${p.name} said: ${text}`);
     return {
       ok: true,
       reply,

@@ -20,6 +20,6 @@ jobs:
         with:
           node-version: '24'
       - run: for file in docs/play/*.js; do node --check "$file"; done
-      - run: node --test alpha/tests/connection.test.mjs
+      - run: node --test alpha/tests/*.test.mjs
       - run: node --test cloudflare/tests/*.test.js
       - run: docker build -t eov-alpha .

@@ -8,7 +8,6 @@ from datetime import datetime, timezone
 import uuid
 import logging
 import random
-import asyncio
 import os
 
 ai_autonomy_router = APIRouter(prefix="/ai-autonomy", tags=["ai-autonomy"])
@@ -136,7 +135,7 @@ def get_db():
 async def generate_npc_message(npc_state: Dict, context: Dict, conversation_history: List[Dict]) -> str:
     """Generate NPC message using LLM"""
     try:
-        from emergentintegrations.llm.chat import LlmChat
+        from emergentintegrations.llm.chat import LlmChat, UserMessage
         
         personality_desc = ", ".join([f"{k}: {v:.1f}" for k, v in npc_state.get("personality", {}).items()])
         
@@ -159,17 +158,18 @@ If you want to take an action, end your message with [ACTION: action_name]"""
         user_message = f"Conversation so far:\n{history_text}\n\nRespond as {npc_state.get('name')}:"
         
         chat = LlmChat(
-            api_key=os.environ.get("LLM_API_KEY"),
+            api_key=os.environ.get("EMERGENT_LLM_KEY") or os.environ.get("LLM_API_KEY"),
             session_id=f"npc-conv-{npc_state.get('npc_id', 'unknown')}",
             system_message=system_prompt
-        )
-        
-        response = await asyncio.to_thread(
-            chat.send_message,
-            user_message
-        )
-        
-        return response.get("response", "...")
+        ).with_model("openai", os.environ.get("EOV_AUTONOMY_MODEL", "gpt-5.2"))
+
+        # Match the working story integration: async UserMessage in, text out.
+        # Running this coroutine in a thread returned a coroutine object and
+        # silently sent every conversation through the acknowledgement fallback.
+        response = await chat.send_message(UserMessage(text=user_message))
+        if not isinstance(response, str) or not response.strip():
+            raise ValueError("Empty NPC model response")
+        return response.strip()
         
     except Exception as e:
         logger.error(f"NPC message generation error: {e}")

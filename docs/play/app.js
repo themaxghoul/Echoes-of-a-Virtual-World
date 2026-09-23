@@ -1,4 +1,6 @@
 import { snapshotFresh } from "./connection.js";
+import { ChunkRetry } from "./chunk-retry.js";
+const chunkRetry = new ChunkRetry();
 const $ = (id) => document.getElementById(id);
 const mode = new URLSearchParams(location.search).get("mode");
 const modes = {
@@ -77,12 +79,15 @@ async function api(path, data, auth = true) {
     signal: AbortSignal.timeout(15000),
   });
   const result = await response.json();
-  if (!response.ok)
-    throw new Error(
+  if (!response.ok) {
+    const error = new Error(
       typeof result.detail === "string"
         ? result.detail
         : `Request failed (${response.status}). Check your input.`,
     );
+    error.retryAt = result.retryAt;
+    throw error;
+  }
   return result;
 }
 
@@ -130,11 +135,18 @@ async function loadChunks(p) {
   for (let y = cy - 1; y <= cy + 1; y++)
     for (let x = cx - 1; x <= cx + 1; x++) {
       const key = `${x},${y}`;
-      if (chunks.has(key) || pendingChunks.has(key)) continue;
+      if (chunks.has(key) || pendingChunks.has(key) || !chunkRetry.ready(key))
+        continue;
       pendingChunks.add(key);
       api(`/api/chunk?cx=${x}&cy=${y}`)
-        .then((chunk) => chunks.set(key, chunk))
-        .catch((error) => feedback(error.message))
+        .then((chunk) => {
+          chunks.set(key, chunk);
+          chunkRetry.succeeded(key);
+        })
+        .catch((error) => {
+          chunkRetry.failed(key, error);
+          feedback(error.message);
+        })
         .finally(() => pendingChunks.delete(key));
     }
   // Nearby cache stays bounded during long journeys.
@@ -144,6 +156,7 @@ async function loadChunks(p) {
 }
 
 function display(state) {
+  if (state.notice && state.notice !== snapshot?.notice) feedback(state.notice);
   snapshot = state;
   $("player-name").textContent = state.self.name;
   $("coords").textContent =
@@ -397,6 +410,31 @@ if (modes[mode]) {
         ...rows.map((row) => {
           const p = document.createElement("p");
           p.textContent = `${row.amount > 0 ? "+" : ""}${row.amount} · ${row.reason}`;
+          return p;
+        }),
+      );
+    } catch (error) {
+      feedback(error.message);
+    }
+  };
+  $("agent-journal").onclick = async () => {
+    try {
+      const data = await api("/api/agents");
+      const lines = data.journal.length
+        ? data.journal.map(
+            (row) =>
+              `${new Date(row.created).toLocaleString()} · ${row.agent} · ${row.status}: ${row.intention} ${row.consequence}`,
+          )
+        : ["No independent decisions recorded yet."];
+      lines.push(
+        data.nextCycle
+          ? `Next scheduled decision: ${new Date(data.nextCycle).toLocaleString()}`
+          : "Background reasoning is not scheduled on this server.",
+      );
+      $("agent-journal-rows").replaceChildren(
+        ...lines.map((text) => {
+          const p = document.createElement("p");
+          p.textContent = text;
           return p;
         }),
       );
