@@ -892,3 +892,54 @@ summary {
 .story-mode .scene-label {
   display: none;
 }
+#session {
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+}
+.game-tools {
+  position: fixed;
+  z-index: 30;
+  inset: auto 0 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: #102017;
+  border-top: 1px solid var(--line);
+  box-shadow: 0 -8px 24px #0005;
+  overflow-x: auto;
+}
+.game-tools a,
+.game-tools button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px 14px;
+  white-space: nowrap;
+  font-size: 13px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+}
+.game-tools a[aria-current="page"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+  font-weight: 700;
+}
+.game-tools [data-tool-target="talk"] {
+  margin-left: 12px;
+}
+#session :is(input, textarea, button, h2, summary) {
+  scroll-margin-bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+}
+@media (max-width: 650px) {
+  .game-tools {
+    padding-inline: 12px;
+  }
+}
+/* Movement controls remain above the fixed dock even on shorter screens. */
+.viewport > .dpad { bottom: 100px; }
+.viewport > .controls-help { bottom: 100px; }

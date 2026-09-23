@@ -248,6 +248,8 @@ async function start() {
   const initial = await api("/api/world");
   $("entry").hidden = true;
   $("session").hidden = false;
+  $("session").append($("game-tools"));
+  $("game-tools").hidden = false;
   $("mode-label").textContent = modes[mode];
   const module = await import(`./${mode}.js`);
   view = module.mount($("scene"), { tile, feedback, action, api });
@@ -321,6 +323,26 @@ if (modes[mode]) {
   $("landing").hidden = true;
   $("game").hidden = false;
   $("entry-title").textContent = modes[mode];
+  document
+    .querySelector(`[data-tool-mode="${mode}"]`)
+    .setAttribute("aria-current", "page");
+  document.querySelectorAll("[data-tool-target]").forEach((button) => {
+    button.onclick = () => {
+      const targets = {
+        talk: mode === "story" ? $("story-message") : $("message"),
+        build: document.querySelector('[data-action="build"]'),
+        inventory: $("player-name"),
+        journal: $("agent-journal"),
+      };
+      const target = targets[button.dataset.toolTarget];
+      if (!target) return;
+      const panel = target.closest("details");
+      if (panel) panel.open = true;
+      if (button.dataset.toolTarget === "inventory") target.tabIndex = -1;
+      target.scrollIntoView({ block: "center" });
+      target.focus({ preventScroll: true });
+    };
+  });
   try {
     const config = await fetch("./config.json").then((r) => r.json());
     server = validatedServer(
