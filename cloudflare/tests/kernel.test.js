@@ -57,6 +57,37 @@ test("Workers AI parsed-object decisions use the same action validation as text 
   s.db.close();
 });
 
+test("agents remember rejected consequences and perceive only affordable research", async () => {
+  const s = storage(),
+    k = new Kernel(s);
+  const result = await k.agents.cycle(
+    {
+      async run() {
+        return {
+          response: {
+            action: "research",
+            goal: "compare soil",
+            intention: "Study a sample.",
+          },
+        };
+      },
+    },
+    Date.now(),
+  );
+  assert.equal(result.status, "rejected");
+  const restarted = new Kernel(s),
+    state = restarted.agents.states.get(result.agent);
+  assert.ok(
+    state.memory.some((m) => m.text.includes("Not enough personal food")),
+  );
+  assert.equal(
+    restarted.agents.perceive(state).availableActions.includes("research"),
+    false,
+  );
+  assert.equal(state.resources.food, 0);
+  s.db.close();
+});
+
 test("instantiated terrain survives a generator change and exposes hierarchical provenance", () => {
   const s = storage(),
     k = new Kernel(s);

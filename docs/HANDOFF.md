@@ -86,10 +86,10 @@ Cloudflare's official agent setup instructions were fetched. Fourteen Cloudflare
 
 ## Verification record
 
-The persistence update is tracked in PR #8 and docs/PERSISTENT_WORLD_PLAN.md. Final Worker version: `133f0967-4ab9-4ec8-a934-193acebe7195`. Public AI dialogue, replay consistency and authenticated WebSocket snapshots passed after deployment. The production alarm fired and rescheduled; the corrected decision parser was verified against the real AI binding in an isolated test world.
+The persistence update is tracked in PR #8 and docs/PERSISTENT_WORLD_PLAN.md. Final Worker version: `df489000-eb05-4f9d-b0e8-5ef28d4c80ba`. Public AI dialogue, replay consistency and authenticated WebSocket snapshots passed after deployment. Production alarms ran repeatedly; Oren independently gathered two food, while unaffordable research was rejected. Rejected consequences now enter agent memory and subsequent perception. The corrected decision parser also passed an isolated real-provider test.
 
 - Python: 14 alpha tests passed (two dependency deprecation warnings).
-- Node: 26 tests passed (23 Cloudflare, 3 browser connection/retry tests), including rollback, persistence, parsed model responses and quota handling.
+- Node: 27 tests passed (24 Cloudflare, 3 browser connection/retry tests), including rollback, persistence, parsed model responses and quota handling.
 - Earlier local two-client network test passed presence, movement, chat, concurrent transfer replay, dialogue and stable membership.
 - Independent review found idle quota consumption and rolled-back position retry bugs; both were corrected.
 - Public HTTPS network test passed health, authorization, two-client presence/movement/chat, concurrent transfer replay, dialogue and stable membership. All three local browser modes inspected. Main726 story restoration adds locations, narrator/NPC conversations, saved history and XP; see STORY_RESTORATION.md.

@@ -97,6 +97,22 @@ export class Agents {
       memory: state.memory,
       resources: state.resources,
       research: state.research,
+      availableActions: [
+        "reflect",
+        "gather",
+        "explore",
+        "speak",
+        ...(state.resources.food >= 1 ? ["research"] : []),
+      ],
+      recentOutcomes: this.storage
+        .exec(
+          "SELECT status,data FROM agent_cycles WHERE agent=? ORDER BY created DESC LIMIT 3",
+          state.id,
+        )
+        .map((row) => ({
+          status: row.status,
+          consequence: JSON.parse(row.data).consequence,
+        })),
     };
   }
   async cycle(ai, now = Date.now()) {
@@ -191,14 +207,18 @@ export class Agents {
           : raw;
       return this.apply(id, state.id, decision, now);
     } catch (error) {
-      this.storage.exec(
-        "UPDATE agent_cycles SET status='rejected',data=? WHERE id=? AND status='pending'",
-        JSON.stringify({
-          perception,
-          consequence: `No action applied: ${String(error.message).slice(0, 160)}`,
-        }),
-        id,
-      );
+      const consequence = `No action applied: ${error instanceof SyntaxError ? "Model returned invalid JSON." : String(error.message).slice(0, 160)}`;
+      this.game.atomic(() => {
+        this.storage.exec(
+          "UPDATE agent_cycles SET status='rejected',data=? WHERE id=? AND status='pending'",
+          JSON.stringify({
+            perception,
+            consequence,
+          }),
+          id,
+        );
+        this.remember(state.id, `failure:${id}`, consequence);
+      });
       return { status: "rejected", agent: state.id };
     } finally {
       clearTimeout(timer);
