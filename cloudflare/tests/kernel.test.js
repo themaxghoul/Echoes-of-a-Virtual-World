@@ -1,1 +1,459 @@
-aW1wb3J0IHsgRGF0YWJhc2VTeW5jIH0gZnJvbSAibm9kZTpzcWxpdGUiOw0KaW1wb3J0IHsgdGVzdCB9IGZyb20gIm5vZGU6dGVzdCI7DQppbXBvcnQgYXNzZXJ0IGZyb20gIm5vZGU6YXNzZXJ0L3N0cmljdCI7DQppbXBvcnQgeyBLZXJuZWwgfSBmcm9tICIuLi9zcmMva2VybmVsLmpzIjsNCmltcG9ydCB7IGRlcml2ZVNlZWQgfSBmcm9tICIuLi9zcmMvcG9zc2liaWxpdGllcy5qcyI7DQoNCmZ1bmN0aW9uIHN0b3JhZ2UoKSB7DQogIGNvbnN0IGRiID0gbmV3IERhdGFiYXNlU3luYygiOm1lbW9yeToiKTsNCiAgcmV0dXJuIHsNCiAgICBkYiwNCiAgICBleGVjKHF1ZXJ5LCAuLi5hcmdzKSB7DQogICAgICBjb25zdCBzdGF0ZW1lbnQgPSBkYi5wcmVwYXJlKHF1ZXJ5KTsNCiAgICAgIHJldHVybiBzdGF0ZW1lbnQuY29sdW1ucygpLmxlbmd0aA0KICAgICAgICA/IHN0YXRlbWVudC5hbGwoLi4uYXJncykNCiAgICAgICAgOiAoc3RhdGVtZW50LnJ1biguLi5hcmdzKSwgW10pOw0KICAgIH0sDQogICAgdHJhbnNhY3Rpb25TeW5jKGZuKSB7DQogICAgICBkYi5leGVjKCJCRUdJTiIpOw0KICAgICAgdHJ5IHsNCiAgICAgICAgY29uc3QgcmVzdWx0ID0gZm4oKTsNCiAgICAgICAgZGIuZXhlYygiQ09NTUlUIik7DQogICAgICAgIHJldHVybiByZXN1bHQ7DQogICAgICB9IGNhdGNoIChlKSB7DQogICAgICAgIGRiLmV4ZWMoIlJPTExCQUNLIik7DQogICAgICAgIHRocm93IGU7DQogICAgICB9DQogICAgfSwNCiAgfTsNCn0NCmFzeW5jIGZ1bmN0aW9uIHVzZXIoaywgbmFtZSkgew0KICBjb25zdCBzZXNzaW9uID0gYXdhaXQgay5yZWdpc3RlcihuYW1lLCAiYS1sb25nLXRlc3QtcGFzc3dvcmQiKTsNCiAgcmV0dXJuIHsgaWQ6IGF3YWl0IGsuYXV0aGVudGljYXRlKHNlc3Npb24udG9rZW4pLCB0b2tlbjogc2Vzc2lvbi50b2tlbiB9Ow0KfQ0KDQp0ZXN0KCJXb3JrZXJzIEFJIHBhcnNlZC1vYmplY3QgZGVjaXNpb25zIHVzZSB0aGUgc2FtZSBhY3Rpb24gdmFsaWRhdGlvbiBhcyB0ZXh0IEpTT04iLCBhc3luYyAoKSA9PiB7DQogIGNvbnN0IHMgPSBzdG9yYWdlKCksDQogICAgayA9IG5ldyBLZXJuZWwocyk7DQogIGNvbnN0IHJlc3VsdCA9IGF3YWl0IGsuYWdlbnRzLmN5Y2xlKA0KICAgIHsNCiAgICAgIGFzeW5jIHJ1bigpIHsNCiAgICAgICAgcmV0dXJuIHsNCiAgICAgICAgICByZXNwb25zZTogew0KICAgICAgICAgICAgYWN0aW9uOiAicmVmbGVjdCIsDQogICAgICAgICAgICBnb2FsOiAiY29tcGFyZSBtZWFkb3cgc2FtcGxlcyIsDQogICAgICAgICAgICBpbnRlbnRpb246ICJDb25zaWRlciBldmlkZW5jZS4iLA0KICAgICAgICAgIH0sDQogICAgICAgIH07DQogICAgICB9LA0KICAgIH0sDQogICAgRGF0ZS5ub3coKSwNCiAgKTsNCiAgYXNzZXJ0LmVxdWFsKHJlc3VsdC5zdGF0dXMsICJhcHBsaWVkIik7DQogIGFzc2VydC5lcXVhbCgNCiAgICBrLm5wY3MoKS5maW5kKChuKSA9PiBuLmlkID09PSByZXN1bHQuYWdlbnQpLmdvYWwsDQogICAgImNvbXBhcmUgbWVhZG93IHNhbXBsZXMiLA0KICApOw0KICBzLmRiLmNsb3NlKCk7DQp9KTsNCg0KdGVzdCgiYWdlbnRzIHJlbWVtYmVyIHJlamVjdGVkIGNvbnNlcXVlbmNlcyBhbmQgcGVyY2VpdmUgb25seSBhZmZvcmRhYmxlIHJlc2VhcmNoIiwgYXN5bmMgKCkgPT4gew0KICBjb25zdCBzID0gc3RvcmFnZSgpLA0KICAgIGsgPSBuZXcgS2VybmVsKHMpOw0KICBjb25zdCByZXN1bHQgPSBhd2FpdCBrLmFnZW50cy5jeWNsZSgNCiAgICB7DQogICAgICBhc3luYyBydW4oKSB7DQogICAgICAgIHJldHVybiB7DQogICAgICAgICAgcmVzcG9uc2U6IHsNCiAgICAgICAgICAgIGFjdGlvbjogInJlc2VhcmNoIiwNCiAgICAgICAgICAgIGdvYWw6ICJjb21wYXJlIHNvaWwiLA0KICAgICAgICAgICAgaW50ZW50aW9uOiAiU3R1ZHkgYSBzYW1wbGUuIiwNCiAgICAgICAgICB9LA0KICAgICAgICB9Ow0KICAgICAgfSwNCiAgICB9LA0KICAgIERhdGUubm93KCksDQogICk7DQogIGFzc2VydC5lcXVhbChyZXN1bHQuc3RhdHVzLCAicmVqZWN0ZWQiKTsNCiAgY29uc3QgcmVzdGFydGVkID0gbmV3IEtlcm5lbChzKSwNCiAgICBzdGF0ZSA9IHJlc3RhcnRlZC5hZ2VudHMuc3RhdGVzLmdldChyZXN1bHQuYWdlbnQpOw0KICBhc3NlcnQub2soDQogICAgc3RhdGUubWVtb3J5LnNvbWUoKG0pID0+IG0udGV4dC5pbmNsdWRlcygiTm90IGVub3VnaCBwZXJzb25hbCBmb29kIikpLA0KICApOw0KICBhc3NlcnQuZXF1YWwoDQogICAgcmVzdGFydGVkLmFnZW50cy5wZXJjZWl2ZShzdGF0ZSkuYXZhaWxhYmxlQWN0aW9ucy5pbmNsdWRlcygicmVzZWFyY2giKSwNCiAgICBmYWxzZSwNCiAgKTsNCiAgYXNzZXJ0LmVxdWFsKHN0YXRlLnJlc291cmNlcy5mb29kLCAwKTsNCiAgcy5kYi5jbG9zZSgpOw0KfSk7DQoNCnRlc3QoImluc3RhbnRpYXRlZCB0ZXJyYWluIHN1cnZpdmVzIGEgZ2VuZXJhdG9yIGNoYW5nZSBhbmQgZXhwb3NlcyBoaWVyYXJjaGljYWwgcHJvdmVuYW5jZSIsICgpID0+IHsNCiAgY29uc3QgcyA9IHN0b3JhZ2UoKSwNCiAgICBrID0gbmV3IEtlcm5lbChzKTsNCiAgY29uc3QgY2h1bmsgPSBrLmNodW5rKC0yLCAzKTsNCiAgYXNzZXJ0LmVxdWFsKHR5cGVvZiBjaHVuay5zZWVkLCAic3RyaW5nIik7DQogIGFzc2VydC5lcXVhbChjaHVuay5wYXRoLmxlbmd0aCwgNCk7DQogIGFzc2VydC5kZWVwRXF1YWwoDQogICAgY2h1bmsucGF0aC5tYXAoKG4pID0+IG4ua2luZCksDQogICAgWyJ3b3JsZCIsICJyZWdpb24iLCAic2V0dGxlbWVudCIsICJwYXJjZWwiXSwNCiAgKTsNCiAgY29uc3QgcmVzdGFydGVkID0gbmV3IEtlcm5lbChzKTsNCiAgcmVzdGFydGVkLnBvc3NpYmlsaXRpZXMuZ2VuZXJhdG9yID0gew0KICAgIGdlbmVyYXRlUG9zc2liaWxpdHkoKSB7DQogICAgICB0aHJvdyBFcnJvcigibXVzdCBub3QgcmVyb2xsIHNhdmVkIGxhbmQiKTsNCiAgICB9LA0KICB9Ow0KICBhc3NlcnQuZGVlcEVxdWFsKHJlc3RhcnRlZC5jaHVuaygtMiwgMyksIGNodW5rKTsNCiAgYXNzZXJ0LmVxdWFsKHJlc3RhcnRlZC50ZXJyYWluKC0zMiwgNDgpLCBjaHVuay50aWxlc1swXSk7DQogIHMuZGIuY2xvc2UoKTsNCn0pOw0KDQp0ZXN0KCJoaWVyYXJjaGljYWwgc2VlZHMgYXJlIG9yZGVyIGluZGVwZW5kZW50IGFuZCBuZWdhdGl2ZSBwYXJjZWxzIHJlbWFpbiBkaXN0aW5jdCIsICgpID0+IHsNCiAgY29uc3QgcyA9IHN0b3JhZ2UoKSwNCiAgICBrID0gbmV3IEtlcm5lbChzKTsNCiAgY29uc3QgYSA9IGsuY2h1bmsoLTEsIDApLA0KICAgIGIgPSBrLmNodW5rKDAsIDApOw0KICBhc3NlcnQubm90RXF1YWwoYS5zZWVkLCBiLnNlZWQpOw0KICBhc3NlcnQuZXF1YWwoYS5wYXRoWzFdLmtleS5pbmNsdWRlcygicmVnaW9uOi0xLDAiKSwgdHJ1ZSk7DQogIGFzc2VydC5lcXVhbCgNCiAgICBkZXJpdmVTZWVkKGEuc2VlZCwgInJvb20iLCAibWFpbiIpLA0KICAgIGRlcml2ZVNlZWQoYS5zZWVkLCAicm9vbSIsICJtYWluIiksDQogICk7DQogIGFzc2VydC5ub3RFcXVhbCgNCiAgICBkZXJpdmVTZWVkKGEuc2VlZCwgInJvb20iLCAibWFpbiIpLA0KICAgIGRlcml2ZVNlZWQoYS5zZWVkLCAib2JqZWN0IiwgIm1haW4iKSwNCiAgKTsNCiAgY29uc3QgczIgPSBzdG9yYWdlKCksDQogICAgazIgPSBuZXcgS2VybmVsKHMyKTsNCiAgazIuY2h1bmsoMCwgMCk7DQogIGFzc2VydC5kZWVwRXF1YWwoazIuY2h1bmsoLTEsIDApLCBhKTsNCiAgcy5kYi5jbG9zZSgpOw0KICBzMi5kYi5jbG9zZSgpOw0KfSk7DQoNCnRlc3QoInRlcnJhaW4gZ2VuZXJhdGlvbiBzdG9wcyBhdCBpdHMgc2hhcmVkIGJ1ZGdldCB3aGlsZSBzYXZlZCB0ZXJyYWluIHN0YXlzIHJlYWRhYmxlIiwgKCkgPT4gew0KICBjb25zdCBzID0gc3RvcmFnZSgpLA0KICAgIGsgPSBuZXcgS2VybmVsKHMpLA0KICAgIHNhdmVkID0gay5jaHVuaygwLCAwKTsNCiAgcy5leGVjKCJVUERBVEUgZ2VuZXJhdGlvbl9idWRnZXQgU0VUIHVzZWQ9MTAwMCIpOw0KICBhc3NlcnQudGhyb3dzKCgpID0+IGsuY2h1bmsoMSwgMSksIC9nZW5lcmF0aW9uIGFsbG93YW5jZS8pOw0KICBhc3NlcnQuZGVlcEVxdWFsKG5ldyBLZXJuZWwocykuY2h1bmsoMCwgMCksIHNhdmVkKTsNCiAgcy5kYi5jbG9zZSgpOw0KfSk7DQoNCnRlc3QoImFuIGV4aGF1c3RlZCBnZW5lcmF0aW9uIGFsbG93YW5jZSBkb2VzIG5vdCBzdG9wIG90aGVyIHNldHRsZXJzIG1vdmluZyIsIGFzeW5jICgpID0+IHsNCiAgY29uc3QgcyA9IHN0b3JhZ2UoKSwNCiAgICBrID0gbmV3IEtlcm5lbChzKSwNCiAgICBhID0gYXdhaXQgdXNlcihrLCAiQWRhIiksDQogICAgYiA9IGF3YWl0IHVzZXIoaywgIkJlYSIpOw0KICBrLmpvaW4oYS5pZCk7DQogIGsuam9pbihiLmlkKTsNCiAgay5jaHVuaygwLCAwKTsNCiAgay5wbGF5ZXJzLmdldChhLmlkKS54ID0gMTUuOTk7DQogIHMuZXhlYygiVVBEQVRFIGdlbmVyYXRpb25fYnVkZ2V0IFNFVCB1c2VkPTEwMDAiKTsNCiAgZm9yIChjb25zdCB1IG9mIFthLCBiXSkgay5jb21tYW5kKHUuaWQsIHsgdHlwZTogImlucHV0IiwgZHg6IDEsIGR5OiAwIH0pOw0KICBhc3NlcnQuZG9lc05vdFRocm93KCgpID0+IGsuc3RlcCgwLjEpKTsNCiAgYXNzZXJ0Lm9rKGsucGxheWVyKGIuaWQpLnggPiAwKTsNCiAgYXNzZXJ0Lm1hdGNoKGsuc25hcHNob3QoYS5pZCkubm90aWNlLCAvZ2VuZXJhdGlvbiBhbGxvd2FuY2UvKTsNCiAgcy5kYi5jbG9zZSgpOw0KfSk7DQoNCnRlc3QoImEgcmVzdGFydGVkIGluZmVyZW5jZSBpcyBtYXJrZWQgaW50ZXJydXB0ZWQgd2l0aG91dCBkdXBsaWNhdGUgY29uc2VxdWVuY2VzIiwgYXN5bmMgKCkgPT4gew0KICBjb25zdCBzID0gc3RvcmFnZSgpLA0KICAgIGsgPSBuZXcgS2VybmVsKHMpLA0KICAgIG5vdyA9IE1hdGguZmxvb3IoRGF0ZS5ub3coKSAvIDcyMDAwMDApICogNzIwMDAwMCArIDEwMDA7DQogIHMuZXhlYygNCiAgICAiSU5TRVJUIElOVE8gYWdlbnRfY3ljbGVzIFZBTFVFUyg/LD8sPyw/LD8pIiwNCiAgICBTdHJpbmcoTWF0aC5mbG9vcihub3cgLyA3MjAwMDAwKSksDQogICAgIm1pcmEiLA0KICAgICJwZW5kaW5nIiwNCiAgICBKU09OLnN0cmluZ2lmeSh7IHBlcmNlcHRpb246IHt9IH0pLA0KICAgIG5vdywNCiAgKTsNCiAgY29uc3QgcmVzdGFydGVkID0gbmV3IEtlcm5lbChzKTsNCiAgYXdhaXQgcmVzdGFydGVkLmFnZW50cy5jeWNsZShudWxsLCBub3cgKyA2MDAwMCk7DQogIGFzc2VydC5lcXVhbCgNCiAgICBzLmV4ZWMoIlNFTEVDVCBzdGF0dXMgRlJPTSBhZ2VudF9jeWNsZXMiKVswXS5zdGF0dXMsDQogICAgImludGVycnVwdGVkIiwNCiAgKTsNCiAgYXNzZXJ0LmVxdWFsKHJlc3RhcnRlZC5ucGNzKCkuZmluZCgobikgPT4gbi5pZCA9PT0gIm1pcmEiKS5yZXNvdXJjZXMuZm9vZCwgMCk7DQogIHMuZGIuY2xvc2UoKTsNCn0pOw0KDQp0ZXN0KCJhZ2VudCBjb25zZXF1ZW5jZXMgcm9sbCBiYWNrIHdoZW4gdGhlaXIgam91cm5hbCB3cml0ZSBmYWlscyIsIGFzeW5jICgpID0+IHsNCiAgY29uc3QgcyA9IHN0b3JhZ2UoKSwNCiAgICBrID0gbmV3IEtlcm5lbChzKSwNCiAgICBleGVjID0gcy5leGVjLmJpbmQocyk7DQogIHMuZXhlYyA9IChzcWwsIC4uLmFyZ3MpID0+IHsNCiAgICBpZiAoc3FsLnN0YXJ0c1dpdGgoIlVQREFURSBhZ2VudF9jeWNsZXMgU0VUIHN0YXR1cz0nYXBwbGllZCciKSkNCiAgICAgIHRocm93IEVycm9yKCJkaXNrIGJ1c3kiKTsNCiAgICByZXR1cm4gZXhlYyhzcWwsIC4uLmFyZ3MpOw0KICB9Ow0KICBjb25zdCByZXN1bHQgPSBhd2FpdCBrLmFnZW50cy5jeWNsZSgNCiAgICB7DQogICAgICBhc3luYyBydW4oKSB7DQogICAgICAgIHJldHVybiB7DQogICAgICAgICAgcmVzcG9uc2U6DQogICAgICAgICAgICAneyJhY3Rpb24iOiJnYXRoZXIiLCJnb2FsIjoic2FtcGxlIGZvb2QiLCJpbnRlbnRpb24iOiJDb2xsZWN0LiJ9JywNCiAgICAgICAgfTsNCiAgICAgIH0sDQogICAgfSwNCiAgICBEYXRlLm5vdygpLA0KICApOw0KICBhc3NlcnQuZXF1YWwocmVzdWx0LnN0YXR1cywgInJlamVjdGVkIik7DQogIGFzc2VydC5lcXVhbChrLm5wY3MoKS5maW5kKChuKSA9PiBuLmlkID09PSByZXN1bHQuYWdlbnQpLnJlc291cmNlcy5mb29kLCAwKTsNCiAgYXNzZXJ0LmVxdWFsKHMuZXhlYygiU0VMRUNUICogRlJPTSBlY29zeXN0ZW0iKS5sZW5ndGgsIDApOw0KICBhc3NlcnQuZXF1YWwoDQogICAgbmV3IEtlcm5lbChzKS5ucGNzKCkuZmluZCgobikgPT4gbi5pZCA9PT0gcmVzdWx0LmFnZW50KS5yZXNvdXJjZXMuZm9vZCwNCiAgICAwLA0KICApOw0KICBzLmRiLmNsb3NlKCk7DQp9KTsNCg0KdGVzdCgiY29udmVyc2F0aW9ucyBhcnJpdmluZyBkdXJpbmcgcmVhc29uaW5nIHN1cnZpdmUgdGhlIGNvbW1pdHRlZCBhY3Rpb24iLCBhc3luYyAoKSA9PiB7DQogIGNvbnN0IHMgPSBzdG9yYWdlKCksDQogICAgayA9IG5ldyBLZXJuZWwocyk7DQogIGNvbnN0IHJlc3VsdCA9IGF3YWl0IGsuYWdlbnRzLmN5Y2xlKA0KICAgIHsNCiAgICAgIGFzeW5jIHJ1bigpIHsNCiAgICAgICAgay5hZ2VudHMucmVtZW1iZXIoDQogICAgICAgICAgIm1pcmEiLA0KICAgICAgICAgICJ0YWxrOmNvbmN1cnJlbnQiLA0KICAgICAgICAgICJBZGEgYXNrZWQgYWJvdXQgZm9yZXN0IHNhbXBsZXMuIiwNCiAgICAgICAgKTsNCiAgICAgICAgcmV0dXJuIHsNCiAgICAgICAgICByZXNwb25zZToNCiAgICAgICAgICAgICd7ImFjdGlvbiI6InJlZmxlY3QiLCJnb2FsIjoiY29tcGFyZSBzYW1wbGVzIiwiaW50ZW50aW9uIjoiQ29uc2lkZXIgdGhlIGV2aWRlbmNlLiJ9JywNCiAgICAgICAgfTsNCiAgICAgIH0sDQogICAgfSwNCiAgICBEYXRlLm5vdygpLA0KICApOw0KICBhc3NlcnQuZXF1YWwocmVzdWx0LnN0YXR1cywgImFwcGxpZWQiKTsNCiAgYXNzZXJ0LmVxdWFsKA0KICAgIG5ldyBLZXJuZWwocykuYWdlbnRzLnN0YXRlcw0KICAgICAgLmdldCgibWlyYSIpDQogICAgICAubWVtb3J5LnNvbWUoKG0pID0+IG0uZXZlbnQgPT09ICJ0YWxrOmNvbmN1cnJlbnQiKSwNCiAgICB0cnVlLA0KICApOw0KICBzLmRiLmNsb3NlKCk7DQp9KTsNCg0KdGVzdCgiYWdlbnQgZGVjaXNpb25zIHBlcnNpc3QgY29uc2VxdWVuY2VzIG9uY2UgYW5kIGRvIG5vdCBncmFudCBwbGF5ZXIgbW9uZXkiLCBhc3luYyAoKSA9PiB7DQogIGNvbnN0IHMgPSBzdG9yYWdlKCksDQogICAgayA9IG5ldyBLZXJuZWwocyk7DQogIGNvbnN0IGEgPSBhd2FpdCB1c2VyKGssICJBZGEiKTsNCiAgay5qb2luKGEuaWQpOw0KICBjb25zdCBjcmVkaXRzID0gay5wbGF5ZXIoYS5pZCkuY3JlZGl0czsNCiAgY29uc3QgYWkgPSB7DQogICAgYXN5bmMgcnVuKCkgew0KICAgICAgcmV0dXJuIHsNCiAgICAgICAgcmVzcG9uc2U6IEpTT04uc3RyaW5naWZ5KHsNCiAgICAgICAgICBhY3Rpb246ICJnYXRoZXIiLA0KICAgICAgICAgIGdvYWw6ICJzdHVkeSBmb29kIGF2YWlsYWJpbGl0eSIsDQogICAgICAgI…701 tokens truncated…ICgpID0+IHsKICBjb25zdCBzID0gc3RvcmFnZSgpLCBrID0gbmV3IEtlcm5lbChzKSwgYSA9IGF3YWl0IHVzZXIoaywgIlRyZWVBZGEiKTsKICBrLmpvaW4oYS5pZCk7CiAgY29uc3QgdHJlZSA9IEFycmF5LmZyb20oeyBsZW5ndGg6IDIwMCB9LCAoXywgeCkgPT4geCAtIDEwMCkKICAgIC5mbGF0TWFwKCh4KSA9PiBBcnJheS5mcm9tKHsgbGVuZ3RoOiAyMDAgfSwgKF8sIHkpID0+IHkgLSAxMDApLm1hcCgoeSkgPT4gKHsgeCwgeSB9KSkpCiAgICAuZmluZCgoeyB4LCB5IH0pID0+IGsudHJlZUF0KHgsIHkpICYmIGsudGVycmFpbih4LCB5KSA9PT0gImZvcmVzdCIpOwogIGFzc2VydC5vayh0cmVlLCAiYSBmb3Jlc3QgdHJlZSBpcyBhdmFpbGFibGUgbmVhciB0aGUgc2hhcmVkIGNvbW1vbnMiKTsKICBrLnBsYXllcnMuZ2V0KGEuaWQpLnggPSB0cmVlLnggKyAwLjU7CiAgay5wbGF5ZXJzLmdldChhLmlkKS55ID0gdHJlZS55ICsgMC41OwogIGZvciAobGV0IGkgPSAwOyBpIDwgNTsgaSsrKSB7CiAgICBrLnBsYXllcnMuZ2V0KGEuaWQpLmxhc3RHYXRoZXIgPSAwOwogICAgay5jb21tYW5kKGEuaWQsIHsgdHlwZTogImdhdGhlciIsIHJlcXVlc3RfaWQ6IGB0cmVlLSR7aX1gIH0pOwogIH0KICBhc3NlcnQub2soIWsuc25hcHNob3QoYS5pZCkuZGVwbGV0ZWRUcmVlcy5pbmNsdWRlcyhgJHt0cmVlLnh9LCR7dHJlZS55fWApKTsKICBrLnBsYXllcnMuZ2V0KGEuaWQpLmxhc3RHYXRoZXIgPSAwOwogIGNvbnN0IGxhc3QgPSBrLmNvbW1hbmQoYS5pZCwgeyB0eXBlOiAiZ2F0aGVyIiwgcmVxdWVzdF9pZDogInRyZWUtZmluYWwiIH0pOwogIGFzc2VydC5tYXRjaChsYXN0LnJlcGx5LCAvZGlzYXBwZWFyZWQgZm9yIGV2ZXJ5b25lLyk7CiAgYXNzZXJ0Lm9rKGsuc25hcHNob3QoYS5pZCkuZGVwbGV0ZWRUcmVlcy5pbmNsdWRlcyhgJHt0cmVlLnh9LCR7dHJlZS55fWApKTsKICBjb25zdCByZXN0YXJ0ZWQgPSBuZXcgS2VybmVsKHMpOwogIGFzc2VydC5vayhyZXN0YXJ0ZWQuc25hcHNob3QoYS5pZCkuZGVwbGV0ZWRUcmVlcy5pbmNsdWRlcyhgJHt0cmVlLnh9LCR7dHJlZS55fWApKTsKICBzLmRiLmNsb3NlKCk7Cn0pOwoKdGVzdCgicGxheWVyIHRyYWRlcyByZXF1aXJlIGJvdGggY29uZmlybWF0aW9ucyBhbmQgcmVsZWFzZSBhdG9taWNhbGx5IGFmdGVyIHRoZSBjb3VudGRvd24iLCBhc3luYyAoKSA9PiB7CiAgY29uc3QgcyA9IHN0b3JhZ2UoKSwgayA9IG5ldyBLZXJuZWwocyksIGEgPSBhd2FpdCB1c2VyKGssICJUcmFkZXJBZGEiKSwgYiA9IGF3YWl0IHVzZXIoaywgIlRyYWRlckJlYSIpOwogIGsuam9pbihhLmlkKTsgay5qb2luKGIuaWQpOyBrLm9ubGluZS5hZGQoYS5pZCk7IGsub25saW5lLmFkZChiLmlkKTsKICBjb25zdCBvZmZlciA9IGsudHJhZGluZy5vZmZlcihhLmlkLCB7IHJlY2lwaWVudDogYi5pZCwgb2ZmZXJSZXNvdXJjZTogImZvb2QiLCBvZmZlckFtb3VudDogMiwgd2FudFJlc291cmNlOiAid29vZCIsIHdhbnRBbW91bnQ6IDEgfSk7CiAgYXNzZXJ0Lm1hdGNoKGsudHJhZGluZy5yZXNwb25kKGEuaWQsIG9mZmVyLmlkLCB0cnVlKS5yZXBseSwgL2FmdGVyIGJvdGggcGFydGllcy8pOwogIGFzc2VydC5lcXVhbChrLnBsYXllcihhLmlkKS5mb29kLCA1KTsKICBjb25zdCBhY2NlcHRlZCA9IGsudHJhZGluZy5yZXNwb25kKGIuaWQsIG9mZmVyLmlkLCB0cnVlKTsKICBhc3NlcnQubWF0Y2goYWNjZXB0ZWQucmVwbHksIC9jb3VudGRvd24vKTsKICBjb25zdCBjb3VudGRvd24gPSBrLnRyYWRpbmcucGFydGljaXBhbnRzKGEuaWQpLm9mZmVycy5maW5kKChyb3cpID0+IHJvdy5pZCA9PT0gb2ZmZXIuaWQpOwogIGFzc2VydC5lcXVhbChjb3VudGRvd24uc3RhdHVzLCAiY291bnRkb3duIik7CiAgYXNzZXJ0LmVxdWFsKGNvdW50ZG93bi5zZW5kZXJBY2NlcHRlZCwgdHJ1ZSk7CiAgYXNzZXJ0LmVxdWFsKGNvdW50ZG93bi5yZWNpcGllbnRBY2NlcHRlZCwgdHJ1ZSk7CiAgYXNzZXJ0LmVxdWFsKGsucGxheWVyKGEuaWQpLmZvb2QsIDUpOwogIGsudHJhZGluZy5yZWxlYXNlRHVlKGNvdW50ZG93bi5yZWxlYXNlQXQpOwogIGFzc2VydC5lcXVhbChrLnRyYWRpbmcucGFydGljaXBhbnRzKGEuaWQpLm9mZmVycy5maW5kKChyb3cpID0+IHJvdy5pZCA9PT0gb2ZmZXIuaWQpLnN0YXR1cywgInJlbGVhc2VkIik7CiAgYXNzZXJ0LmVxdWFsKEpTT04ucGFyc2Uocy5leGVjKCJTRUxFQ1QgZGF0YSBGUk9NIHBsYXllcnMgV0hFUkUgaWQ9PyIsIGEuaWQpWzBdLmRhdGEpLmZvb2QsIDMpOwogIGFzc2VydC5lcXVhbChKU09OLnBhcnNlKHMuZXhlYygiU0VMRUNUIGRhdGEgRlJPTSBwbGF5ZXJzIFdIRVJFIGlkPT8iLCBhLmlkKVswXS5kYXRhKS53b29kLCAyMSk7CiAgYXNzZXJ0LmVxdWFsKEpTT04ucGFyc2Uocy5leGVjKCJTRUxFQ1QgZGF0YSBGUk9NIHBsYXllcnMgV0hFUkUgaWQ9PyIsIGIuaWQpWzBdLmRhdGEpLmZvb2QsIDcpOwogIGFzc2VydC5lcXVhbChKU09OLnBhcnNlKHMuZXhlYygiU0VMRUNUIGRhdGEgRlJPTSBwbGF5ZXJzIFdIRVJFIGlkPT8iLCBiLmlkKVswXS5kYXRhKS53b29kLCAxOSk7CiAgY29uc3QgcmVzdGFydGVkID0gbmV3IEtlcm5lbChzKTsKICBhc3NlcnQuZXF1YWwocmVzdGFydGVkLnNuYXBzaG90KGEuaWQpLnNlbGYuZm9vZCwgMyk7CiAgYXNzZXJ0LmVxdWFsKHJlc3RhcnRlZC5zbmFwc2hvdChhLmlkKS5zZWxmLndvb2QsIDIxKTsKICBzLmRiLmNsb3NlKCk7Cn0pOwoNCnRlc3QoImZhaWxlZCBwb3NpdGlvbiBiYXRjaCByZXRyaWVzIGV2ZXJ5IHJvbGxlZC1iYWNrIHBsYXllciIsIGFzeW5jICgpID0+IHsNCiAgY29uc3QgcyA9IHN0b3JhZ2UoKSwNCiAgICBrID0gbmV3IEtlcm5lbChzKTsNCiAgY29uc3QgYSA9IGF3YWl0IHVzZXIoaywgIkFkYSIpLA0KICAgIGIgPSBhd2FpdCB1c2VyKGssICJCZWEiKTsNCiAgay5qb2luKGEuaWQpOw0KICBrLmpvaW4oYi5pZCk7DQogIGZvciAoY29uc3QgaWQgb2YgW2EuaWQsIGIuaWRdKSBrLmNvbW1hbmQoaWQsIHsgdHlwZTogImlucHV0IiwgZHg6IDEsIGR5OiAwIH0pOw0KICBrLnN0ZXAoMC4wNSk7DQogIGNvbnN0IGV4ZWMgPSBzLmV4ZWMuYmluZChzKTsNCiAgbGV0IHdyaXRlcyA9IDA7DQogIHMuZXhlYyA9IChxdWVyeSwgLi4uYXJncykgPT4gew0KICAgIGlmIChxdWVyeS5zdGFydHNXaXRoKCJJTlNFUlQgSU5UTyBwbGF5ZXJzIikgJiYgKyt3cml0ZXMgPT09IDIpDQogICAgICB0aHJvdyBFcnJvcigiZGlzayBidXN5Iik7DQogICAgcmV0dXJuIGV4ZWMocXVlcnksIC4uLmFyZ3MpOw0KICB9Ow0KICBhc3NlcnQudGhyb3dzKCgpID0+IGsuZmx1c2goKSwgL2Rpc2sgYnVzeS8pOw0KICBhc3NlcnQuZXF1YWwoay5kaXJ0eS5zaXplLCAyKTsNCiAgcy5leGVjID0gZXhlYzsNCiAgay5mbHVzaCgpOw0KICBjb25zdCByZXN0YXJ0ZWQgPSBuZXcgS2VybmVsKHMpOw0KICBmb3IgKGNvbnN0IGlkIG9mIFthLmlkLCBiLmlkXSkNCiAgICBhc3NlcnQuZXF1YWwocmVzdGFydGVkLnBsYXllcnMuZ2V0KGlkKS54LCBrLnBsYXllcnMuZ2V0KGlkKS54KTsNCiAgcy5kYi5jbG9zZSgpOw0KfSk7DQoNCnRlc3QoImZyZWUgcnVudGltZSByZXRhaW5zIHNlc3Npb25zLCBzZWVkLCBtZW1iZXJzaGlwIGFuZCBsZWRnZXIgYWNyb3NzIGV2aWN0aW9uIiwgYXN5bmMgKCkgPT4gew0KICBjb25zdCBzID0gc3RvcmFnZSgpLA0KICAgIGsgPSBuZXcgS2VybmVsKHMpOw0KICBjb25zdCBhID0gYXdhaXQgdXNlcihrLCAiQWRhIik7DQogIGsuam9pbihhLmlkKTsNCiAgY29uc3QgYmVmb3JlID0gay5zbmFwc2hvdChhLmlkKSwNCiAgICBjaHVuayA9IGsuY2h1bmsoMCwgMCk7DQogIGsuam9pbihhLmlkKTsNCiAgYXNzZXJ0LmVxdWFsKGsuc25hcHNob3QoYS5pZCkuc2VsZi5jcmVkaXRzLCAxMDApOw0KICBjb25zdCBiID0gYXdhaXQgdXNlcihrLCAiQmVhIik7DQogIGsuam9pbihiLmlkKTsNCiAgYXNzZXJ0LmVxdWFsKGsuc25hcHNob3QoYS5pZCkud29ybGQucmFkaXVzLCBiZWZvcmUud29ybGQucmFkaXVzICsgMzIpOw0KICBhc3NlcnQuZGVlcEVxdWFsKGsuY2h1bmsoMCwgMCksIGNodW5rKTsNCiAgY29uc3QgcmVzdGFydGVkID0gbmV3IEtlcm5lbChzKTsNCiAgYXNzZXJ0LmVxdWFsKGF3YWl0IHJlc3RhcnRlZC5hdXRoZW50aWNhdGUoYS50b2tlbiksIGEuaWQpOw0KICBhc3NlcnQuZXF1YWwocmVzdGFydGVkLnNuYXBzaG90KGEuaWQpLnNlbGYuY3JlZGl0cywgMTAwKTsNCiAgcy5kYi5jbG9zZSgpOw0KfSk7DQp0ZXN0KCJhdG9taWMgcmVwbGF5LXNhZmUgbGVkZ2VyIHJlamVjdHMgY29uZmxpY3RzIGFuZCBvdmVyZHJhZnRzIiwgYXN5bmMgKCkgPT4gew0KICBjb25zdCBzID0gc3RvcmFnZSgpLA0KICAgIGsgPSBuZXcgS2VybmVsKHMpLA0KICAgIGEgPSBhd2FpdCB1c2VyKGssICJBZGEiKSwNCiAgICBiID0gYXdhaXQgdXNlcihrLCAiQmVhIik7DQogIGsuam9pbihhLmlkKTsNCiAgay5qb2luKGIuaWQpOw0KICBjb25zdCBjbWQgPSB7IHR5cGU6ICJ0cmFuc2ZlciIsIHRvOiBiLmlkLCBhbW91bnQ6IDc1LCByZXF1ZXN0X2lkOiAib25lIiB9Ow0KICBrLmNvbW1hbmQoYS5pZCwgY21kKTsNCiAgay5jb21tYW5kKGEuaWQsIGNtZCk7DQogIGFzc2VydC5lcXVhbChrLnNuYXBzaG90KGEuaWQpLnNlbGYuY3JlZGl0cywgMjUpOw0KICBhc3NlcnQuZXF1YWwoay5zbmFwc2hvdChiLmlkKS5zZWxmLmNyZWRpdHMsIDE3NSk7DQogIGFzc2VydC50aHJvd3MoKCkgPT4gay5jb21tYW5kKGEuaWQsIHsgLi4uY21kLCBhbW91bnQ6IDEgfSksIC91c2VkLyk7DQogIGFzc2VydC50aHJvd3MoDQogICAgKCkgPT4gay5jb21tYW5kKGEuaWQsIHsgLi4uY21kLCByZXF1ZXN0X2lkOiAidHdvIiB9KSwNCiAgICAvSW5zdWZmaWNpZW50LywNCiAgKTsNCiAgYXNzZXJ0LnRocm93cygoKSA9Pg0KICAgIGsuY29tbWFuZChhLmlkLCB7IC4uLmNtZCwgYW1vdW50OiAxLjUsIHJlcXVlc3RfaWQ6ICJmbG9hdCIgfSksDQogICk7DQogIGFzc2VydC5vaygNCiAgICBzDQogICAgICAuZXhlYygiU0VMRUNUIFNVTShhbW91bnQpIHRvdGFsIEZST00gbGVkZ2VyIEdST1VQIEJZIHR4IikNCiAgICAgIC5ldmVyeSgocikgPT4gci50b3RhbCA9PT0gMCksDQogICk7DQogIHMuZGIuY2xvc2UoKTsNCn0pOw0KdGVzdCgic2VydmVyIGNvbnRyb2xzIG1vdmVtZW50LCBwcm90ZWN0cyBjb21tb25zIGFuZCBwcm92aWRlcyBlc2NhcGUiLCBhc3luYyAoKSA9PiB7DQogIGNvbnN0IHMgPSBzdG9yYWdlKCksDQogICAgayA9IG5ldyBLZXJuZWwocyksDQogICAgYSA9IGF3YWl0IHVzZXIoaywgIkFkYSIpOw0KICBrLmpvaW4oYS5pZCk7DQogIGFzc2VydC50aHJvd3MoDQogICAgKCkgPT4gay5jb21tYW5kKGEuaWQsIHsgdHlwZTogImJ1aWxkIiwga2luZDogImNhbXAiLCByZXF1ZXN0X2lkOiAic3Bhd24iIH0pLA0KICAgIC9jb21tb25zLywNCiAgKTsNCiAgYXNzZXJ0LnRocm93cygoKSA9PiBrLmNvbW1hbmQoYS5pZCwgeyB0eXBlOiAiaW5wdXQiLCBkeDogTmFOLCBkeTogMCB9KSk7DQogIGFzc2VydC50aHJvd3MoKCkgPT4NCiAgICBrLmNvbW1hbmQoYS5pZCwgeyB0eXBlOiAidGVsZXBvcnQiLCB4OiAxMDAwLCByZXF1ZXN0X2lkOiAiYmFkIiB9KSwNCiAgKTsNCiAgay5jb21tYW5kKGEuaWQsIHsgdHlwZTogImlucHV0IiwgZHg6IDEsIGR5OiAxIH0pOw0KICBrLnN0ZXAoMC4wNSk7DQogIGNvbnN0IHAgPSBrLnNuYXBzaG90KGEuaWQpLnNlbGY7DQogIGFzc2VydC5vayhNYXRoLmh5cG90KHAueCwgcC55KSA8PSAwLjMwMSAmJiBwLnggPiAwKTsNCiAgay5jb21tYW5kKGEuaWQsIHsgdHlwZTogImhvbWUiLCByZXF1ZXN0X2lkOiAiZXNjYXBlIiB9KTsNCiAgYXNzZXJ0LmVxdWFsKGsuc25hcHNob3QoYS5pZCkuc2VsZi54LCAwKTsNCiAgcy5kYi5jbG9zZSgpOw0KfSk7DQp0ZXN0KCJkaWFsb2d1ZSByZW1lbWJlcnMgcGxheWVycyBidXQgb25seSBleHBsaWNpdCBkaXBsb21hY3kgY2hhbmdlcyByZXB1dGF0aW9uIiwgYXN5bmMgKCkgPT4gew0KICBjb25zdCBzID0gc3RvcmFnZSgpLA0KICAgIGsgPSBuZXcgS2VybmVsKHMpLA0KICAgIGEgPSBhd2FpdCB1c2VyKGssICJBZGEiKTsNCiAgay5qb2luKGEuaWQpOw0KICBjb25zdCByZXBseSA9IGsuY29tbWFuZChhLmlkLCB7DQogICAgdHlwZTogInRhbGsiLA0KICAgIG5wYzogIm1pcmEiLA0KICAgIHRleHQ6ICJIb3cgY2FuIEkgaGVscCB5b3U/IiwNCiAgICByZXF1ZXN0X2lkOiAidGFsayIsDQogIH0pOw0KICBhc3NlcnQubWF0Y2gocmVwbHkucmVwbHksIC9zb2lsLyk7DQogIGNvbnN0IG1lbW9yeSA9IGsuY29tbWFuZChhLmlkLCB7DQogICAgdHlwZTogInRhbGsiLA0KICAgIG5wYzogIm1pcmEiLA0KICAgIHRleHQ6ICJEbyB5b3UgcmVtZW1iZXIgbWU/IiwNCiAgICByZXF1ZXN0X2lkOiAibWVtb3J5IiwNCiAgfSk7DQogIGFzc2VydC5tYXRjaChtZW1vcnkucmVwbHksIC9Ib3cgY2FuIEkgaGVscCB5b3UvKTsNCiAgYXNzZXJ0LmVxdWFsKGsuc25hcHNob3QoYS5pZCkuc2VsZi5yZXB1dGF0aW9uLCAwKTsNCiAgay5jb21tYW5kKGEuaWQsIHsgdHlwZTogImRpcGxvbWFjeSIsIG5wYzogIm1pcmEiLCByZXF1ZXN0X2lkOiAicGVhY2UiIH0pOw0KICBrLmNvbW1hbmQoYS5pZCwgeyB0eXBlOiAiZGlwbG9tYWN5IiwgbnBjOiAibWlyYSIsIHJlcXVlc3RfaWQ6ICJwZWFjZTIiIH0pOw0KICBhc3NlcnQuZXF1YWwoay5zbmFwc2hvdChhLmlkKS5zZWxmLnJlcHV0YXRpb24sIDEpOw0KICBzLmRiLmNsb3NlKCk7DQp9KTsNCnRlc3QoImdhdGhlci9yZXNlYXJjaCBjYW5ub3QgZHVwbGljYXRlIHJld2FyZHMgYW5kIHBvc2l0aW9uIHdyaXRlcyBhcmUgYmF0Y2hlZCIsIGFzeW5jICgpID0+IHsNCiAgY29uc3QgcyA9IHN0b3JhZ2UoKSwNCiAgICBrID0gbmV3IEtlcm5lbChzKSwNCiAgICBhID0gYXdhaXQgdXNlcihrLCAiQWRhIik7DQogIGsuam9pbihhLmlkKTsNCiAgY29uc3QgY21kID0geyB0eXBlOiAiZ2F0aGVyIiwgcmVxdWVzdF9pZDogImZvb2QiIH07DQogIGsuY29tbWFuZChhLmlkLCBjbWQpOw0KICBrLmNvbW1hbmQoYS5pZCwgY21kKTsNCiAgYXNzZXJ0LmVxdWFsKGsuc25hcHNob3QoYS5pZCkuc2VsZi5mb29kLCA3KTsNCiAgay5jb21tYW5kKGEuaWQsIHsgdHlwZTogInJlc2VhcmNoIiwgcmVxdWVzdF9pZDogInNhbXBsZSIgfSk7DQogIGFzc2VydC50aHJvd3MoDQogICAgKCkgPT4gay5jb21tYW5kKGEuaWQsIHsgdHlwZTogInJlc2VhcmNoIiwgcmVxdWVzdF9pZDogInNhbXBsZTIiIH0pLA0KICAgIC90ZW4gc2Vjb25kcy8sDQogICk7DQogIGFzc2VydC5lcXVhbChrLnNuYXBzaG90KGEuaWQpLnNlbGYucmVzZWFyY2gsIDEpOw0KICBrLmNvbW1hbmQoYS5pZCwgeyB0eXBlOiAiaW5wdXQiLCBkeDogMSwgZHk6IDAgfSk7DQogIGsuc3RlcCgwLjA1KTsNCiAgay5mbHVzaCgpOw0KICBjb25zdCBmcmVzaCA9IG5ldyBLZXJuZWwocyk7DQogIGFzc2VydC5vayhmcmVzaC5zbmFwc2hvdChhLmlkKS5zZWxmLnggPiAwKTsNCiAgcy5kYi5jbG9zZSgpOw0KfSk7DQo=
+import { DatabaseSync } from "node:sqlite";
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { Kernel } from "../src/kernel.js";
+import { deriveSeed } from "../src/possibilities.js";
+
+function storage() {
+  const db = new DatabaseSync(":memory:");
+  return {
+    db,
+    exec(query, ...args) {
+      const statement = db.prepare(query);
+      return statement.columns().length
+        ? statement.all(...args)
+        : (statement.run(...args), []);
+    },
+    transactionSync(fn) {
+      db.exec("BEGIN");
+      try {
+        const result = fn();
+        db.exec("COMMIT");
+        return result;
+      } catch (e) {
+        db.exec("ROLLBACK");
+        throw e;
+      }
+    },
+  };
+}
+async function user(k, name) {
+  const session = await k.register(name, "a-long-test-password");
+  return { id: await k.authenticate(session.token), token: session.token };
+}
+
+test("Workers AI parsed-object decisions use the same action validation as text JSON", async () => {
+  const s = storage(),
+    k = new Kernel(s);
+  const result = await k.agents.cycle(
+    {
+      async run() {
+        return {
+          response: {
+            action: "reflect",
+            goal: "compare meadow samples",
+            intention: "Consider evidence.",
+          },
+        };
+      },
+    },
+    Date.now(),
+  );
+  assert.equal(result.status, "applied");
+  assert.equal(
+    k.npcs().find((n) => n.id === result.agent).goal,
+    "compare meadow samples",
+  );
+  s.db.close();
+});
+
+test("agents remember rejected consequences and perceive only affordable research", async () => {
+  const s = storage(),
+    k = new Kernel(s);
+  const result = await k.agents.cycle(
+    {
+      async run() {
+        return {
+          response: {
+            action: "research",
+            goal: "compare soil",
+            intention: "Study a sample.",
+          },
+        };
+      },
+    },
+    Date.now(),
+  );
+  assert.equal(result.status, "rejected");
+  const restarted = new Kernel(s),
+    state = restarted.agents.states.get(result.agent);
+  assert.ok(
+    state.memory.some((m) => m.text.includes("Not enough personal food")),
+  );
+  assert.equal(
+    restarted.agents.perceive(state).availableActions.includes("research"),
+    false,
+  );
+  assert.equal(state.resources.food, 0);
+  s.db.close();
+});
+
+test("instantiated terrain survives a generator change and exposes hierarchical provenance", () => {
+  const s = storage(),
+    k = new Kernel(s);
+  const chunk = k.chunk(-2, 3);
+  assert.equal(typeof chunk.seed, "string");
+  assert.equal(chunk.path.length, 4);
+  assert.deepEqual(
+    chunk.path.map((n) => n.kind),
+    ["world", "region", "settlement", "parcel"],
+  );
+  const restarted = new Kernel(s);
+  restarted.possibilities.generator = {
+    generatePossibility() {
+      throw Error("must not reroll saved land");
+    },
+  };
+  assert.deepEqual(restarted.chunk(-2, 3), chunk);
+  assert.equal(restarted.terrain(-32, 48), chunk.tiles[0]);
+  s.db.close();
+});
+
+test("hierarchical seeds are order independent and negative parcels remain distinct", () => {
+  const s = storage(),
+    k = new Kernel(s);
+  const a = k.chunk(-1, 0),
+    b = k.chunk(0, 0);
+  assert.notEqual(a.seed, b.seed);
+  assert.equal(a.path[1].key.includes("region:-1,0"), true);
+  assert.equal(
+    deriveSeed(a.seed, "room", "main"),
+    deriveSeed(a.seed, "room", "main"),
+  );
+  assert.notEqual(
+    deriveSeed(a.seed, "room", "main"),
+    deriveSeed(a.seed, "object", "main"),
+  );
+  const s2 = storage(),
+    k2 = new Kernel(s2);
+  k2.chunk(0, 0);
+  assert.deepEqual(k2.chunk(-1, 0), a);
+  s.db.close();
+  s2.db.close();
+});
+
+test("terrain generation stops at its shared budget while saved terrain stays readable", () => {
+  const s = storage(),
+    k = new Kernel(s),
+    saved = k.chunk(0, 0);
+  s.exec("UPDATE generation_budget SET used=1000");
+  assert.throws(() => k.chunk(1, 1), /generation allowance/);
+  assert.deepEqual(new Kernel(s).chunk(0, 0), saved);
+  s.db.close();
+});
+
+test("an exhausted generation allowance does not stop other settlers moving", async () => {
+  const s = storage(),
+    k = new Kernel(s),
+    a = await user(k, "Ada"),
+    b = await user(k, "Bea");
+  k.join(a.id);
+  k.join(b.id);
+  k.chunk(0, 0);
+  k.players.get(a.id).x = 15.99;
+  s.exec("UPDATE generation_budget SET used=1000");
+  for (const u of [a, b]) k.command(u.id, { type: "input", dx: 1, dy: 0 });
+  assert.doesNotThrow(() => k.step(0.1));
+  assert.ok(k.player(b.id).x > 0);
+  assert.match(k.snapshot(a.id).notice, /generation allowance/);
+  s.db.close();
+});
+
+test("a restarted inference is marked interrupted without duplicate consequences", async () => {
+  const s = storage(),
+    k = new Kernel(s),
+    now = Math.floor(Date.now() / 7200000) * 7200000 + 1000;
+  s.exec(
+    "INSERT INTO agent_cycles VALUES(?,?,?,?,?)",
+    String(Math.floor(now / 7200000)),
+    "mira",
+    "pending",
+    JSON.stringify({ perception: {} }),
+    now,
+  );
+  const restarted = new Kernel(s);
+  await restarted.agents.cycle(null, now + 60000);
+  assert.equal(
+    s.exec("SELECT status FROM agent_cycles")[0].status,
+    "interrupted",
+  );
+  assert.equal(restarted.npcs().find((n) => n.id === "mira").resources.food, 0);
+  s.db.close();
+});
+
+test("agent consequences roll back when their journal write fails", async () => {
+  const s = storage(),
+    k = new Kernel(s),
+    exec = s.exec.bind(s);
+  s.exec = (sql, ...args) => {
+    if (sql.startsWith("UPDATE agent_cycles SET status='applied'"))
+      throw Error("disk busy");
+    return exec(sql, ...args);
+  };
+  const result = await k.agents.cycle(
+    {
+      async run() {
+        return {
+          response:
+            '{"action":"gather","goal":"sample food","intention":"Collect."}',
+        };
+      },
+    },
+    Date.now(),
+  );
+  assert.equal(result.status, "rejected");
+  assert.equal(k.npcs().find((n) => n.id === result.agent).resources.food, 0);
+  assert.equal(s.exec("SELECT * FROM ecosystem").length, 0);
+  assert.equal(
+    new Kernel(s).npcs().find((n) => n.id === result.agent).resources.food,
+    0,
+  );
+  s.db.close();
+});
+
+test("conversations arriving during reasoning survive the committed action", async () => {
+  const s = storage(),
+    k = new Kernel(s);
+  const result = await k.agents.cycle(
+    {
+      async run() {
+        k.agents.remember(
+          "mira",
+          "talk:concurrent",
+          "Ada asked about forest samples.",
+        );
+        return {
+          response:
+            '{"action":"reflect","goal":"compare samples","intention":"Consider the evidence."}',
+        };
+      },
+    },
+    Date.now(),
+  );
+  assert.equal(result.status, "applied");
+  assert.equal(
+    new Kernel(s).agents.states
+      .get("mira")
+      .memory.some((m) => m.event === "talk:concurrent"),
+    true,
+  );
+  s.db.close();
+});
+
+test("agent decisions persist consequences once and do not grant player money", async () => {
+  const s = storage(),
+    k = new Kernel(s);
+  const a = await user(k, "Ada");
+  k.join(a.id);
+  const credits = k.player(a.id).credits;
+  const ai = {
+    async run() {
+      return {
+        response: JSON.stringify({
+          action: "gather",
+          goal: "study food availability",
+          intention: "Collect a sample.",
+        }),
+      };
+    },
+  };
+  const now = Date.now();
+  const result = await k.agents.cycle(ai, now);
+  assert.equal(result.status, "applied");
+  const agent = k.npcs().find((n) => n.id === result.agent);
+  assert.equal(agent.resources.food, 2);
+  const restarted = new Kernel(s);
+  assert.deepEqual(
+    restarted.npcs().find((n) => n.id === agent.id),
+    agent,
+  );
+  assert.equal((await restarted.agents.cycle(ai, now)).status, "waiting");
+  assert.equal(restarted.player(a.id).credits, credits);
+  assert.equal(
+    s.exec("SELECT * FROM agent_cycles WHERE status='applied'").length,
+    1,
+  );
+  s.db.close();
+});
+
+test("invalid model actions are rejected without changing world or inventory", async () => {
+  const s = storage(),
+    k = new Kernel(s),
+    before = k.world.radius;
+  const ai = {
+    async run() {
+      return {
+        response:
+          '{"action":"transfer","amount":100000,"goal":"own everything","intention":"take it"}',
+      };
+    },
+  };
+  const result = await k.agents.cycle(ai, Date.now());
+  assert.equal(result.status, "rejected");
+  assert.equal(k.world.radius, before);
+  assert.equal(s.exec("SELECT * FROM ledger").length, 0);
+  s.db.close();
+});
+
+test("ecosystem harvest is shared, finite, retry safe and persistent", async () => {
+  const s = storage(),
+    k = new Kernel(s);
+  const a = await user(k, "Ada");
+  k.join(a.id);
+  for (let i = 0; i < 6; i++) {
+    k.players.get(a.id).lastGather = 0;
+    k.command(a.id, { type: "gather", request_id: `harvest-${i}` });
+  }
+  k.players.get(a.id).lastGather = 0;
+  assert.throws(
+    () => k.command(a.id, { type: "gather", request_id: "depleted" }),
+    /depleted/,
+  );
+  const restarted = new Kernel(s);
+  assert.throws(
+    () => restarted.command(a.id, { type: "gather", request_id: "depleted" }),
+    /depleted|three seconds/,
+  );
+  assert.equal(restarted.player(a.id).food, 17);
+  s.db.close();
+});
+
+test("failed position batch retries every rolled-back player", async () => {
+  const s = storage(),
+    k = new Kernel(s);
+  const a = await user(k, "Ada"),
+    b = await user(k, "Bea");
+  k.join(a.id);
+  k.join(b.id);
+  for (const id of [a.id, b.id]) k.command(id, { type: "input", dx: 1, dy: 0 });
+  k.step(0.05);
+  const exec = s.exec.bind(s);
+  let writes = 0;
+  s.exec = (query, ...args) => {
+    if (query.startsWith("INSERT INTO players") && ++writes === 2)
+      throw Error("disk busy");
+    return exec(query, ...args);
+  };
+  assert.throws(() => k.flush(), /disk busy/);
+  assert.equal(k.dirty.size, 2);
+  s.exec = exec;
+  k.flush();
+  const restarted = new Kernel(s);
+  for (const id of [a.id, b.id])
+    assert.equal(restarted.players.get(id).x, k.players.get(id).x);
+  s.db.close();
+});
+
+test("free runtime retains sessions, seed, membership and ledger across eviction", async () => {
+  const s = storage(),
+    k = new Kernel(s);
+  const a = await user(k, "Ada");
+  k.join(a.id);
+  const before = k.snapshot(a.id),
+    chunk = k.chunk(0, 0);
+  k.join(a.id);
+  assert.equal(k.snapshot(a.id).self.credits, 100);
+  const b = await user(k, "Bea");
+  k.join(b.id);
+  assert.equal(k.snapshot(a.id).world.radius, before.world.radius + 32);
+  assert.deepEqual(k.chunk(0, 0), chunk);
+  const restarted = new Kernel(s);
+  assert.equal(await restarted.authenticate(a.token), a.id);
+  assert.equal(restarted.snapshot(a.id).self.credits, 100);
+  s.db.close();
+});
+test("atomic replay-safe ledger rejects conflicts and overdrafts", async () => {
+  const s = storage(),
+    k = new Kernel(s),
+    a = await user(k, "Ada"),
+    b = await user(k, "Bea");
+  k.join(a.id);
+  k.join(b.id);
+  const cmd = { type: "transfer", to: b.id, amount: 75, request_id: "one" };
+  k.command(a.id, cmd);
+  k.command(a.id, cmd);
+  assert.equal(k.snapshot(a.id).self.credits, 25);
+  assert.equal(k.snapshot(b.id).self.credits, 175);
+  assert.throws(() => k.command(a.id, { ...cmd, amount: 1 }), /used/);
+  assert.throws(
+    () => k.command(a.id, { ...cmd, request_id: "two" }),
+    /Insufficient/,
+  );
+  assert.throws(() =>
+    k.command(a.id, { ...cmd, amount: 1.5, request_id: "float" }),
+  );
+  assert.ok(
+    s
+      .exec("SELECT SUM(amount) total FROM ledger GROUP BY tx")
+      .every((r) => r.total === 0),
+  );
+  s.db.close();
+});
+test("server controls movement, protects commons and provides escape", async () => {
+  const s = storage(),
+    k = new Kernel(s),
+    a = await user(k, "Ada");
+  k.join(a.id);
+  assert.throws(
+    () => k.command(a.id, { type: "build", kind: "camp", request_id: "spawn" }),
+    /commons/,
+  );
+  assert.throws(() => k.command(a.id, { type: "input", dx: NaN, dy: 0 }));
+  assert.throws(() =>
+    k.command(a.id, { type: "teleport", x: 1000, request_id: "bad" }),
+  );
+  k.command(a.id, { type: "input", dx: 1, dy: 1 });
+  k.step(0.05);
+  const p = k.snapshot(a.id).self;
+  assert.ok(Math.hypot(p.x, p.y) <= 0.301 && p.x > 0);
+  k.command(a.id, { type: "home", request_id: "escape" });
+  assert.equal(k.snapshot(a.id).self.x, 0);
+  s.db.close();
+});
+test("dialogue remembers players but only explicit diplomacy changes reputation", async () => {
+  const s = storage(),
+    k = new Kernel(s),
+    a = await user(k, "Ada");
+  k.join(a.id);
+  const reply = k.command(a.id, {
+    type: "talk",
+    npc: "mira",
+    text: "How can I help you?",
+    request_id: "talk",
+  });
+  assert.match(reply.reply, /soil/);
+  const memory = k.command(a.id, {
+    type: "talk",
+    npc: "mira",
+    text: "Do you remember me?",
+    request_id: "memory",
+  });
+  assert.match(memory.reply, /How can I help you/);
+  assert.equal(k.snapshot(a.id).self.reputation, 0);
+  k.command(a.id, { type: "diplomacy", npc: "mira", request_id: "peace" });
+  k.command(a.id, { type: "diplomacy", npc: "mira", request_id: "peace2" });
+  assert.equal(k.snapshot(a.id).self.reputation, 1);
+  s.db.close();
+});
+test("gather/research cannot duplicate rewards and position writes are batched", async () => {
+  const s = storage(),
+    k = new Kernel(s),
+    a = await user(k, "Ada");
+  k.join(a.id);
+  const cmd = { type: "gather", request_id: "food" };
+  k.command(a.id, cmd);
+  k.command(a.id, cmd);
+  assert.equal(k.snapshot(a.id).self.food, 7);
+  k.command(a.id, { type: "research", request_id: "sample" });
+  assert.throws(
+    () => k.command(a.id, { type: "research", request_id: "sample2" }),
+    /ten seconds/,
+  );
+  assert.equal(k.snapshot(a.id).self.research, 1);
+  k.command(a.id, { type: "input", dx: 1, dy: 0 });
+  k.step(0.05);
+  k.flush();
+  const fresh = new Kernel(s);
+  assert.ok(fresh.snapshot(a.id).self.x > 0);
+  s.db.close();
+});

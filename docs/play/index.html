@@ -1,1 +1,400 @@
-PCFkb2N0eXBlIGh0bWw+DQo8aHRtbCBsYW5nPSJlbiI+DQogIDxoZWFkPg0KICAgIDxtZXRhIGNoYXJzZXQ9InV0Zi04IiAvPg0KICAgIDxtZXRhIG5hbWU9InZpZXdwb3J0IiBjb250ZW50PSJ3aWR0aD1kZXZpY2Utd2lkdGgsaW5pdGlhbC1zY2FsZT0xIiAvPg0KICAgIDxtZXRhIG5hbWU9InRoZW1lLWNvbG9yIiBjb250ZW50PSIjMTAxZTE5IiAvPg0KICAgIDxtZXRhDQogICAgICBuYW1lPSJkZXNjcmlwdGlvbiINCiAgICAgIGNvbnRlbnQ9IkEgc2hhcmVkIGV4cGVyaW1lbnRhbCB3b3JsZC4gRXhwbG9yZSwgc2V0dGxlLCBzdHVkeSwgYW5kIHRhbGsgd2l0aCB0aGUgU2FtYXJpdGFucy4gRXhwZWN0IGJ1Z3Mg4oCUIHB1YmxpYyBhbHBoYS4iDQogICAgLz4NCiAgICA8dGl0bGU+RWNob2VzIG9mIGEgVmlydHVhbCBXb3JsZCDCtyBBbHBoYTwvdGl0bGU+DQogICAgPGxpbmsgcmVsPSJzdHlsZXNoZWV0IiBocmVmPSIuL3N0eWxlLmNzcyIgLz4NCiAgPC9oZWFkPg0KICA8Ym9keT4NCiAgICA8aGVhZGVyIGNsYXNzPSJtYXN0aGVhZCI+DQogICAgICA8YSBjbGFzcz0iYnJhbmQiIGhyZWY9Ii4vIg0KICAgICAgICA+RTxzcGFuPuKXiDwvc3Bhbj5WIDxzbWFsbD5FQ0hPRVMgT0YgQSBWSVJUVUFMIFdPUkxEPC9zbWFsbD48L2ENCiAgICAgID48c3BhbiBjbGFzcz0iYWxwaGEiPkVYUEVDVCBCVUdTIOKAlCBBTFBIQTwvc3Bhbg0KICAgICAgPjxhIGhyZWY9Imh0dHBzOi8vZ2l0aHViLmNvbS90aGVtYXhnaG91bC9FY2hvZXMtb2YtYS1WaXJ0dWFsLVdvcmxkIg0KICAgICAgICA+R2l0SHViIOKGlzwvYQ0KICAgICAgPg0KICAgIDwvaGVhZGVyPg0KICAgIDxtYWluIGlkPSJsYW5kaW5nIj4NCiAgICAgIDxkaXYgY2xhc3M9Imhlcm8iPg0KICAgICAgICA8ZGl2IGNsYXNzPSJleWVicm93Ij5BIFdPUkxEIFdFIEJVSUxEIFRPR0VUSEVSIC8gMDAxPC9kaXY+DQogICAgICAgIDxoMT5CZWdpbiB3aXRoIGN1cmlvc2l0eS48YnIgLz48ZW0+TGVhdmUgYW4gZWNoby48L2VtPjwvaDE+DQogICAgICAgIDxwPg0KICAgICAgICAgIEEgc2hhcmVkIGZyb250aWVyIGZvciBleHBlcmltZW50cywgZXZlcnlkYXkgbGlmZSwgYW5kIGEgY2l2aWxpemF0aW9uDQogICAgICAgICAgb2YgeW91ciBvd24uIEZpbmQgYSBwbGFjZSwgYnVpbGQgc29tZXRoaW5nIHVzZWZ1bCwgYW5kIGdldCB0byBrbm93IHRoZQ0KICAgICAgICAgIG1pbmRzIGxpdmluZyBhbG9uZ3NpZGUgeW91Lg0KICAgICAgICA8L3A+DQogICAgICAgIDxkaXYgY2xhc3M9IndvcmxkLXJ1bGUiPg0KICAgICAgICAgIDxzcGFuIGNsYXNzPSJzZWVkLW1hcmsiPuKcszwvc3Bhbj4NCiAgICAgICAgICA8ZGl2Pg0KICAgICAgICAgICAgPHN0cm9uZz5PbmUgc2VlZC4gUm9vbSB0byBkaXNjb3Zlci48L3N0cm9uZz48YnIgLz5MYW5kIGV4cGFuZHMgd2hlbg0KICAgICAgICAgICAgbmV3IHNldHRsZXJzIGpvaW4uIFlvdXIgZGlzY292ZXJpZXMgc3RheSB3aGVyZSB5b3UgbGVmdCB0aGVtLg0KICAgICAgICAgIDwvZGl2Pg0KICAgICAgICA8L2Rpdj4NCiAgICAgIDwvZGl2Pg0KICAgICAgPHNlY3Rpb24gY2xhc3M9Im1vZGUtc2VjdGlvbiI+DQogICAgICAgIDxkaXYgY2xhc3M9InNlY3Rpb24tbGFiZWwiPg0KICAgICAgICAgIDxoMj5DaG9vc2UgeW91ciB3aW5kb3cgaW50byB0aGUgd29ybGQ8L2gyPg0KICAgICAgICAgIDxzcGFuPk5PIEZVTEwgQ0xJRU5UIFJFUVVJUkVEPC9zcGFuPg0KICAgICAgICA8L2Rpdj4NCiAgICAgICAgPGRpdiBjbGFzcz0ibW9kZXMiPg0KICAgICAgICAgIDxhIGNsYXNzPSJtb2RlLWNhcmQiIGhyZWY9Ij9tb2RlPXN0b3J5Ig0KICAgICAgICAgICAgPjxzcGFuIGNsYXNzPSJtb2RlLW51bWJlciI+MDEgLyBMSUdIVFdFSUdIVDwvc3Bhbj4NCiAgICAgICAgICAgIDxkaXYgY2xhc3M9Im1vZGUtYXJ0IHRleHQtYXJ0Ij4NCiAgICAgICAgICAgICAg4oCcPHNwYW4+QSBjb252ZXJzYXRpb248YnIgLz5jYW4gY2hhbmdlIGEgZnV0dXJlLjwvc3Bhbj7igJ0NCiAgICAgICAgICAgIDwvZGl2Pg0KICAgICAgICAgICAgPGgzPlN0b3J5ICYgY29udmVyc2F0aW9uPC9oMz4NCiAgICAgICAgICAgIDxwPg0KICAgICAgICAgICAgICBUZXh0LWJhc2VkIGV4cGxvcmF0aW9uLCBTYW1hcml0YW4gZGlhbG9ndWUsIGFuZCBleHBsaWNpdA0KICAgICAgICAgICAgICBkaXBsb21hY3kuIE5vIGdyYXBoaWNzIGVuZ2luZSBkb3dubG9hZC4NCiAgICAgICAgICAgIDwvcD4NCiAgICAgICAgICAgIDxzcGFuIGNsYXNzPSJtb2RlLWxpbmsiPkVudGVyIHN0b3J5IG1vZGUg4oaXPC9zcGFuPjwvYQ0KICAgICAgICAgID4NCiAgICAgICAgICA8YSBjbGFzcz0ibW9kZS1jYXJkIGZlYXR1cmVkIiBocmVmPSI/bW9kZT1pc29tZXRyaWMiDQogICAgICAgICAgICA+PHNwYW4gY2xhc3M9Im1vZGUtbnVtYmVyIj4wMiAvIEVYUExPUkUgJiBTRVRUTEU8L3NwYW4+DQogICAgICAgICAgICA8ZGl2IGNsYXNzPSJtb2RlLWFydCBpc28tYXJ0Ij48aT48L2k+PGk+PC9pPjxpPjwvaT48aT48L2k+PC9kaXY+DQogICAgICAgICAgICA8aDM+VGhlIGlzb21ldHJpYyB3b3JsZDwvaDM+DQogICAgICAgICAgICA8cD4NCiAgICAgICAgICAgICAgV2FsayB0aGUgbGFuZHNjYXBlLCBnYXRoZXIgcmVzb3VyY2VzLCBidWlsZCBhIGNhbXAsIGFuZCBjb25kdWN0DQogICAgICAgICAgICAgIHlvdXIgZmlyc3QgZmllbGQgZXhwZXJpbWVudHMuDQogICAgICAgICAgICA8L3A+DQogICAgICAgICAgICA8c3BhbiBjbGFzcz0ibW9kZS1saW5rIj5FbnRlciAyLjVEIHdvcmxkIOKGlzwvc3Bhbj48L2ENCiAgICAgICAgICA+DQogICAgICAgICAgPGEgY2xhc3M9Im1vZGUtY2FyZCIgaHJlZj0iP21vZGU9Zmlyc3RwZXJzb24iDQogICAgICAgICAgICA+PHNwYW4gY2xhc3M9Im1vZGUtbnVtYmVyIj4wMyAvIE9OIFRIRSBHUk9VTkQ8L3NwYW4+DQogICAgICAgICAgICA8ZGl2IGNsYXNzPSJtb2RlLWFydCBwZXJzcGVjdGl2ZS1hcnQiPjxzcGFuPis8L3NwYW4+PC9kaXY+DQogICAgICAgICAgICA8aDM+Rmlyc3QtcGVyc29uIGV4cGxvcmVyPC9oMz4NCiAgICAgICAgICAgIDxwPg0KICAgICAgICAgICAgICBBIGxpZ2h0d2VpZ2h0IGZpcnN0LXBlcnNvbiBjYW52YXMgdmlldyBvZiB0aGUgc2FtZSB0ZXJyYWluLA0KICAgICAgICAgICAgICBwZW9wbGUsIGFuZCBzZXR0bGVtZW50cy4NCiAgICAgICAgICAgIDwvcD4NCiAgICAgICAgICAgIDxzcGFuIGNsYXNzPSJtb2RlLWxpbmsiPkVudGVyIGZpcnN0IHBlcnNvbiDihpc8L3NwYW4+PC9hDQogICAgICAgICAgPg0KICAgICAgICAgIDxhcnRpY2xlIGNsYXNzPSJtb2RlLWNhcmQgZnV0dXJlIj4NCiAgICAgICAgICAgIDxzcGFuIGNsYXNzPSJtb2RlLW51bWJlciI+MDQgLyBJTiBERVZFTE9QTUVOVDwvc3Bhbj4NCiAgICAgICAgICAgIDxkaXYgY2xhc3M9Im1vZGUtYXJ0IHVuaXR5LWFydCI+VTxzcGFuPkNMSUVOVDwvc3Bhbj48L2Rpdj4NCiAgICAgICAgICAgIDxoMz5Vbml0eSBjbGllbnQ8L2gzPg0KICAgICAgICAgICAgPHA+DQogICAgICAgICAgICAgIE5hdGl2ZSBjbGllbnQgZGV2ZWxvcG1lbnQgY29udGludWVzIHNlcGFyYXRlbHkuIE5vIHBsYXlhYmxlIFVuaXR5DQogICAgICAgICAgICAgIGJ1aWxkIGhhcyBiZWVuIHB1Ymxpc2hlZCBoZXJlIHlldC4NCiAgICAgICAgICAgIDwvcD4NCiAgICAgICAgICAgIDxhDQogICAgICAgICAgICAgIGNsYXNzPSJtb2RlLWxpbmsiDQogICAgICAgICAgICAgIGhyZWY9Imh0dHBzOi8vZ2l0aHViLmNvbS90aGVtYXhnaG91bC9FY2hvZXMtb2YtYS1WaXJ0dWFsLVdvcmxkL3JlbGVhc2VzIg0KICAgICAgICAgICAgICA+Q2hlY2sgYXZhaWxhYmxlIHJlbGVhc2VzIOKGlzwvYQ0KICAgICAgICAgICAgPg0KICAgICAgICAgIDwvYXJ0aWNsZT4NCiAgICAgICAgPC9kaXY+DQogICAgICA8L3NlY3Rpb24+DQogICAgICA8c2VjdGlvbiBjbGFzcz0ibm90ZXMiPg0KICAgICAgICA8ZGl2Pg0KICAgICAgICAgIDxoMz5FeHBsb3JlLiBPYnNlcnZlLiBSZXBlYXQuPC9oMz4NCiAgICAgICAgICA8cD4NCiAgICAgICAgICAgIFNjaWVuY2UgYmVnaW5zIHdpdGggY29tcGFyaXNvbi4gVGhlIGFscGhhIGluY2x1ZGVzIHNpbXBsZSBzb2lsDQogICAgICAgICAgICBzYW1wbGluZywgcmVzb3VyY2UgZ2F0aGVyaW5nLCBhbmQgcGVyc2lzdGVudCBjb25zdHJ1Y3Rpb24uIEl0cw0KICAgICAgICAgICAgZW52aXJvbm1lbnRhbCBtb2RlbHMgYXJlIGRlbGliZXJhdGVseSBzbWFsbCBhbmQgZXhwZXJpbWVudGFsLg0KICAgICAgICAgIDwvcD4NCiAgICAgICAgPC9kaXY+DQogICAgICAgIDxkaXY+DQogICAgICAgICAgPGgzPkEgc29jaWV0eSwgbm90IGEgcGF5b3V0IHByb21pc2UuPC9oMz4NCiAgICAgICAgICA8cD4NCiAgICAgICAgICAgIEVvViBjcmVkaXRzIGFyZSB0ZXN0IGN1cnJlbmN5IHdpdGggYSB0cmFuc2FjdGlvbiBsZWRnZXIuIE5vIGNhc2gNCiAgICAgICAgICAgIHZhbHVlLCBCVEMgZGVwb3NpdHMsIHdpdGhkcmF3YWxzLCBvciBjb252ZXJzaW9uLiBPcmRpbmFyeQ0KICAgICAgICAgICAgY29udmVyc2F0aW9uIGRvZXMgbm90IHNwZW5kIHlvdXIgcmVzb3VyY2VzLg0KICAgICAgICAgIDwvcD4NCiAgICAgICAgPC9kaXY+DQogICAgICAgIDxkaXY+DQogICAgICAgICAgPGgzPkJ1aWx0IGluIHRoZSBvcGVuLjwvaDM+DQogICAgICAgICAgPHA+DQogICAgICAgICAgICBCcm93c2VyIG1vZHVsZXMgbG9hZCBvbmx5IHdoZW4gbmVlZGVkLg0KICAgICAgICAgICAgPGENCiAgICAgICAgICAgICAgaHJlZj0iaHR0cHM6Ly9naXRodWIuY29tL3RoZW1heGdob3VsL0VjaG9lcy1vZi1hLVZpcnR1YWwtV29ybGQvdHJlZS9tYWluL2RvY3MvcGxheSINCiAgICAgICAgICAgICAgPkRvd25sb2FkIGJyb3dzZXIgc291cmNlPC9hDQogICAgICAgICAgICA+DQogICAgICAgICAgICBvcg0KICAgICAgICAgICAgPGENCiAgICAgICAgICAgICAgaHJlZj0iaHR0cHM6Ly9naXRodWIuY29tL3RoZW1heGdob3VsL0VjaG9lcy1vZi1hLVZpcnR1YWwtV29ybGQvaXNzdWVzL25ldyINCiAgICAgICAgICAgICAgPnJlcG9ydCBhbiBhbHBoYSBidWc8L2ENCiAgICAgICAgICAgID4uIFBsZWFzZSBpbmNsdWRlIHlvdXIgbW9kZSBhbmQgc3RlcHMgdG8gcmVwcm9kdWNlLg0KICAgICAgICAgIDwvcD4NCiAgICAgICAgPC9kaXY+DQogICAgICA8L3NlY3Rpb24+DQogICAgICA8bmF2IGlkPSJnYW1lLXRvb2xzIiBjbGFzcz0iZ2FtZS10b29scyIgYXJpYS1sYWJlbD0iR2FtZSB0b29scyIgaGlkZGVuPg0KICAgICAgICA8YSBocmVmPSI/bW9kZT1zdG9yeSIgZGF0YS10b29sLW1vZGU9InN0b3J5Ij5TdG9yeTwvYT4NCiAgICAgICAgPGEgaHJlZj0iP21vZGU9aXNvbWV0cmljIiBkYXRhLXRvb2wtbW9kZT0iaXNvbWV0cmljIj5Jc29tZXRyaWM8L2E+DQogICAgICAgIDxhIGhyZWY9Ij9tb2RlPWZpcnN0cGVyc29uIiBkYXRhLXRvb2wtbW9kZT0iZmlyc3RwZXJzb24iDQogICAgICAgICAgPkZpcnN0IHBlcnNvbjwvYQ0KICAgICAgICA+DQogICAgICAgIDxidXR0b24gZGF0YS10b29sLXRhcmdldD0idGFsayIgdGl0bGU9Ik9wZW4gY2hhdCB3aXRob3V0IG1vdmluZyDCtyBUIj4NCiAgICAgICAgICBDaGF0IMK3IFQNCiAgICAgICAgPC9idXR0b24+DQogICAgICAgIDxidXR0b24gZGF0YS10b29sLXRhcmdldD0idHJhZGUiPlRyYWRlPC9idXR0b24+DQogICAgICAgIDxidXR0b24gZGF0YS1hY3Rpb249ImdhdGhlciI+R2F0aGVyPC9idXR0b24+DQogICAgICAgIDxidXR0b24gZGF0YS1hY3Rpb249InJlc2VhcmNoIj5TYW1wbGUgc29pbDwvYnV0dG9uPg0KICAgICAgICA8YnV0dG9uIGRhdGEtdG9vbC10YXJnZXQ9ImJ1aWxkIj5CdWlsZDwvYnV0dG9uPg0KICAgICAgICA8YnV0dG9uIGRhdGEtdG9vbC10YXJnZXQ9IndvcmtzaG9wIj5DcmFmdCDCtyBDPC9idXR0b24+CiAgICAgICAgPGJ1dHRvbiBkYXRhLXRvb2wtdGFyZ2V0PSJpbnZlbnRvcnkiPkludmVudG9yeSDCtyBJPC9idXR0b24+CiAgICAgICAgPGJ1dHRvbiBkYXRhLXRvb2wtdGFyZ2V0PSJqb3VybmFsIj5BY3Rpdml0eTwvYnV0dG9uPg0KICAgICAgICA8YnV0dG9uIGRhdGEtYWN0aW9uPSJob21lIj5Ib21lPC9idXR0b24+DQogICAgICA8L25hdj4NCiAgICA8L21haW4+DQogICAgPG1haW4gaWQ9ImdhbWUiIGhpZGRlbj4NCiAgICAgIDxzZWN0aW9uIGlkPSJlbnRyeSIgY2xhc3M9ImVudHJ5Ij4NCiAgICAgICAgPGEgaHJlZj0iLi8iPuKGkCBBbGwgZ2FtZSBtb2RlczwvYT4NCiAgICAgICAgPGRpdiBjbGFzcz0iZXllYnJvdyI+RU5URVIgVEhFIFNIQVJFRCBXT1JMRDwvZGl2Pg0KICAgICAgICA8aDEgaWQ9ImVudHJ5LXRpdGxlIj5Zb3VyIGpvdXJuZXkgc3RhcnRzIGhlcmUuPC9oMT4NCiAgICAgICAgPHAgaWQ9InNlcnZlci1zdGF0dXMiIHJvbGU9InN0YXR1cyI+Q2hlY2tpbmcgd29ybGQgc2VydmVy4oCmPC9wPg0KICAgICAgICA8Zm9ybSBpZD0iYXV0aCI+DQogICAgICAgICAgPGxhYmVsDQogICAgICAgICAgICA+U2V0dGxlciBuYW1lPGlucHV0DQogICAgICAgICAgICAgIGlkPSJuYW1lIg0KICAgICAgICAgICAgICBhdXRvY29tcGxldGU9InVzZXJuYW1lIg0KICAgICAgICAgICAgICBtaW5sZW5ndGg9IjMiDQogICAgICAgICAgICAgIG1heGxlbmd0aD0iMjQiDQogICAgICAgICAgICAgIHBhdHRlcm49IltBLVphLXowLTlfLV0rIg0KICAgICAgICAgICAgICByZXF1aXJlZA0KICAgICAgICAgICAgICBwbGFjZWhvbGRlcj0iZS5nLiBBZGFfRXhwbG9yZXIiIC8+PC9sYWJlbA0KICAgICAgICAgID48bGFiZWwNCiAgICAgICAgICAgID5QYXNzd29yZDxpbnB1dA0KICAgICAgICAgICAgICBpZD0icGFzc3dvcmQiDQogICAgICAgICAgICAgIHR5cGU9InBhc3N3b3JkIg0KICAgICAgICAgICAgICBhdXRvY29tcGxldGU9ImN1cnJlbnQtcGFzc3dvcmQiDQogICAgICAgICAgICAgIG1pbmxlbmd0aD0iMTIiDQogICAgICAgICAgICAgIG1heGxlbmd0aD0iMTI4Ig0KICAgICAgICAgICAgICByZXF1aXJlZA0KICAgICAgICAgICAgICBwbGFjZWhvbGRlcj0iQXQgbGVhc3QgMTIgY2hhcmFjdGVycyINCiAgICAgICAgICAvPjwvbGFiZWw+DQogICAgICAgICAgPGRpdiBjbGFzcz0iYnV0dG9ucyI+DQogICAgICAgICAgICA8YnV0dG9uIHR5cGU9InN1Ym1pdCIgaWQ9ImpvaW4iPkNyZWF0ZSBzZXR0bGVyPC9idXR0b24NCiAgICAgICAgICAgID48YnV0dG9uIHR5cGU9ImJ1dHRvbiIgaWQ9ImxvZ2luIiBjbGFzcz0ic2Vjb25kYXJ5Ij5Mb2cgaW48L2J1dHRvbj4NCiAgICAgICAgICA8L2Rpdj4NCiAgICAgICAgICA8cCBjbGFzcz0ic21hbGwiPg0KICAgICAgICAgICAgVXNlIGEgdW5pcXVlIHBhc3N3b3JkLiBBbHBoYSBhY2NvdW50cyBoYXZlIG5vIHBhc3N3b3JkIHJlY292ZXJ5IHlldC4NCiAgICAgICAgICAgIFJldHVybmluZyBzZXR0bGVycyBjYW4gbG9nIGluIG9uIGFub3RoZXIgZGV2aWNlLg0KICAgICAgICAgIDwvcD4NCiAgICAgICAgPC9mb3JtPg0KICAgICAgICA8ZGV0YWlscz4NCiAgICAgICAgICA8c3VtbWFyeT5Db25uZWN0IHRvIGFub3RoZXIgd29ybGQgc2VydmVyPC9zdW1tYXJ5Pg0KICAgICAgICAgIDxmb3JtIGlkPSJzZXJ2ZXItZm9ybSI+DQogICAgICAgICAgICA8bGFiZWwNCiAgICAgICAgICAgICAgPkJhY2tlbmQgSFRUUFMgVVJMPGlucHV0DQogICAgICAgICAgICAgICAgaWQ9InNlcnZlci11cmwiDQogICAgICAgICAgICAgICAgdHlwZT0idXJsIg0KICAgICAgICAgICAgICAgIHBsYWNlaG9sZGVyPSJodHRwczovL3lvdXItd29ybGQtc2VydmVyLm9ucmVuZGVyLmNvbSIgLz48L2xhYmVsDQogICAgICAgICAgICA+PGJ1dHRvbj5TYXZlIHNlcnZlcjwvYnV0dG9uPg0KICAgICAgICAgIDwvZm9ybT4NCiAgICAgICAgICA8cCBjbGFzcz0ic21hbGwiPg0KICAgICAgICAgICAgT25seSBjb25uZWN0IHRvIGEgc2VydmVyIHlvdSB0cnVzdC4gWW91ciBsb2dpbiBpcyBzZW50IHRvIHRoZQ0KICAgICAgICAgICAgc2VsZWN0ZWQgc2VydmVyLiBMb2NhbCB0ZXN0aW5nIGFjY2VwdHMgbG9jYWxob3N0IEhUVFAuDQogICAgICAgICAgPC9wPg0KICAgICAgICA8L2RldGFpbHM+DQogICAgICAgIDxwIGlkPSJlbnRyeS1lcnJvciIgY2xhc3M9ImVycm9yIiByb2xlPSJhbGVydCI+PC9wPg0KICAgICAgPC9zZWN0aW9uPg0KICAgICAgPHNlY3Rpb24gaWQ9InNlc3Npb24iIGhpZGRlbj4NCiAgICAgICAgPG5hdiBjbGFzcz0iZ2FtZWJhciI+DQogICAgICAgICAgPGEgaHJlZj0iLi8iPuKGkCBNb2RlczwvYQ0KICAgICAgICAgID48c3Ryb25nIGlkPSJ3b3JsZC10aXRsZSI+VGhlIHNoYXJlZCBmcm9udGllcjwvc3Ryb25nDQogICAgICAgICAgPjxzcGFuIGlkPSJjb25uZWN0aW9uIiByb2xlPSJzdGF0dXMiPkNvbm5lY3RpbmfigKY8L3NwYW4NCiAgICAgICAgICA+PGJ1dHRvbiBpZD0ibG9nb3V0IiBjbGFzcz0ic2Vjb25kYXJ5IGNvbXBhY3QiPkxvZyBvdXQ8L2J1dHRvbj4NCiAgICAgICAgPC9uYXY+DQogICAgICAgIDxkaXYgY2xhc3M9IndvcmtzcGFjZSI+DQogICAgICAgICAgPHNlY3Rpb24gY2xhc3M9InZpZXdwb3J0Ij4NCiAgICAgICAgICAgIDxkaXYgaWQ9InNjZW5lIj48L2Rpdj4NCiAgICAgICAgICAgIDxkaXYgY2xhc3M9InNjZW5lLWxhYmVsIj4NCiAgICAgICAgICAgICAgPHNwYW4gaWQ9Im1vZGUtbGFiZWwiPjwvc3Bhbj48c3BhbiBpZD0iY29vcmRzIj48L3NwYW4+DQogICAgICAgICAgICA8L2Rpdj4NCiAgICAgICAgICAgIDxkaXYgaWQ9ImNvbnRyb2xzLWhlbHAiIGNsYXNzPSJjb250cm9scy1oZWxwIj48L2Rpdj4NCiAgICAgICAgICAgIDxkaXYgY2xhc3M9ImRwYWQiIGFyaWEtbGFiZWw9Ik1vdmVtZW50IGNvbnRyb2xzIj4NCiAgICAgICAgICAgICAgPGJ1dHRvbiBkYXRhLWR4PSIwIiBkYXRhLWR5PSItMSIgYXJpYS1sYWJlbD0iTW92ZSBmb3J3YXJkIj4NCiAgICAgICAgICAgICAgICDihpENCiAgICAgICAgICAgICAgPC9idXR0b24+DQogICAgICAgICAgICAgIDxkaXY+DQogICAgICAgICAgICAgICAgPGJ1dHRvbiBkYXRhLWR4PSItMSIgZGF0YS1keT0iMCIgYXJpYS1sYWJlbD0iTW92ZSBsZWZ0Ij4NCiAgICAgICAgICAgICAgICAgIOKGkDwvYnV0dG9uDQogICAgICAgICAgICAgICAgPjxidXR0b24gZGF0YS1keD0iMCIgZGF0YS1keT0iMSIgYXJpYS1sYWJlbD0iTW92ZSBiYWNrd2FyZCI+DQogICAgICAgICAgICAgICAgICDihpM8L2J1dHRvbg0KICAgICAgICAgICAgICAgID48YnV0dG9uIGRhdGEtZHg9IjEiIGRhdGEtZHk9IjAiIGFyaWEtbGFiZWw9Ik1vdmUgcmlnaHQiPg0KICAgICAgICAgICAgICAgICAg4oaSDQogICAgICAgICAgICAgICAgPC9idXR0b24+DQogICAgICAgICAgICAgIDwvZGl2Pg0KICAgICAgICAgICAgPC9kaXY+DQogICAgICAgICAgPC9zZWN0aW9uPg0KICAgICAgICAgIDxhc2lkZSBjbGFzcz0ic2lkZWJhciI+DQogICAgICAgICAgICA8ZGl2IGNsYXNzPSJpZGVudGl0eSI+DQogICAgICAgICAgICAgIDxzcGFuIGNsYXNzPSJleWVicm93Ij5ZT1VSIFNFVFRMRVI8L3NwYW4+DQogICAgICAgICAgICAgIDxoMiBpZD0icGxheWVyLW5hbWUiPjwvaDI+DQogICAgICAgICAgICA8L2Rpdj4NCiAgICAgICAgICAgIDxkZXRhaWxzIG9wZW4+DQogICAgICAgICAgICAgIDxzdW1tYXJ5Pk1ha2UgYSBiZWdpbm5pbmc8L3N1bW1hcnk+DQogICAgICAgICAgICAgIDxkaXYgY2xhc3M9ImFjdGlvbi1ncmlkIj4NCiAgICAgICAgICAgICAgICA8YnV0dG9uIGRhdGEtYWN0aW9uPSJnYXRoZXIiPkdhdGhlciBuZWFyYnk8L2J1dHRvbg0KICAgICAgICAgICAgICAgID48YnV0dG9uIGRhdGEtYWN0aW9uPSJyZXNlYXJjaCI+U2FtcGxlIHNvaWw8L2J1dHRvbg0KICAgICAgICAgICAgICAgID48YnV0dG9uIGRhdGEtYWN0aW9uPSJidWlsZCIgZGF0YS1raW5kPSJjYW1wIj4NCiAgICAgICAgICAgICAgICAgIENhbXAgwrcgOFcgLyAyUzwvYnV0dG9uDQogICAgICAgICAgICAgICAgPjxidXR0b24gZGF0YS1hY3Rpb249ImJ1aWxkIiBkYXRhLWtpbmQ9ImZhcm0iPg0KICAgICAgICAgICAgICAgICAgRmFybSDCtyAxMFcgLyA0UzwvYnV0dG9uDQogICAgICAgICAgICAgICAgPjxidXR0b24gZGF0YS1hY3Rpb249ImJ1aWxkIiBkYXRhLWtpbmQ9ImxhYiI+DQogICAgICAgICAgICAgICAgICBMYWIgwrcgMTZXIC8gMTBTDQogICAgICAgICAgICAgICAgPC9idXR0b24+DQogICAgICAgICAgICAgIDwvZGl2Pg0KICAgICAgICAgICAgICA8cCBjbGFzcz0ic21hbGwiPg0KICAgICAgICAgICAgICAgIEZvcmVzdHMg4oaSIHdvb2QgwrcgUm9jayDihpIgc3RvbmUgwrcgTWVhZG93IOKGkiBmb29kLiBDb25zdHJ1Y3Rpb24gZ29lcw0KICAgICAgICAgICAgICAgIG9uZSB0aWxlIGVhc3QuIFdhbGsgYmV5b25kIHRoZSBjb21tb25zIHRvIGZpbmQgdGVycmFpbi4NCiAgICAgICAgICAgICAgPC9wPg0KICAgICAgICAgICAgPC9kZXRhaWxzPg0KICAgICAgICAgICAgPGJ1dHRvbiBkYXRhLWFjdGlvbj0iaG9tZSIgY2xhc3M9InNlY29uZGFyeSBjb21wYWN0Ij4NCiAgICAgICAgICAgICAgUmV0dXJuIHRvIHByb3RlY3RlZCBjb21tb25zDQogICAgICAgICAgICA8L2J1dHRvbj4NCiAgICAgICAgICAgIDxwIGNsYXNzPSJzbWFsbCI+DQogICAgICAgICAgICAgIFByZXNzIDxrYmQ+VDwva2JkPiBvciBjaG9vc2UgQ2hhdCB0byB0YWxrIHdpdGggc2V0dGxlcnMgYW5kIHRoZQ0KICAgICAgICAgICAgICBTYW1hcml0YW5zLiBObyBtb3ZlbWVudCByZXF1aXJlZC4NCiAgICAgICAgICAgIDwvcD4NCiAgICAgICAgICAgIDxkZXRhaWxzPg0KICAgICAgICAgICAgICA8c3VtbWFyeT5FeHBlcmltZW50YWwgbGVkZ2VyPC9zdW1tYXJ5Pg0KICAgICAgICAgICAgICA8cCBjbGFzcz0ic21hbGwiPg0KICAgICAgICAgICAgICAgIENyZWRpdHMgaGF2ZSBubyBjYXNoIHZhbHVlLiBCVEMgYW5kIHBheW91dHMgYXJlIGRpc2FibGVkLg0KICAgICAgICAgICAgICA8L3A+DQogICAgICAgICAgICAgIDxidXR0b24gaWQ9ImxlZGdlciIgY2xhc3M9InNlY29uZGFyeSI+DQogICAgICAgICAgICAgICAgVmlldyBteSB0cmFuc2FjdGlvbnMNCiAgICAgICAgICAgICAgPC9idXR0b24+DQogICAgICAgICAgICAgIDxkaXYgaWQ9ImxlZGdlci1yb3dzIiBjbGFzcz0ic21hbGwiPjwvZGl2Pg0KICAgICAgICAgICAgICA8Zm9ybSBpZD0idHJhbnNmZXIiPg0KICAgICAgICAgICAgICAgIDxsYWJlbCBjbGFzcz0ic21hbGwiDQogICAgICAgICAgICAgICAgICA+VHJhbnNmZXIgdG8gYSBuZWFyYnkgc2V0dGxlcjxzZWxlY3QNCiAgICAgICAgICAgICAgICAgICAgaWQ9InJlY2lwaWVudCINCiAgICAgICAgICAgICAgICAgID48L3NlbGVjdD48L2xhYmVsDQogICAgICAgICAgICAgICAgPjxsYWJlbCBjbGFzcz0ic21hbGwiDQogICAgICAgICAgICAgICAgICA+V2hvbGUgY3JlZGl0czxpbnB1dA0KICAgICAgICAgICAgICAgICAgICBpZD0iYW1vdW50Ig0KICAgICAgICAgICAgICAgICAgICB0eXBlPSJudW1iZXIiDQogICAgICAgICAgICAgICAgICAgIG1pbj0iMSINCiAgICAgICAgICAgICAgICAgICAgbWF4PSIxMDAwMDAwIg0KICAgICAgICAgICAgICAgICAgICBzdGVwPSIxIg0KICAgICAgICAgICAgICAgICAgICB2YWx1ZT0iMSIgLz48L2xhYmVsDQogICAgICAgICAgICAgICAgPjxidXR0b24+VHJhbnNmZXIgY3JlZGl0czwvYnV0dG9uPg0KICAgICAgICAgICAgICA8L2Zvcm0+DQogICAgICAgICAgICA8L2RldGFpbHM+DQogICAgICAgICAgICA8ZGV0YWlscz4NCiAgICAgICAgICAgICAgPHN1bW1hcnk+U2FtYXJpdGFuIGFjdGl2aXR5PC9zdW1tYXJ5Pg0KICAgICAgICAgICAgICA8cCBjbGFzcz0ic21hbGwiPgogICAgICAgICAgICAgICAgUGVyc2lzdGVudCBpbnRlbnRpb25zIGFuZCBvdXRjb21lcy4gVGhlIGZyZWUgYWxwaGEgc2NoZWR1bGVzIG9uZQogICAgICAgICAgICAgICAgaW5kZXBlbmRlbnQsIEFJLWNob3NlbiBkZWNpc2lvbiBldmVyeSA0NSBtaW51dGVzIGFjcm9zcyB0aGUgdGhyZWUgd29ybGQKICAgICAgICAgICAgICAgIFNhbWFyaXRhbnMuIENvbnZlcnNhdGlvbnMgcmVtYWluIGF2YWlsYWJsZSBiZXR3ZWVuIGN5Y2xlcy4KICAgICAgICAgICAgICA8L3A+CiAgICAgICAgICAgICAgPGJ1dHRvbiBpZD0iYWdlbnQtam91cm5hbCIgY2xhc3M9InNlY29uZGFyeSI+DQogICAgICAgICAgICAgICAgUmVhZCBhY3Rpdml0eQ0KICAgICAgICAgICAgICA8L2J1dHRvbj4NCiAgICAgICAgICAgICAgPGRpdg0KICAgICAgICAgICAgICAgIGlkPSJhZ2VudC1qb3VybmFsLXJvd3MiDQogICAgICAgICAgICAgICAgY2xhc3M9InNtYWxsIg0KICAgICAgICAgICAgICAgIGFyaWEtbGl2ZT0icG9saXRlIg0KICAgICAgICAgICAgICA+PC9kaXY+DQogICAgICAgICAgICA8L2RldGFpbHM+DQogICAgICAgICAgICA8ZGl2IGlkPSJmZWVkYmFjayIgcm9sZT0ic3RhdHVzIiBhcmlhLWxpdmU9InBvbGl0ZSI+DQogICAgICAgICAgICAgIFdlbGNvbWUgdG8gdGhlIGZyb250aWVyLg0KICAgICAgICAgICAgPC9kaXY+DQogICAgICAgICAgPC9hc2lkZT4NCiAgICAgICAgPC9kaXY+DQogICAgICA8L3NlY3Rpb24+DQogICAgPC9tYWluPg0KICAgIDxkaWFsb2cgaWQ9ImNoYXQtZGlhbG9nIiBjbGFzcz0iY2hhdC1kaWFsb2ciIGFyaWEtbGFiZWxsZWRieT0iY2hhdC10aXRsZSI+DQogICAgICA8aGVhZGVyPg0KICAgICAgICA8ZGl2Pg0KICAgICAgICAgIDxzcGFuIGNsYXNzPSJleWVicm93Ij5DT05WRVJTQVRJT04gwrcgTk8gTU9WRU1FTlQgUkVRVUlSRUQ8L3NwYW4+DQogICAgICAgICAgPGgyIGlkPSJjaGF0LXRpdGxlIj5DaGF0IHdpdGggdGhlIHdvcmxkPC9oMj4NCiAgICAgICAgPC9kaXY+DQogICAgICAgIDxidXR0b24gaWQ9ImNoYXQtY2xvc2UiIGNsYXNzPSJzZWNvbmRhcnkiPkNsb3NlIDxrYmQ+RXNjPC9rYmQ+PC9idXR0b24+DQogICAgICA8L2hlYWRlcj4NCiAgICAgIDxwIGNsYXNzPSJzbWFsbCI+DQogICAgICAgIDxhIGhyZWY9Ij9tb2RlPXN0b3J5Ij5PcGVuIHRoZSB0ZXh0IHN0b3J5IG1vZGU8L2E+IMK3IHN3aXRjaCBwZXJzcGVjdGl2ZXMNCiAgICAgICAgZnJvbSB0aGUgYm90dG9tIGJhcjsgdGhpcyBjaGF0IHN0YXlzIGF2YWlsYWJsZSBpbiBlYWNoIHZpZXcuDQogICAgICA8L3A+DQogICAgICA8ZGl2IGNsYXNzPSJjaGF0LWRpYWxvZy1jb250ZW50Ij4NCiAgICAgICAgPGRpdiBpZD0iY29udmVyc2F0aW9uLXBhbmVsIj4NCiAgICAgICAgICA8bGFiZWwgY2xhc3M9InNtYWxsIg0KICAgICAgICAgICAgPkNob29zZSBhIGNvbnZlcnNhdGlvbiBwYXJ0bmVyPHNlbGVjdCBpZD0ibnBjIj4NCiAgICAgICAgICAgICAgPG9wdGlvbiB2YWx1ZT0ibWlyYSI+TWlyYSDCtyBFY29sb2dpc3Q8L29wdGlvbj4NCiAgICAgICAgICAgICAgPG9wdGlvbiB2YWx1ZT0ib3JlbiI+T3JlbiDCtyBCdWlsZGVyPC9vcHRpb24+DQogICAgICAgICAgICAgIDxvcHRpb24gdmFsdWU9InNvbCI+U29sIMK3IE1lZGlhdG9yPC9vcHRpb24+DQogICAgICAgICAgICAgIDxvcHRpb24gdmFsdWU9IndvcmxkIj5Xb3JsZCBjaGF0IMK3IGFsbCBwbGF5ZXJzPC9vcHRpb24+DQogICAgICAgICAgICA8L3NlbGVjdD48L2xhYmVsDQogICAgICAgICAgPg0KICAgICAgICAgIDxkaXYgaWQ9ImRpYWxvZ3VlIiBjbGFzcz0iZGlhbG9ndWUiIHJvbGU9ImxvZyIgYXJpYS1saXZlPSJwb2xpdGUiPg0KICAgICAgICAgICAgPHA+DQogICAgICAgICAgICAgIEFzayB3aGF0IHRoZXkgbmVlZCwgcmVxdWVzdCBoZWxwLCBvciB0ZWxsIHRoZW0gd2hhdCB5b3UNCiAgICAgICAgICAgICAgZGlzY292ZXJlZC4NCiAgICAgICAgICAgIDwvcD4NCiAgICAgICAgICA8L2Rpdj4NCiAgICAgICAgICA8Zm9ybSBpZD0iY2hhdCI+DQogICAgICAgICAgICA8bGFiZWwgY2xhc3M9InNyLW9ubHkiIGZvcj0ibWVzc2FnZSI+WW91ciBtZXNzYWdlPC9sYWJlbA0KICAgICAgICAgICAgPjxpbnB1dA0KICAgICAgICAgICAgICBpZD0ibWVzc2FnZSINCiAgICAgICAgICAgICAgbWF4bGVuZ3RoPSIxMDAwIg0KICAgICAgICAgICAgICByZXF1aXJlZA0KICAgICAgICAgICAgICBwbGFjZWhvbGRlcj0iSG93IGNhbiBJIGhlbHAgeW91PyINCiAgICAgICAgICAgIC8+PGJ1dHRvbj5TZW5kPC9idXR0b24+DQogICAgICAgICAgPC9mb3JtPg0KICAgICAgICAgIDxidXR0b24gaWQ9ImNvb3BlcmF0ZSIgY2xhc3M9InNlY29uZGFyeSI+UHJvcG9zZSBjb29wZXJhdGlvbjwvYnV0dG9uPg0KICAgICAgICA8L2Rpdj4NCiAgICAgIDwvZGl2Pg0KICAgICAgPHAgY2xhc3M9InNtYWxsIj4NCiAgICAgICAgQ2hvb3NlIFdvcmxkIGNoYXQgdG8gdGFsayB0byBzZXR0bGVycyBvciBhIFNhbWFyaXRhbiB0byBzcGVhayB3aXRoIHRoZW0NCiAgICAgICAgZGlyZWN0bHkuIERpcGxvbWF0aWMgYWdyZWVtZW50cyByZW1haW4gZXhwbGljaXQuDQogICAgICA8L3A+DQogICAgPC9kaWFsb2c+DQogICAgPGRpYWxvZyBpZD0idHJhZGUtZGlhbG9nIiBjbGFzcz0id29ya3Nob3AiIGFyaWEtbGFiZWxsZWRieT0idHJhZGUtdGl0bGUiPg0KICAgICAgPGhlYWRlcj4NCiAgICAgICAgPGRpdj4NCiAgICAgICAgICA8c3BhbiBjbGFzcz0iZXllYnJvdyI+TUFURVJJQUxTIMK3IEVYUExJQ0lUIENPTlNFTlQ8L3NwYW4+DQogICAgICAgICAgPGgyIGlkPSJ0cmFkZS10aXRsZSI+VHJhZGUgd2l0aCBhIHBhcnRpY2lwYW50PC9oMj4KICAgICAgICA8L2Rpdj4NCiAgICAgICAgPGJ1dHRvbiBpZD0idHJhZGUtY2xvc2UiIGNsYXNzPSJzZWNvbmRhcnkiPkNsb3NlPC9idXR0b24+DQogICAgICA8L2hlYWRlcj4NCiAgICAgIDxwPkNob29zZSBhbnkgb25saW5lIHNldHRsZXIgaW4gdGhlIHNoYXJlZCB3b3JsZCBvciBhIFNhbWFyaXRhbi4gQm90aCBwbGF5ZXJzIG11c3QgYWNjZXB0OyBhIHNoYXJlZCAz4oCTMuKAkzEgY291bnRkb3duIHNob3dzIGJlZm9yZSBhbnl0aGluZyBtb3Zlcy4gRWl0aGVyIG1heSByZWplY3QgYmVmb3JlIHJlbGVhc2UuIFNhbWFyaXRhbiBkZWxpdmVyaWVzIGFyZSBwb3NzaWJsZSBvbmx5IHdoZW4gdGhleSBoYXZlIG1hZGUgYSBzcGVjaWZpYyByZXF1ZXN0LiBFeHBlcmltZW50YWwgY3JlZGl0cyBhbmQgcmVhbCBtb25leSBhcmUgZXhjbHVkZWQuPC9wPgogICAgICA8bGFiZWw+UGFydGljaXBhbnQ8c2VsZWN0IGlkPSJ0cmFkZS1wYXJ0bmVyIiByZXF1aXJlZD4NCiAgICAgICAgPG9wdGlvbiB2YWx1ZT0iIj5DaG9vc2UgYSBwYXJ0aWNpcGFudDwvb3B0aW9uPg0KICAgICAgPC9zZWxlY3Q+PC9sYWJlbD4NCiAgICAgIDxmb3JtIGlkPSJwbGF5ZXItdHJhZGUtZm9ybSIgaGlkZGVuPg0KICAgICAgICA8ZGl2IGNsYXNzPSJkaW1lbnNpb24tZmllbGRzIj4NCiAgICAgICAgICA8bGFiZWw+T2ZmZXIgbWF0ZXJpYWw8c2VsZWN0IGlkPSJ0cmFkZS1vZmZlci1yZXNvdXJjZSI+PG9wdGlvbiB2YWx1ZT0id29vZCI+V29vZDwvb3B0aW9uPjxvcHRpb24gdmFsdWU9InBsYW5rcyI+UGxhbmtzPC9vcHRpb24+PG9wdGlvbiB2YWx1ZT0ic3RvbmUiPlN0b25lPC9vcHRpb24+PG9wdGlvbiB2YWx1ZT0iZm9vZCI+Rm9vZDwvb3B0aW9uPjxvcHRpb24gdmFsdWU9InJlc2VhcmNoIj5SZXNlYXJjaDwvb3B0aW9uPjwvc2VsZWN0PjwvbGFiZWw+DQogICAgICAgICAgPGxhYmVsPkFtb3VudDxpbnB1dCBpZD0idHJhZGUtb2ZmZXItYW1vdW50IiB0eXBlPSJudW1iZXIiIG1pbj0iMSIgbWF4PSIxMDAiIHZhbHVlPSIxIiByZXF1aXJlZD48L2xhYmVsPg0KICAgICAgICA8L2Rpdj4NCiAgICAgICAgPGRpdiBjbGFzcz0iZGltZW5zaW9uLWZpZWxkcyI+DQogICAgICAgICAgPGxhYmVsPlJlcXVlc3QgaW4gcmV0dXJuPHNlbGVjdCBpZD0idHJhZGUtd2FudC1yZXNvdXJjZSI+PG9wdGlvbiB2YWx1ZT0id29vZCI+V29vZDwvb3B0aW9uPjxvcHRpb24gdmFsdWU9InBsYW5rcyI+UGxhbmtzPC9vcHRpb24+PG9wdGlvbiB2YWx1ZT0ic3RvbmUiPlN0b25lPC9vcHRpb24+PG9wdGlvbiB2YWx1ZT0iZm9vZCI+Rm9vZDwvb3B0aW9uPjxvcHRpb24gdmFsdWU9InJlc2VhcmNoIj5SZXNlYXJjaDwvb3B0aW9uPjwvc2VsZWN0PjwvbGFiZWw+DQogICAgICAgICAgPGxhYmVsPkFtb3VudDxpbnB1dCBpZD0idHJhZGUtd2FudC1hbW91bnQiIHR5cGU9Im51bWJlciIgbWluPSIxIiBtYXg9IjEwMCIgdmFsdWU9IjEiIHJlcXVpcmVkPjwvbGFiZWw+DQogICAgICAgIDwvZGl2Pg0KICAgICAgICA8YnV0dG9uPlNlbmQgb2ZmZXI8L2J1dHRvbj4NCiAgICAgIDwvZm9ybT4NCiAgICAgIDxzZWN0aW9uIGlkPSJzYW1hcml0YW4tdHJhZGUiIGhpZGRlbj4NCiAgICAgICAgPHAgaWQ9InNhbWFyaXRhbi1yZXF1ZXN0LXN0YXR1cyIgcm9sZT0ic3RhdHVzIj5Bc2sgd2hldGhlciB0aGlzIFNhbWFyaXRhbiBoYXMgYSBzcGVjaWZpYyBtYXRlcmlhbCByZXF1ZXN0LjwvcD4NCiAgICAgICAgPGJ1dHRvbiBpZD0ic2FtYXJpdGFuLXJlcXVlc3QiIGNsYXNzPSJzZWNvbmRhcnkiPkFzayBmb3IgY3VycmVudCByZXF1ZXN0PC9idXR0b24+DQogICAgICAgIDxidXR0b24gaWQ9InNhbWFyaXRhbi1kZWxpdmVyIiBkaXNhYmxlZD5EZWxpdmVyIHJlcXVlc3RlZCBtYXRlcmlhbHM8L2J1dHRvbj4NCiAgICAgIDwvc2VjdGlvbj4NCiAgICAgIDxoMz5PZmZlcnMgYW5kIHJlcXVlc3RzPC9oMz4NCiAgICAgIDxidXR0b24gaWQ9InRyYWRlLXJlZnJlc2giIGNsYXNzPSJzZWNvbmRhcnkiPlJlZnJlc2g8L2J1dHRvbj4NCiAgICAgIDxkaXYgaWQ9InRyYWRlLWFjdGl2aXR5IiBjbGFzcz0ic21hbGwiIHJvbGU9ImxvZyIgYXJpYS1saXZlPSJwb2xpdGUiPjwvZGl2PgogICAgICA8cCBpZD0idHJhZGUtc3RhdHVzIiBjbGFzcz0idHJhZGUtcmVsZWFzZSIgcm9sZT0ic3RhdHVzIiBhcmlhLWxpdmU9InBvbGl0ZSI+PC9wPgogICAgPC9kaWFsb2c+DQogICAgPGRpYWxvZyBpZD0iaW52ZW50b3J5LWRpYWxvZyIgY2xhc3M9ImNoYXQtZGlhbG9nIiBhcmlhLWxhYmVsbGVkYnk9ImludmVudG9yeS10aXRsZSI+DQogICAgICA8aGVhZGVyPg0KICAgICAgICA8ZGl2Pg0KICAgICAgICAgIDxzcGFuIGNsYXNzPSJleWVicm93Ij5QUklWQVRFIFNFVFRMRVIgSE9MRElOR1M8L3NwYW4+DQogICAgICAgICAgPGgyIGlkPSJpbnZlbnRvcnktdGl0bGUiPllvdXIgaW52ZW50b3J5PC9oMj4NCiAgICAgICAgPC9kaXY+DQogICAgICAgIDxidXR0b24gaWQ9ImludmVudG9yeS1jbG9zZSIgY2xhc3M9InNlY29uZGFyeSI+Q2xvc2UgPGtiZD5Fc2M8L2tiZD48L2J1dHRvbj4NCiAgICAgIDwvaGVhZGVyPg0KICAgICAgPHAgY2xhc3M9InNtYWxsIj5Zb3VyIG1hdGVyaWFsIGFuZCByZXNlYXJjaCBob2xkaW5ncyBhcmUgc2hvd24gb25seSB3aGlsZSB0aGlzIGludmVudG9yeSBpcyBvcGVuLjwvcD4NCiAgICAgIDxkaXYgaWQ9ImludmVudG9yeSI+PC9kaXY+DQogICAgPC9kaWFsb2c+DQogICAgPGZvb3Rlcj4NCiAgICAgIDxzcGFuPkFQRVhGT1JHRSBDT0xMRUNUSVZFIC8gRUNIT0VTIE9GIFZJUlRVQUxJVFk8L3NwYW4NCiAgICAgID48c3Bhbj5TbWFsbCBiZWdpbm5pbmdzLiBQZXJzaXN0ZW50IGNvbnNlcXVlbmNlcy48L3NwYW4+DQogICAgPC9mb290ZXI+DQogICAgPHNjcmlwdCB0eXBlPSJtb2R1bGUiIHNyYz0iLi9hcHAuanMiPjwvc2NyaXB0Pg0KICA8L2JvZHk+DQo8L2h0bWw+DQo=
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#101e19" />
+    <meta
+      name="description"
+      content="A shared experimental world. Explore, settle, study, and talk with the Samaritans. Expect bugs — public alpha."
+    />
+    <title>Echoes of a Virtual World · Alpha</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <a class="brand" href="./"
+        >E<span>◈</span>V <small>ECHOES OF A VIRTUAL WORLD</small></a
+      ><span class="alpha">EXPECT BUGS — ALPHA</span
+      ><a href="https://github.com/themaxghoul/Echoes-of-a-Virtual-World"
+        >GitHub ↗</a
+      >
+    </header>
+    <main id="landing">
+      <div class="hero">
+        <div class="eyebrow">A WORLD WE BUILD TOGETHER / 001</div>
+        <h1>Begin with curiosity.<br /><em>Leave an echo.</em></h1>
+        <p>
+          A shared frontier for experiments, everyday life, and a civilization
+          of your own. Find a place, build something useful, and get to know the
+          minds living alongside you.
+        </p>
+        <div class="world-rule">
+          <span class="seed-mark">✳</span>
+          <div>
+            <strong>One seed. Room to discover.</strong><br />Land expands when
+            new settlers join. Your discoveries stay where you left them.
+          </div>
+        </div>
+      </div>
+      <section class="mode-section">
+        <div class="section-label">
+          <h2>Choose your window into the world</h2>
+          <span>NO FULL CLIENT REQUIRED</span>
+        </div>
+        <div class="modes">
+          <a class="mode-card" href="?mode=story"
+            ><span class="mode-number">01 / LIGHTWEIGHT</span>
+            <div class="mode-art text-art">
+              “<span>A conversation<br />can change a future.</span>”
+            </div>
+            <h3>Story & conversation</h3>
+            <p>
+              Text-based exploration, Samaritan dialogue, and explicit
+              diplomacy. No graphics engine download.
+            </p>
+            <span class="mode-link">Enter story mode ↗</span></a
+          >
+          <a class="mode-card featured" href="?mode=isometric"
+            ><span class="mode-number">02 / EXPLORE & SETTLE</span>
+            <div class="mode-art iso-art"><i></i><i></i><i></i><i></i></div>
+            <h3>The isometric world</h3>
+            <p>
+              Walk the landscape, gather resources, build a camp, and conduct
+              your first field experiments.
+            </p>
+            <span class="mode-link">Enter 2.5D world ↗</span></a
+          >
+          <a class="mode-card" href="?mode=firstperson"
+            ><span class="mode-number">03 / ON THE GROUND</span>
+            <div class="mode-art perspective-art"><span>+</span></div>
+            <h3>First-person explorer</h3>
+            <p>
+              A lightweight first-person canvas view of the same terrain,
+              people, and settlements.
+            </p>
+            <span class="mode-link">Enter first person ↗</span></a
+          >
+          <article class="mode-card future">
+            <span class="mode-number">04 / IN DEVELOPMENT</span>
+            <div class="mode-art unity-art">U<span>CLIENT</span></div>
+            <h3>Unity client</h3>
+            <p>
+              Native client development continues separately. No playable Unity
+              build has been published here yet.
+            </p>
+            <a
+              class="mode-link"
+              href="https://github.com/themaxghoul/Echoes-of-a-Virtual-World/releases"
+              >Check available releases ↗</a
+            >
+          </article>
+        </div>
+      </section>
+      <section class="notes">
+        <div>
+          <h3>Explore. Observe. Repeat.</h3>
+          <p>
+            Science begins with comparison. The alpha includes simple soil
+            sampling, resource gathering, and persistent construction. Its
+            environmental models are deliberately small and experimental.
+          </p>
+        </div>
+        <div>
+          <h3>A society, not a payout promise.</h3>
+          <p>
+            EoV credits are test currency with a transaction ledger. No cash
+            value, BTC deposits, withdrawals, or conversion. Ordinary
+            conversation does not spend your resources.
+          </p>
+        </div>
+        <div>
+          <h3>Built in the open.</h3>
+          <p>
+            Browser modules load only when needed.
+            <a
+              href="https://github.com/themaxghoul/Echoes-of-a-Virtual-World/tree/main/docs/play"
+              >Download browser source</a
+            >
+            or
+            <a
+              href="https://github.com/themaxghoul/Echoes-of-a-Virtual-World/issues/new"
+              >report an alpha bug</a
+            >. Please include your mode and steps to reproduce.
+          </p>
+        </div>
+      </section>
+      <nav id="game-tools" class="game-tools" aria-label="Game tools" hidden>
+        <a href="?mode=story" data-tool-mode="story">Story</a>
+        <a href="?mode=isometric" data-tool-mode="isometric">Isometric</a>
+        <a href="?mode=firstperson" data-tool-mode="firstperson"
+          >First person</a
+        >
+        <button data-tool-target="talk" title="Open chat without moving · T">
+          Chat · T
+        </button>
+        <button data-tool-target="trade">Trade</button>
+        <button data-action="gather">Gather</button>
+        <button data-action="research">Sample soil</button>
+        <button data-tool-target="build">Build</button>
+        <button data-tool-target="workshop">Workshop</button>
+        <button data-tool-target="inventory">Inventory</button>
+        <button data-tool-target="journal">Activity</button>
+        <button data-action="home">Home</button>
+      </nav>
+    </main>
+    <main id="game" hidden>
+      <section id="entry" class="entry">
+        <a href="./">← All game modes</a>
+        <div class="eyebrow">ENTER THE SHARED WORLD</div>
+        <h1 id="entry-title">Your journey starts here.</h1>
+        <p id="server-status" role="status">Checking world server…</p>
+        <form id="auth">
+          <label
+            >Settler name<input
+              id="name"
+              autocomplete="username"
+              minlength="3"
+              maxlength="24"
+              pattern="[A-Za-z0-9_-]+"
+              required
+              placeholder="e.g. Ada_Explorer" /></label
+          ><label
+            >Password<input
+              id="password"
+              type="password"
+              autocomplete="current-password"
+              minlength="12"
+              maxlength="128"
+              required
+              placeholder="At least 12 characters"
+          /></label>
+          <div class="buttons">
+            <button type="submit" id="join">Create settler</button
+            ><button type="button" id="login" class="secondary">Log in</button>
+          </div>
+          <p class="small">
+            Use a unique password. Alpha accounts have no password recovery yet.
+            Returning settlers can log in on another device.
+          </p>
+        </form>
+        <details>
+          <summary>Connect to another world server</summary>
+          <form id="server-form">
+            <label
+              >Backend HTTPS URL<input
+                id="server-url"
+                type="url"
+                placeholder="https://your-world-server.onrender.com" /></label
+            ><button>Save server</button>
+          </form>
+          <p class="small">
+            Only connect to a server you trust. Your login is sent to the
+            selected server. Local testing accepts localhost HTTP.
+          </p>
+        </details>
+        <p id="entry-error" class="error" role="alert"></p>
+      </section>
+      <section id="session" hidden>
+        <nav class="gamebar">
+          <a href="./">← Modes</a
+          ><strong id="world-title">The shared frontier</strong
+          ><span id="connection" role="status">Connecting…</span
+          ><button id="logout" class="secondary compact">Log out</button>
+        </nav>
+        <div class="workspace">
+          <section class="viewport">
+            <div id="scene"></div>
+            <div class="scene-label">
+              <span id="mode-label"></span><span id="coords"></span>
+            </div>
+            <div id="controls-help" class="controls-help"></div>
+            <div class="dpad" aria-label="Movement controls">
+              <button data-dx="0" data-dy="-1" aria-label="Move forward">
+                ↑
+              </button>
+              <div>
+                <button data-dx="-1" data-dy="0" aria-label="Move left">
+                  ←</button
+                ><button data-dx="0" data-dy="1" aria-label="Move backward">
+                  ↓</button
+                ><button data-dx="1" data-dy="0" aria-label="Move right">
+                  →
+                </button>
+              </div>
+            </div>
+          </section>
+          <aside class="sidebar">
+            <div class="identity">
+              <span class="eyebrow">YOUR SETTLER</span>
+              <h2 id="player-name"></h2>
+            </div>
+            <details open>
+              <summary>Make a beginning</summary>
+              <div class="action-grid">
+                <button data-action="gather">Gather nearby</button
+                ><button data-action="research">Sample soil</button
+                ><button data-action="build" data-kind="camp">
+                  Camp · 8W / 2S</button
+                ><button data-action="build" data-kind="farm">
+                  Farm · 10W / 4S</button
+                ><button data-action="build" data-kind="lab">
+                  Lab · 16W / 10S
+                </button>
+              </div>
+              <p class="small">
+                Forests → wood · Rock → stone · Meadow → food. Construction goes
+                one tile east. Walk beyond the commons to find terrain.
+              </p>
+            </details>
+            <button data-action="home" class="secondary compact">
+              Return to protected commons
+            </button>
+            <p class="small">
+              Press <kbd>T</kbd> or choose Chat to talk with settlers and the
+              Samaritans. No movement required.
+            </p>
+            <details>
+              <summary>Experimental ledger</summary>
+              <p class="small">
+                Credits have no cash value. BTC and payouts are disabled.
+              </p>
+              <button id="ledger" class="secondary">
+                View my transactions
+              </button>
+              <div id="ledger-rows" class="small"></div>
+              <form id="transfer">
+                <label class="small"
+                  >Transfer to a nearby settler<select
+                    id="recipient"
+                  ></select></label
+                ><label class="small"
+                  >Whole credits<input
+                    id="amount"
+                    type="number"
+                    min="1"
+                    max="1000000"
+                    step="1"
+                    value="1" /></label
+                ><button>Transfer credits</button>
+              </form>
+            </details>
+            <details>
+              <summary>Samaritan activity</summary>
+              <p class="small">
+                Persistent intentions and outcomes. The free alpha schedules one
+                independent decision every two hours across the three world
+                Samaritans. Conversations remain available between cycles.
+              </p>
+              <button id="agent-journal" class="secondary">
+                Read activity
+              </button>
+              <div
+                id="agent-journal-rows"
+                class="small"
+                aria-live="polite"
+              ></div>
+            </details>
+            <div id="feedback" role="status" aria-live="polite">
+              Welcome to the frontier.
+            </div>
+          </aside>
+        </div>
+      </section>
+    </main>
+    <dialog id="chat-dialog" class="chat-dialog" aria-labelledby="chat-title">
+      <header>
+        <div>
+          <span class="eyebrow">CONVERSATION · NO MOVEMENT REQUIRED</span>
+          <h2 id="chat-title">Chat with the world</h2>
+        </div>
+        <button id="chat-close" class="secondary">Close <kbd>Esc</kbd></button>
+      </header>
+      <p class="small">
+        <a href="?mode=story">Open the text story mode</a> · switch perspectives
+        from the bottom bar; this chat stays available in each view.
+      </p>
+      <div class="chat-dialog-content">
+        <div id="conversation-panel">
+          <label class="small"
+            >Choose a conversation partner<select id="npc">
+              <option value="mira">Mira · Ecologist</option>
+              <option value="oren">Oren · Builder</option>
+              <option value="sol">Sol · Mediator</option>
+              <option value="world">World chat · all players</option>
+            </select></label
+          >
+          <div id="dialogue" class="dialogue" role="log" aria-live="polite">
+            <p>
+              Ask what they need, request help, or tell them what you
+              discovered.
+            </p>
+          </div>
+          <form id="chat">
+            <label class="sr-only" for="message">Your message</label
+            ><input
+              id="message"
+              maxlength="1000"
+              required
+              placeholder="How can I help you?"
+            /><button>Send</button>
+          </form>
+          <button id="cooperate" class="secondary">Propose cooperation</button>
+        </div>
+      </div>
+      <p class="small">
+        Choose World chat to talk to settlers or a Samaritan to speak with them
+        directly. Diplomatic agreements remain explicit.
+      </p>
+    </dialog>
+    <dialog id="trade-dialog" class="workshop" aria-labelledby="trade-title">
+      <header>
+        <div>
+          <span class="eyebrow">MATERIALS · EXPLICIT CONSENT</span>
+          <h2 id="trade-title">Trade with a participant</h2>
+        </div>
+        <button id="trade-close" class="secondary">Close</button>
+      </header>
+      <p>Choose an online nearby settler or a Samaritan. Player offers move nothing until accepted. Samaritan deliveries are possible only when they have made a specific request. Experimental credits and real money are excluded.</p>
+      <label>Participant<select id="trade-partner" required>
+        <option value="">Choose a participant</option>
+      </select></label>
+      <form id="player-trade-form" hidden>
+        <div class="dimension-fields">
+          <label>Offer material<select id="trade-offer-resource"><option value="wood">Wood</option><option value="planks">Planks</option><option value="stone">Stone</option><option value="food">Food</option><option value="research">Research</option></select></label>
+          <label>Amount<input id="trade-offer-amount" type="number" min="1" max="100" value="1" required></label>
+        </div>
+        <div class="dimension-fields">
+          <label>Request in return<select id="trade-want-resource"><option value="wood">Wood</option><option value="planks">Planks</option><option value="stone">Stone</option><option value="food">Food</option><option value="research">Research</option></select></label>
+          <label>Amount<input id="trade-want-amount" type="number" min="1" max="100" value="1" required></label>
+        </div>
+        <button>Send offer</button>
+      </form>
+      <section id="samaritan-trade" hidden>
+        <p id="samaritan-request-status" role="status">Ask whether this Samaritan has a specific material request.</p>
+        <button id="samaritan-request" class="secondary">Ask for current request</button>
+        <button id="samaritan-deliver" disabled>Deliver requested materials</button>
+      </section>
+      <h3>Offers and requests</h3>
+      <button id="trade-refresh" class="secondary">Refresh</button>
+      <div id="trade-activity" class="small" role="log" aria-live="polite"></div>
+      <p id="trade-status" role="status" aria-live="polite"></p>
+    </dialog>
+    <dialog id="inventory-dialog" class="chat-dialog" aria-labelledby="inventory-title">
+      <header>
+        <div>
+          <span class="eyebrow">PRIVATE SETTLER HOLDINGS</span>
+          <h2 id="inventory-title">Your inventory</h2>
+        </div>
+        <button id="inventory-close" class="secondary">Close <kbd>Esc</kbd></button>
+      </header>
+      <p class="small">Your material and research holdings are shown only while this inventory is open.</p>
+      <div id="inventory"></div>
+    </dialog>
+    <footer>
+      <span>APEXFORGE COLLECTIVE / ECHOES OF VIRTUALITY</span
+      ><span>Small beginnings. Persistent consequences.</span>
+    </footer>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

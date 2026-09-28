@@ -1,1 +1,751 @@
-aW1wb3J0IHsgc25hcHNob3RGcmVzaCB9IGZyb20gIi4vY29ubmVjdGlvbi5qcyI7DQppbXBvcnQgeyBDaHVua1JldHJ5IH0gZnJvbSAiLi9jaHVuay1yZXRyeS5qcyI7DQpjb25zdCBjaHVua1JldHJ5ID0gbmV3IENodW5rUmV0cnkoKTsNCmxldCB3b3Jrc2hvcDsNCmNvbnN0ICQgPSAoaWQpID0+IGRvY3VtZW50LmdldEVsZW1lbnRCeUlkKGlkKTsNCmNvbnN0IG1vZGUgPSBuZXcgVVJMU2VhcmNoUGFyYW1zKGxvY2F0aW9uLnNlYXJjaCkuZ2V0KCJtb2RlIik7DQpjb25zdCBtb2RlcyA9IHsNCiAgc3Rvcnk6ICJTdG9yeSAmIGNvbnZlcnNhdGlvbiIsDQogIGlzb21ldHJpYzogIjIuNUQgaXNvbWV0cmljIHdvcmxkIiwNCiAgZmlyc3RwZXJzb246ICJGaXJzdC1wZXJzb24gZXhwbG9yZXIiLA0KfTsNCmNvbnN0IHN0b3JhZ2UgPSB7DQogIGdldChrZXkpIHsNCiAgICB0cnkgew0KICAgICAgcmV0dXJuIGxvY2FsU3RvcmFnZS5nZXRJdGVtKGtleSk7DQogICAgfSBjYXRjaCB7DQogICAgICByZXR1cm4gbnVsbDsNCiAgICB9DQogIH0sDQogIHNldChrZXksIHZhbHVlKSB7DQogICAgdHJ5IHsNCiAgICAgIGxvY2FsU3RvcmFnZS5zZXRJdGVtKGtleSwgdmFsdWUpOw0KICAgIH0gY2F0Y2gge30NCiAgfSwNCiAgcmVtb3ZlKGtleSkgew0KICAgIHRyeSB7DQogICAgICBsb2NhbFN0b3JhZ2UucmVtb3ZlSXRlbShrZXkpOw0KICAgIH0gY2F0Y2gge30NCiAgfSwNCn07DQpsZXQgc2VydmVyID0gIiIsDQogIHRva2VuID0gIiIsDQogIHNvY2tldCwNCiAgcmVjb25uZWN0LA0KICBzbmFwc2hvdCwNCiAgdmlldywNCiAga2V5cyA9IG5ldyBTZXQoKSwNCiAgcGFkID0geyB4OiAwLCB5OiAwIH0sDQogIHNlZW5NZXNzYWdlcyA9IG5ldyBTZXQoKSwNCiAgY29ubmVjdGVkID0gZmFsc2UsDQogIGxhc3RSZWNpcGllbnRzID0gIiIsDQogIGxhc3RTbmFwc2hvdCA9IDA7DQpjb25zdCBjaHVua3MgPSBuZXcgTWFwKCksDQogIHBlbmRpbmdDaHVua3MgPSBuZXcgU2V0KCk7DQpjb25zdCBpc0xvY2FsID0gWyJsb2NhbGhvc3QiLCAiMTI3LjAuMC4xIiwgIls6OjFdIl0uaW5jbHVkZXMobG9jYXRpb24uaG9zdG5hbWUpOw0KY29uc3QgZmVlZGJhY2sgPSAodGV4dCkgPT4gew0KICAkKCJmZWVkYmFjayIpLnRleHRDb250ZW50ID0gdGV4dDsNCn07DQoNCmZ1bmN0aW9uIHZhbGlkYXRlZFNlcnZlcih2YWx1ZSkgew0KICBpZiAoIXZhbHVlKSByZXR1cm4gIiI7DQogIGNvbnN0IHVybCA9IG5ldyBVUkwodmFsdWUpOw0KICBpZiAoDQogICAgdXJsLnVzZXJuYW1lIHx8DQogICAgdXJsLnBhc3N3b3JkIHx8DQogICAgdXJsLnNlYXJjaCB8fA0KICAgIHVybC5oYXNoIHx8DQogICAgKHVybC5wcm90b2NvbCAhPT0gImh0dHBzOiIgJiYNCiAgICAgICEoDQogICAgICAgIHVybC5wcm90b2NvbCA9PT0gImh0dHA6IiAmJg0KICAgICAgICBbImxvY2FsaG9zdCIsICIxMjcuMC4wLjEiLCAiWzo6MV0iXS5pbmNsdWRlcyh1cmwuaG9zdG5hbWUpDQogICAgICApKQ0KICApDQogICAgdGhyb3cgbmV3IEVycm9yKCJVc2UgSFRUUFMgZm9yIGEgcHVibGljIHNlcnZlciwgb3IgSFRUUCBvbiBsb2NhbGhvc3QuIik7DQogIHJldHVybiB1cmwuaHJlZi5yZXBsYWNlKC9cLyQvLCAiIik7DQp9DQoNCmFzeW5jIGZ1bmN0aW9uIGFwaShwYXRoLCBkYXRhLCBhdXRoID0gdHJ1ZSkgew0KICBpZiAoIXNlcnZlcikNCiAgICB0aHJvdyBuZXcgRXJyb3IoDQogICAgICAiVGhlIHB1YmxpYyBzZXJ2ZXIgaXMgbm90IGNvbmZpZ3VyZWQgeWV0LiBTZWUgaG9zdGluZyBzdGF0dXMgYWJvdmUuIiwNCiAgICApOw0KICBjb25zdCByZXNwb25zZSA9IGF3YWl0IGZldGNoKHNlcnZlciArIHBhdGgsIHsNCiAgICBtZXRob2Q6IGRhdGEgPT09IHVuZGVmaW5lZCA/ICJHRVQiIDogIlBPU1QiLA0KICAgIGhlYWRlcnM6IHsNCiAgICAgIC4uLihkYXRhID09PSB1bmRlZmluZWQgPyB7fSA6IHsgIkNvbnRlbnQtVHlwZSI6ICJhcHBsaWNhdGlvbi9qc29uIiB9KSwNCiAgICAgIC4uLihhdXRoICYmIHRva2VuID8geyBBdXRob3JpemF0aW9uOiBgQmVhcmVyICR7dG9rZW59YCB9IDoge30pLA0KICAgIH0sDQogICAgYm9keTogZGF0YSA9PT0gdW5kZWZpbmVkID8gdW5kZWZpbmVkIDogSlNPTi5zdHJpbmdpZnkoZGF0YSksDQogICAgc2lnbmFsOiBBYm9ydFNpZ25hbC50aW1lb3V0KDMwMDAwKSwNCiAgfSk7DQogIGNvbnN0IHJlc3VsdCA9IGF3YWl0IHJlc3BvbnNlLmpzb24oKTsNCiAgaWYgKCFyZXNwb25zZS5vaykgew0KICAgIGNvbnN0IGVycm9yID0gbmV3IEVycm9yKA0KICAgICAgdHlwZW9mIHJlc3VsdC5kZXRhaWwgPT09ICJzdHJpbmciDQogICAgICAgID8gcmVzdWx0LmRldGFpbA0KICAgICAgICA6IGBSZXF1ZXN0IGZhaWxlZCAoJHtyZXNwb25zZS5zdGF0dXN9KS4gQ2hlY2sgeW91ciBpbnB1dC5gLA0KICAgICk7DQogICAgZXJyb3IucmV0cnlBdCA9IHJlc3VsdC5yZXRyeUF0Ow0KICAgIHRocm93IGVycm9yOw0KICB9DQogIHJldHVybiByZXN1bHQ7DQp9DQoNCmZ1bmN0aW9uIGFkZERpYWxvZ3VlKG5hbWUsIHRleHQpIHsNCiAgY29uc3QgcCA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoInAiKSwNCiAgICBzdHJvbmcgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KCJzdHJvbmciKTsNCiAgc3Ryb25nLnRleHRDb250ZW50ID0gbmFtZTsNCiAgcC5hcHBlbmQoc3Ryb25nLCBkb2N1bWVudC5jcmVhdGVUZXh0Tm9kZSh0ZXh0KSk7DQogICQoImRpYWxvZ3VlIikuYXBwZW5kKHApOw0KICB3aGlsZSAoJCgiZGlhbG9ndWUiKS5jaGlsZHJlbi5sZW5ndGggPiAxMDApICQoImRpYWxvZ3VlIikuZmlyc3RDaGlsZC5yZW1vdmUoKTsNCiAgJCgiZGlhbG9ndWUiKS5zY3JvbGxUb3AgPSAkKCJkaWFsb2d1ZSIpLnNjcm9sbEhlaWdodDsNCn0NCg0KYXN5bmMgZnVuY3Rpb24gYWN0aW9uKGRhdGEsIHRocm93RXJyb3JzID0gZmFsc2UpIHsNCiAgaWYgKCFjb25uZWN0ZWQpIHsNCiAgICBpZiAodGhyb3dFcnJvcnMpDQogICAgICB0aHJvdyBFcnJvcigiRGlzY29ubmVjdGVkLiBXYWl0IGZvciB0aGUgd29ybGQgdG8gcmVjb25uZWN0LiIpOw0KICAgIGZlZWRiYWNrKCJEaXNjb25uZWN0ZWQuIEFjdGlvbnMgYXJlIHBhdXNlZCB1bnRpbCB0aGUgc2VydmVyIHJlY29ubmVjdHMuIik7DQogICAgcmV0dXJuIG51bGw7DQogIH0NCiAgdHJ5IHsNCiAgICBjb25zdCByZXN1bHQgPSBhd2FpdCBhcGkoIi9hcGkvY29tbWFuZCIsIHsNCiAgICAgIC4uLmRhdGEsDQogICAgICByZXF1ZXN0X2lkOiBkYXRhLnJlcXVlc3RfaWQgfHwgY3J5cHRvLnJhbmRvbVVVSUQoKSwNCiAgICB9KTsNCiAgICBmZWVkYmFjayhyZXN1bHQucmVwbHkgfHwgIkRvbmUuIik7DQogICAgcmV0dXJuIHJlc3VsdDsNCiAgfSBjYXRjaCAoZXJyb3IpIHsNCiAgICBmZWVkYmFjayhlcnJvci5tZXNzYWdlKTsNCiAgICBpZiAodGhyb3dFcnJvcnMpIHRocm93IGVycm9yOw0KICAgIHJldHVybiBudWxsOw0KICB9DQp9DQoNCmZ1bmN0aW9uIHRpbGUoeCwgeSkgew0KICBjb25zdCBjeCA9IE1hdGguZmxvb3IoeCAvIDE2KSwNCiAgICBjeSA9IE1hdGguZmxvb3IoeSAvIDE2KSwNCiAgICBjaHVuayA9IGNodW5rcy5nZXQoYCR7Y3h9LCR7Y3l9YCk7DQogIGlmICghY2h1bmspIHJldHVybiAidW5rbm93biI7DQogIHJldHVybiBjaHVuay50aWxlc1sNCiAgICAoKChNYXRoLmZsb29yKHkpICUgMTYpICsgMTYpICUgMTYpICogMTYgKyAoKChNYXRoLmZsb29yKHgpICUgMTYpICsgMTYpICUgMTYpDQogIF07DQp9DQoNCmFzeW5jIGZ1bmN0aW9uIGxvYWRDaHVua3MocCkgew0KICBjb25zdCBjeCA9IE1hdGguZmxvb3IocC54IC8gMTYpLA0KICAgIGN5ID0gTWF0aC5mbG9vcihwLnkgLyAxNik7DQogIGZvciAobGV0IHkgPSBjeSAtIDE7IHkgPD0gY3kgKyAxOyB5KyspDQogICAgZm9yIChsZXQgeCA9IGN4IC0gMTsgeCA8PSBjeCArIDE7IHgrKykgew0KICAgICAgY29uc3Qga2V5ID0gYCR7eH0sJHt5fWA7DQogICAgICBpZiAoY2h1bmtzLmhhcyhrZXkpIHx8IHBlbmRpbmdDaHVua3MuaGFzKGtleSkgfHwgIWNodW5rUmV0cnkucmVhZHkoa2V5KSkNCiAgICAgICAgY29udGludWU7DQogICAgICBwZW5kaW5nQ2h1bmtzLmFkZChrZXkpOw0KICAgICAgYXBpKGAvYXBpL2NodW5rP2N4PSR7eH0mY3k9JHt5fWApDQogICAgICAgIC50aGVuKChjaHVuaykgPT4gew0KICAgICAgICAgIGNodW5rcy5zZXQoa2V5LCBjaHVuayk7DQogICAgICAgICAgY2h1bmtSZXRyeS5zdWNjZWVkZWQoa2V5KTsNCiAgICAgICAgfSkNCiAgICAgICAgLmNhdGNoKChlcnJvcikgPT4gew0KICAgICAgICAgIGNodW5rUmV0cnkuZmFpbGVkKGtleSwgZXJyb3IpOw0KICAgICAgICAgIGZlZWRiYWNrKGVycm9yLm1lc3NhZ2UpOw0KICAgICAgICB9KQ0KICAgICAgICAuZmluYWxseSgoKSA9PiBwZW5kaW5nQ2h1bmtzLmRlbGV0ZShrZXkpKTsNCiAgICB9DQogIC8vIE5lYXJieSBjYWNoZSBzdGF5cyBib3VuZGVkIGR1cmluZyBsb25nIGpvdXJuZXlzLg0KICBmb3IgKGNvbnN0IFtrZXksIGNodW5rXSBvZiBjaHVua3MpDQogICAgaWYgKE1hdGguYWJzKGNodW5rLmN4IC0gY3gpID4gNCB8fCBNYXRoLmFicyhjaHVuay5jeSAtIGN5KSA+IDQpDQogICAgICBjaHVua3MuZGVsZXRlKGtleSk7DQp9DQoNCmZ1bmN0aW9uIGRpc3BsYXkoc3RhdGUpIHsNCiAgaWYgKHN0YXRlLm5vdGljZSAmJiBzdGF0ZS5ub3RpY2UgIT09IHNuYXBzaG90Py5ub3RpY2UpIGZlZWRiYWNrKHN0YXRlLm5vdGljZSk7DQogIHNuYXBzaG90ID0gc3RhdGU7DQogIHdvcmtzaG9wPy51cGRhdGUoc3RhdGUpOw0KICAkKCJwbGF5ZXItbmFtZSIpLnRleHRDb250ZW50ID0gc3RhdGUuc2VsZi5uYW1lOw0KICAkKCJjb29yZHMiKS50ZXh0Q29udGVudCA9DQogICAgYCR7c3RhdGUuc2VsZi54LnRvRml4ZWQoMSl9LCAke3N0YXRlLnNlbGYueS50b0ZpeGVkKDEpfSDCtyAke3N0YXRlLndvcmxkLm1lbWJlcnN9IHNldHRsZXJzIMK3ICR7c3RhdGUud29ybGQucmFkaXVzICogMn3CsiB0aWxlc2A7DQogIGNvbnN0IGludmVudG9yeSA9IFsNCiAgICBbIldvb2QiLCBzdGF0ZS5zZWxmLndvb2RdLA0KICAgIFsiUGxhbmtzIiwgc3RhdGUuc2VsZi5wbGFua3MgfHwgMF0sDQogICAgWyJTdG9uZSIsIHN0YXRlLnNlbGYuc3RvbmVdLA0KICAgIFsiRm9vZCIsIHN0YXRlLnNlbGYuZm9vZF0sDQogICAgWyJSZXNlYXJjaCIsIHN0YXRlLnNlbGYucmVzZWFyY2hdLA0KICAgIFsiQ3JlZGl0cyIsIHN0YXRlLnNlbGYuY3JlZGl0c10sDQogICAgWyJSZXB1dGF0aW9uIiwgc3RhdGUuc2VsZi5yZXB1dGF0aW9uXSwNCiAgXTsNCiAgJCgiaW52ZW50b3J5IikucmVwbGFjZUNoaWxkcmVuKA0KICAgIC4uLmludmVudG9yeS5tYXAoKFtsYWJlbCwgdmFsdWVdKSA9PiB7DQogICAgICBjb25zdCBzID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudCgic3BhbiIpOw0KICAgICAgcy50ZXh0Q29udGVudCA9IGAke2xhYmVsfSDCtyAke3ZhbHVlfWA7DQogICAgICByZXR1cm4gczsNCiAgICB9KSwNCiAgKTsNCiAgY29uc3QgcmVjaXBpZW50cyA9IEpTT04uc3RyaW5naWZ5KA0KICAgIHN0YXRlLnBsYXllcnMubWFwKChwKSA9PiAoeyBpZDogcC5pZCwgbmFtZTogcC5uYW1lIH0pKSwNCiAgKTsNCiAgaWYgKHJlY2lwaWVudHMgIT09IGxhc3RSZWNpcGllbnRzKSB7DQogICAgbGFzdFJlY2lwaWVudHMgPSByZWNpcGllbnRzOw0KICAgIGNvbnN0IHNlbGVjdGVkID0gJCgicmVjaXBpZW50IikudmFsdWU7DQogICAgJCgicmVjaXBpZW50IikucmVwbGFjZUNoaWxkcmVuKA0KICAgICAgLi4uc3RhdGUucGxheWVycy5tYXAoKHApID0+IHsNCiAgICAgICAgY29uc3QgbyA9IGRvY3VtZW50LmNyZWF0ZUVsZW1lbnQoIm9wdGlvbiIpOw0KICAgICAgICBvLnZhbHVlID0gcC5pZDsNCiAgICAgICAgby50ZXh0Q29udGVudCA9IHAubmFtZTsNCiAgICAgICAgcmV0dXJuIG87DQogICAgICB9KSwNCiAgICApOw0KICAgIGlmIChzdGF0ZS5wbGF5ZXJzLnNvbWUoKHApID0+IHAuaWQgPT09IHNlbGVjdGVkKSkNCiAgICAgICQoInJlY2lwaWVudCIpLnZhbHVlID0gc2VsZWN0ZWQ7DQogIH0NCiAgZm9yIChjb25zdCBtc2cgb2Ygc3RhdGUubWVzc2FnZXMpDQogICAgaWYgKCFzZWVuTWVzc2FnZXMuaGFzKG1zZy5pZCkpIHsNCiAgICAgIHNlZW5NZXNzYWdlcy5hZGQobXNnLmlkKTsNCiAgICAgIGFkZERpYWxvZ3VlKGAke21zZy5uYW1lfSDCtyB3b3JsZGAsIG1zZy50ZXh0KTsNCiAgICB9DQogIGlmIChzZWVuTWVzc2FnZXMuc2l6ZSA+IDEwMDApDQogICAgc2Vlbk1lc3NhZ2VzID0gbmV3IFNldChzdGF0ZS5tZXNzYWdlcy5tYXAoKG0pID0+IG0uaWQpKTsNCiAgbG9hZENodW5rcyhzdGF0ZS5zZWxmKTsNCiAgdmlldz8udXBkYXRlKHN0YXRlKTsNCn0NCg0KZnVuY3Rpb24gY29ubmVjdCgpIHsNCiAgY2xlYXJUaW1lb3V0KHJlY29ubmVjdCk7DQogIGxhc3RTbmFwc2hvdCA9IDA7DQogIHNvY2tldCA9IG5ldyBXZWJTb2NrZXQoc2VydmVyLnJlcGxhY2UoL15odHRwLywgIndzIikgKyAiL3dzIik7DQogIHNvY2tldC5vbm9wZW4gPSAoKSA9PiBzb2NrZXQuc2VuZChKU09OLnN0cmluZ2lmeSh7IHRva2VuIH0pKTsNCiAgc29ja2V0Lm9ubWVzc2FnZSA9IChldmVudCkgPT4gew0KICAgIGNvbnN0IGRhdGEgPSBKU09OLnBhcnNlKGV2ZW50LmRhdGEpOw0KICAgIGlmIChkYXRhLnR5cGUgPT09ICJzbmFwc2hvdCIpIHsNCiAgICAgIGxhc3RTbmFwc2hvdCA9IHBlcmZvcm1hbmNlLm5vdygpOw0KICAgICAgY29ubmVjdGVkID0gdHJ1ZTsNCiAgICAgICQoImNvbm5lY3Rpb24iKS50ZXh0Q29udGVudCA9ICLil48gQ29ubmVjdGVkIHRvIHNoYXJlZCB3b3JsZCI7DQogICAgICBkaXNwbGF5KGRhdGEpOw0KICAgIH0gZWxzZSBpZiAoZGF0YS50eXBlID09PSAiZXJyb3IiKSBmZWVkYmFjayhkYXRhLm1lc3NhZ2UpOw0KICAgIGVsc2UgaWYgKGRhdGEucmVwbHkpIGZlZWRiYWNrKGRhdGEucmVwbHkpOw0KICB9Ow0KICBzb2NrZXQub25jbG9zZSA9IChldmVudCkgPT4gew0KICAgIGNvbm5lY3RlZCA9IGZhbHNlOw0KICAgIGtleXMuY2xlYXIoKTsNCiAgICBwYWQgPSB7IHg6IDAsIHk6IDAgfTsNCiAgICAkKCJjb25uZWN0aW9uIikudGV4dENvbnRlbnQgPSAi4peLIERpc2Nvbm5lY3RlZCDCtyBhY3Rpb25zIHBhdXNlZCI7DQogICAgaWYgKGV2ZW50LmNvZGUgPT09IDEwMDgpIHsNCiAgICAgIHN0b3JhZ2UucmVtb3ZlKGBlb3Y6dG9rZW46JHtzZXJ2ZXJ9YCk7DQogICAgICAkKCJlbnRyeS1lcnJvciIpLnRleHRDb250ZW50ID0NCiAgICAgICAgIlNlc3Npb24gZXhwaXJlZCBvciBzZXJ2ZXIgYWNjZXNzIGRlbmllZC4gUGxlYXNlIGxvZyBpbiBhZ2Fpbi4iOw0KICAgICAgJCgiZW50cnkiKS5oaWRkZW4gPSBmYWxzZTsNCiAgICAgICQoInNlc3Npb24iKS5oaWRkZW4gPSB0cnVlOw0KICAgICAgcmV0dXJuOw0KICAgIH0NCiAgICBmZWVkYmFjaygNCiAgICAgIGV2ZW50LmNvZGUgPT09IDEwMTMNCiAgICAgICAgPyAiV29ybGQg…4275 tokens truncated…IGV2ZW50LnByZXZlbnREZWZhdWx0KCk7DQogICAgY29uc3QgcmVjaXBpZW50ID0gJCgidHJhZGUtcGFydG5lciIpLnZhbHVlLnJlcGxhY2UoL15wbGF5ZXI6LywgIiIpOw0KICAgIGF3YWl0IHN1Ym1pdFRyYWRlKHsNCiAgICAgIGFjdGlvbjogIm9mZmVyIiwNCiAgICAgIHJlY2lwaWVudCwNCiAgICAgIG9mZmVyUmVzb3VyY2U6ICQoInRyYWRlLW9mZmVyLXJlc291cmNlIikudmFsdWUsDQogICAgICBvZmZlckFtb3VudDogTnVtYmVyKCQoInRyYWRlLW9mZmVyLWFtb3VudCIpLnZhbHVlKSwNCiAgICAgIHdhbnRSZXNvdXJjZTogJCgidHJhZGUtd2FudC1yZXNvdXJjZSIpLnZhbHVlLA0KICAgICAgd2FudEFtb3VudDogTnVtYmVyKCQoInRyYWRlLXdhbnQtYW1vdW50IikudmFsdWUpLA0KICAgIH0pOw0KICB9Ow0KICAkKCJzYW1hcml0YW4tcmVxdWVzdCIpLm9uY2xpY2sgPSBhc3luYyAoKSA9PiB7DQogICAgY29uc3QgcGFydGljaXBhbnRJZCA9ICQoInRyYWRlLXBhcnRuZXIiKS52YWx1ZS5yZXBsYWNlKC9ec2FtYXJpdGFuOi8sICIiKTsNCiAgICBpZiAoIXBhcnRpY2lwYW50SWQpIHJldHVybjsNCiAgICAkKCJzYW1hcml0YW4tcmVxdWVzdCIpLmRpc2FibGVkID0gdHJ1ZTsNCiAgICB0cnkgew0KICAgICAgY29uc3QgcmVzdWx0ID0gYXdhaXQgYXBpKCIvYXBpL3RyYWRlcyIsIHsgYWN0aW9uOiAicmVxdWVzdCIsIHBhcnRpY2lwYW50SWQgfSk7DQogICAgICB0cmFkZVN0YXR1cyhyZXN1bHQucmVwbHkpOw0KICAgICAgYXdhaXQgcmVmcmVzaFRyYWRlcygpOw0KICAgICAgZGlzcGxheShzbmFwc2hvdCk7DQogICAgfSBjYXRjaCAoZXJyb3IpIHsNCiAgICAgIHRyYWRlU3RhdHVzKGVycm9yLm1lc3NhZ2UpOw0KICAgIH0gZmluYWxseSB7DQogICAgICAkKCJzYW1hcml0YW4tcmVxdWVzdCIpLmRpc2FibGVkID0gZmFsc2U7DQogICAgfQ0KICB9Ow0KICAkKCJzYW1hcml0YW4tZGVsaXZlciIpLm9uY2xpY2sgPSBhc3luYyAoKSA9PiB7DQogICAgaWYgKCFhY3RpdmVUcmFkZVJlcXVlc3QpIHJldHVybjsNCiAgICBhd2FpdCBzdWJtaXRUcmFkZSh7IGFjdGlvbjogImRlbGl2ZXIiLCByZXF1ZXN0SWQ6IGFjdGl2ZVRyYWRlUmVxdWVzdC5pZCB9KTsNCiAgfTsNCiAgJCgiY2hhdC1kaWFsb2ciKS5hZGRFdmVudExpc3RlbmVyKCJjbGljayIsIChlKSA9PiB7DQogICAgaWYgKGUudGFyZ2V0ID09PSAkKCJjaGF0LWRpYWxvZyIpKSAkKCJjaGF0LWRpYWxvZyIpLmNsb3NlKCk7DQogIH0pOw0KICBkb2N1bWVudC5xdWVyeVNlbGVjdG9yQWxsKCJbZGF0YS1hY3Rpb25dIikuZm9yRWFjaCgNCiAgICAoYnV0dG9uKSA9Pg0KICAgICAgKGJ1dHRvbi5vbmNsaWNrID0gKCkgPT4NCiAgICAgICAgYWN0aW9uKHsNCiAgICAgICAgICB0eXBlOiBidXR0b24uZGF0YXNldC5hY3Rpb24sDQogICAgICAgICAgLi4uKGJ1dHRvbi5kYXRhc2V0LmtpbmQgPyB7IGtpbmQ6IGJ1dHRvbi5kYXRhc2V0LmtpbmQgfSA6IHt9KSwNCiAgICAgICAgfSkpLA0KICApOw0KICAkKCJjaGF0Iikub25zdWJtaXQgPSBhc3luYyAoZSkgPT4gew0KICAgIGUucHJldmVudERlZmF1bHQoKTsNCiAgICBjb25zdCB0ZXh0ID0gJCgibWVzc2FnZSIpLnZhbHVlLA0KICAgICAgbnBjID0gJCgibnBjIikudmFsdWU7DQogICAgY29uc3QgcmVzdWx0ID0gYXdhaXQgYWN0aW9uKHsNCiAgICAgIHR5cGU6IG5wYyA9PT0gIndvcmxkIiA/ICJjaGF0IiA6ICJ0YWxrIiwNCiAgICAgIHRleHQsDQogICAgICBucGMsDQogICAgfSk7DQogICAgaWYgKHJlc3VsdCkgew0KICAgICAgJCgibWVzc2FnZSIpLnZhbHVlID0gIiI7DQogICAgICBpZiAobnBjICE9PSAid29ybGQiKSB7DQogICAgICAgIGFkZERpYWxvZ3VlKHNuYXBzaG90LnNlbGYubmFtZSwgdGV4dCk7DQogICAgICAgIGFkZERpYWxvZ3VlKHJlc3VsdC5ucGMgfHwgbnBjLCByZXN1bHQucmVwbHkpOw0KICAgICAgfQ0KICAgIH0NCiAgfTsNCiAgJCgiY29vcGVyYXRlIikub25jbGljayA9ICgpID0+IHsNCiAgICBpZiAoJCgibnBjIikudmFsdWUgPT09ICJ3b3JsZCIpIHsNCiAgICAgIGZlZWRiYWNrKCJDaG9vc2UgYSBTYW1hcml0YW4gYmVmb3JlIHByb3Bvc2luZyBjb29wZXJhdGlvbi4iKTsNCiAgICAgIHJldHVybjsNCiAgICB9DQogICAgYWN0aW9uKHsgdHlwZTogImRpcGxvbWFjeSIsIG5wYzogJCgibnBjIikudmFsdWUgfSk7DQogIH07DQogICQoImxlZGdlciIpLm9uY2xpY2sgPSBhc3luYyAoKSA9PiB7DQogICAgdHJ5IHsNCiAgICAgIGNvbnN0IHJvd3MgPSBhd2FpdCBhcGkoIi9hcGkvbGVkZ2VyIik7DQogICAgICAkKCJsZWRnZXItcm93cyIpLnJlcGxhY2VDaGlsZHJlbigNCiAgICAgICAgLi4ucm93cy5tYXAoKHJvdykgPT4gew0KICAgICAgICAgIGNvbnN0IHAgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KCJwIik7DQogICAgICAgICAgcC50ZXh0Q29udGVudCA9IGAke3Jvdy5hbW91bnQgPiAwID8gIisiIDogIiJ9JHtyb3cuYW1vdW50fSDCtyAke3Jvdy5yZWFzb259YDsNCiAgICAgICAgICByZXR1cm4gcDsNCiAgICAgICAgfSksDQogICAgICApOw0KICAgIH0gY2F0Y2ggKGVycm9yKSB7DQogICAgICBmZWVkYmFjayhlcnJvci5tZXNzYWdlKTsNCiAgICB9DQogIH07DQogICQoImFnZW50LWpvdXJuYWwiKS5vbmNsaWNrID0gYXN5bmMgKCkgPT4gew0KICAgIHRyeSB7DQogICAgICBjb25zdCBkYXRhID0gYXdhaXQgYXBpKCIvYXBpL2FnZW50cyIpOw0KICAgICAgY29uc3QgbGluZXMgPSBkYXRhLmpvdXJuYWwubGVuZ3RoDQogICAgICAgID8gZGF0YS5qb3VybmFsLm1hcCgNCiAgICAgICAgICAgIChyb3cpID0+DQogICAgICAgICAgICAgIGAke25ldyBEYXRlKHJvdy5jcmVhdGVkKS50b0xvY2FsZVN0cmluZygpfSDCtyAke3Jvdy5hZ2VudH0gwrcgJHtyb3cuc3RhdHVzfTogJHtyb3cuaW50ZW50aW9ufSAke3Jvdy5jb25zZXF1ZW5jZX1gLA0KICAgICAgICAgICkNCiAgICAgICAgOiBbIk5vIGluZGVwZW5kZW50IGRlY2lzaW9ucyByZWNvcmRlZCB5ZXQuIl07DQogICAgICBsaW5lcy5wdXNoKA0KICAgICAgICBkYXRhLm5leHRDeWNsZQ0KICAgICAgICAgID8gYE5leHQgc2NoZWR1bGVkIGRlY2lzaW9uOiAke25ldyBEYXRlKGRhdGEubmV4dEN5Y2xlKS50b0xvY2FsZVN0cmluZygpfWANCiAgICAgICAgICA6ICJCYWNrZ3JvdW5kIHJlYXNvbmluZyBpcyBub3Qgc2NoZWR1bGVkIG9uIHRoaXMgc2VydmVyLiIsDQogICAgICApOw0KICAgICAgJCgiYWdlbnQtam91cm5hbC1yb3dzIikucmVwbGFjZUNoaWxkcmVuKA0KICAgICAgICAuLi5saW5lcy5tYXAoKHRleHQpID0+IHsNCiAgICAgICAgICBjb25zdCBwID0gZG9jdW1lbnQuY3JlYXRlRWxlbWVudCgicCIpOw0KICAgICAgICAgIHAudGV4dENvbnRlbnQgPSB0ZXh0Ow0KICAgICAgICAgIHJldHVybiBwOw0KICAgICAgICB9KSwNCiAgICAgICk7DQogICAgfSBjYXRjaCAoZXJyb3IpIHsNCiAgICAgIGZlZWRiYWNrKGVycm9yLm1lc3NhZ2UpOw0KICAgIH0NCiAgfTsNCiAgJCgidHJhbnNmZXIiKS5vbnN1Ym1pdCA9IChlKSA9PiB7DQogICAgZS5wcmV2ZW50RGVmYXVsdCgpOw0KICAgIGFjdGlvbih7DQogICAgICB0eXBlOiAidHJhbnNmZXIiLA0KICAgICAgdG86ICQoInJlY2lwaWVudCIpLnZhbHVlLA0KICAgICAgYW1vdW50OiBOdW1iZXIoJCgiYW1vdW50IikudmFsdWUpLA0KICAgIH0pOw0KICB9Ow0KICB3aW5kb3cuYWRkRXZlbnRMaXN0ZW5lcigia2V5ZG93biIsIChlKSA9PiB7DQogICAgaWYgKHR5cGVvZiBlLmtleSAhPT0gInN0cmluZyIpIHJldHVybjsNCiAgICBjb25zdCBjaGF0ID0gJCgiY2hhdC1kaWFsb2ciKTsNCiAgICAvLyBFc2NhcGUgY2xvc2VzIGNoYXQgd2hlcmV2ZXIgZm9jdXMgaXMuIFQgb3BlbnMgY2hhdCBhbmQgaXMgbmV2ZXIgYSB0b2dnbGUuDQogICAgaWYgKGUua2V5ID09PSAiRXNjYXBlIiAmJiBjaGF0Lm9wZW4pIHsNCiAgICAgIGUucHJldmVudERlZmF1bHQoKTsNCiAgICAgIGNoYXQuY2xvc2UoKTsNCiAgICAgIHJldHVybjsNCiAgICB9DQogICAgaWYgKAogICAgICBlLmNvZGUgPT09ICJLZXlUIiAmJgogICAgICAhZS5yZXBlYXQgJiYNCiAgICAgICFlLmlzQ29tcG9zaW5nICYmDQogICAgICAhZS5hbHRLZXkgJiYNCiAgICAgICFlLmN0cmxLZXkgJiYNCiAgICAgICFlLm1ldGFLZXkgJiYNCiAgICAgICFjaGF0Lm9wZW4gJiYNCiAgICAgICFbIklOUFVUIiwgIlNFTEVDVCIsICJURVhUQVJFQSJdLmluY2x1ZGVzKGRvY3VtZW50LmFjdGl2ZUVsZW1lbnQudGFnTmFtZSkNCiAgICApIHsNCiAgICAgIGUucHJldmVudERlZmF1bHQoKTsNCiAgICAgIGtleXMuY2xlYXIoKTsNCiAgICAgIHBhZC54ID0gcGFkLnkgPSAwOw0KICAgICAgaWYgKCFkb2N1bWVudC5xdWVyeVNlbGVjdG9yKCJkaWFsb2dbb3Blbl0iKSkgew0KICAgICAgICBjaGF0LnNob3dNb2RhbCgpOw0KICAgICAgICAkKCJtZXNzYWdlIikuZm9jdXMoKTsNCiAgICAgIH0NCiAgICAgIHJldHVybjsKICAgIH0KICAgIGNvbnN0IHNob3J0Y3V0VGFyZ2V0ID0gZS50YXJnZXQ7CiAgICBjb25zdCBjYW5Vc2VTaG9ydGN1dCA9ICFlLnJlcGVhdCAmJiAhZS5pc0NvbXBvc2luZyAmJiAhZS5hbHRLZXkgJiYgIWUuY3RybEtleSAmJiAhZS5tZXRhS2V5ICYmCiAgICAgICFbIklOUFVUIiwgIlNFTEVDVCIsICJURVhUQVJFQSIsICJCVVRUT04iXS5pbmNsdWRlcyhzaG9ydGN1dFRhcmdldD8udGFnTmFtZSkgJiYKICAgICAgIXNob3J0Y3V0VGFyZ2V0Py5pc0NvbnRlbnRFZGl0YWJsZTsKICAgIGlmIChjYW5Vc2VTaG9ydGN1dCAmJiAhZG9jdW1lbnQucXVlcnlTZWxlY3RvcigiZGlhbG9nW29wZW5dIikgJiYgbW9kZSAhPT0gInN0b3J5IikgewogICAgICBjb25zdCBzaG9ydGN1dCA9IGUua2V5LnRvTG93ZXJDYXNlKCk7CiAgICAgIGlmIChzaG9ydGN1dCA9PT0gImkiKSB7CiAgICAgICAgZS5wcmV2ZW50RGVmYXVsdCgpOwogICAgICAgIGNvbnN0IG9wZW5NZW51cyA9ICQoInNlc3Npb24iKS5xdWVyeVNlbGVjdG9yQWxsKCJkZXRhaWxzW29wZW5dIik7CiAgICAgICAgaWYgKG9wZW5NZW51cy5sZW5ndGgpIGZlZWRiYWNrKCJDbG9zZSBhbGwgb3RoZXIgbWVudXMgYmVmb3JlIG9wZW5pbmcgSW52ZW50b3J5LiIpOwogICAgICAgIGVsc2UgJCgiaW52ZW50b3J5LWRpYWxvZyIpLnNob3dNb2RhbCgpOwogICAgICAgIHJldHVybjsKICAgICAgfQogICAgICBpZiAoc2hvcnRjdXQgPT09ICJjIikgewogICAgICAgIGUucHJldmVudERlZmF1bHQoKTsKICAgICAgICBkb2N1bWVudC5xdWVyeVNlbGVjdG9yKCdbZGF0YS10b29sLXRhcmdldD0id29ya3Nob3AiXScpPy5jbGljaygpOwogICAgICAgIHJldHVybjsKICAgICAgfQogICAgfQogICAgY29uc3QgdHlwaW5nID0gWyJJTlBVVCIsICJTRUxFQ1QiLCAiVEVYVEFSRUEiXS5pbmNsdWRlcygNCiAgICAgIGRvY3VtZW50LmFjdGl2ZUVsZW1lbnQudGFnTmFtZSwNCiAgICApOw0KICAgIGlmIChkb2N1bWVudC5xdWVyeVNlbGVjdG9yKCJkaWFsb2dbb3Blbl0iKSB8fCBtb2RlID09PSAic3RvcnkiKSByZXR1cm47DQogICAgaWYgKA0KICAgICAgWyJJTlBVVCIsICJTRUxFQ1QiLCAiVEVYVEFSRUEiLCAiQlVUVE9OIl0uaW5jbHVkZXMoDQogICAgICAgIGRvY3VtZW50LmFjdGl2ZUVsZW1lbnQudGFnTmFtZSwNCiAgICAgICkNCiAgICApDQogICAgICByZXR1cm47DQogICAgY29uc3Qga2V5ID0gZS5rZXkudG9Mb3dlckNhc2UoKTsNCiAgICBpZiAoDQogICAgICBbDQogICAgICAgICJ3IiwNCiAgICAgICAgImEiLA0KICAgICAgICAicyIsDQogICAgICAgICJkIiwNCiAgICAgICAgImFycm93dXAiLA0KICAgICAgICAiYXJyb3dkb3duIiwNCiAgICAgICAgImFycm93bGVmdCIsDQogICAgICAgICJhcnJvd3JpZ2h0IiwNCiAgICAgIF0uaW5jbHVkZXMoa2V5KQ0KICAgICkgew0KICAgICAgZS5wcmV2ZW50RGVmYXVsdCgpOw0KICAgICAga2V5cy5hZGQoa2V5KTsNCiAgICB9DQogICAgaWYgKCFlLnJlcGVhdCAmJiBrZXkgPT09ICJlIikgYWN0aW9uKHsgdHlwZTogImdhdGhlciIgfSk7DQogICAgaWYgKCFlLnJlcGVhdCAmJiBrZXkgPT09ICJyIikgYWN0aW9uKHsgdHlwZTogInJlc2VhcmNoIiB9KTsNCiAgfSk7DQogIHdpbmRvdy5hZGRFdmVudExpc3RlbmVyKCJrZXl1cCIsIChlKSA9PiBrZXlzLmRlbGV0ZShlLmtleT8udG9Mb3dlckNhc2UoKSkpOw0KICBjb25zdCBzdG9wID0gKCkgPT4gew0KICAgIGtleXMuY2xlYXIoKTsNCiAgICBwYWQgPSB7IHg6IDAsIHk6IDAgfTsNCiAgfTsNCiAgd2luZG93LmFkZEV2ZW50TGlzdGVuZXIoImJsdXIiLCBzdG9wKTsNCiAgZG9jdW1lbnQuYWRkRXZlbnRMaXN0ZW5lcigidmlzaWJpbGl0eWNoYW5nZSIsICgpID0+IHsNCiAgICBpZiAoZG9jdW1lbnQuaGlkZGVuKSBzdG9wKCk7DQogIH0pOw0KICBkb2N1bWVudC5xdWVyeVNlbGVjdG9yQWxsKCJbZGF0YS1keF0iKS5mb3JFYWNoKChidXR0b24pID0+IHsNCiAgICBsZXQgc3RhcnRlZCA9IDA7DQogICAgYnV0dG9uLm9ucG9pbnRlcmRvd24gPSAoZSkgPT4gew0KICAgICAgZS5wcmV2ZW50RGVmYXVsdCgpOw0KICAgICAgYnV0dG9uLnNldFBvaW50ZXJDYXB0dXJlKGUucG9pbnRlcklkKTsNCiAgICAgIHN0YXJ0ZWQgPSBwZXJmb3JtYW5jZS5ub3coKTsNCiAgICAgIHBhZCA9IHsgeDogTnVtYmVyKGJ1dHRvbi5kYXRhc2V0LmR4KSwgeTogTnVtYmVyKGJ1dHRvbi5kYXRhc2V0LmR5KSB9Ow0KICAgICAgaW5wdXRUaWNrKCk7DQogICAgfTsNCiAgICBidXR0b24ub25wb2ludGVydXAgPSAoKSA9PiB7DQogICAgICBzZXRUaW1lb3V0KA0KICAgICAgICAoKSA9PiB7DQogICAgICAgICAgcGFkID0geyB4OiAwLCB5OiAwIH07DQogICAgICAgIH0sDQogICAgICAgIE1hdGgubWF4KDAsIDEyMCAtIChwZXJmb3JtYW5jZS5ub3coKSAtIHN0YXJ0ZWQpKSwNCiAgICAgICk7DQogICAgfTsNCiAgICBidXR0b24ub25wb2ludGVyY2FuY2VsID0gKCkgPT4gew0KICAgICAgcGFkID0geyB4OiAwLCB5OiAwIH07DQogICAgfTsNCiAgfSk7DQogIHNldEludGVydmFsKGlucHV0VGljaywgNTApOw0KICBzZXRJbnRlcnZhbCgoKSA9PiB7DQogICAgaWYgKGNvbm5lY3RlZCAmJiAhc25hcHNob3RGcmVzaChsYXN0U25hcHNob3QsIHBlcmZvcm1hbmNlLm5vdygpKSkgew0KICAgICAgY29ubmVjdGVkID0gZmFsc2U7DQogICAgICBrZXlzLmNsZWFyKCk7DQogICAgICBwYWQgPSB7IHg6IDAsIHk6IDAgfTsNCiAgICAgICQoImNvbm5lY3Rpb24iKS50ZXh0Q29udGVudCA9DQogICAgICAgICLil4sgU2VydmVyIHN0b3BwZWQgcmVzcG9uZGluZyDCtyBhY3Rpb25zIHBhdXNlZCI7DQogICAgICBmZWVkYmFjaygiTm8gd29ybGQgdXBkYXRlcyBmb3IgZml2ZSBzZWNvbmRzLiBSZWNvbm5lY3RpbmfigKYiKTsNCiAgICAgIGlmIChzb2NrZXQpIHsNCiAgICAgICAgc29ja2V0Lm9uY2xvc2UgPSBudWxsOw0KICAgICAgICBzb2NrZXQuY2xvc2UoKTsNCiAgICAgIH0NCiAgICAgIHJlY29ubmVjdCA9IHNldFRpbWVvdXQoY29ubmVjdCwgMTAwMCk7DQogICAgfQ0KICB9LCAxMDAwKTsNCn0NCg==
+import { snapshotFresh } from "./connection.js";
+import { ChunkRetry } from "./chunk-retry.js";
+const chunkRetry = new ChunkRetry();
+let workshop;
+const $ = (id) => document.getElementById(id);
+const mode = new URLSearchParams(location.search).get("mode");
+const modes = {
+  story: "Story & conversation",
+  isometric: "2.5D isometric world",
+  firstperson: "First-person explorer",
+};
+const storage = {
+  get(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  },
+  set(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch {}
+  },
+  remove(key) {
+    try {
+      localStorage.removeItem(key);
+    } catch {}
+  },
+};
+let server = "",
+  token = "",
+  socket,
+  reconnect,
+  snapshot,
+  view,
+  keys = new Set(),
+  pad = { x: 0, y: 0 },
+  seenMessages = new Set(),
+  connected = false,
+  lastRecipients = "",
+  lastSnapshot = 0;
+const chunks = new Map(),
+  pendingChunks = new Set();
+const isLocal = ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname);
+const feedback = (text) => {
+  $("feedback").textContent = text;
+};
+
+function validatedServer(value) {
+  if (!value) return "";
+  const url = new URL(value);
+  if (
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    (url.protocol !== "https:" &&
+      !(
+        url.protocol === "http:" &&
+        ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)
+      ))
+  )
+    throw new Error("Use HTTPS for a public server, or HTTP on localhost.");
+  return url.href.replace(/\/$/, "");
+}
+
+async function api(path, data, auth = true) {
+  if (!server)
+    throw new Error(
+      "The public server is not configured yet. See hosting status above.",
+    );
+  const response = await fetch(server + path, {
+    method: data === undefined ? "GET" : "POST",
+    headers: {
+      ...(data === undefined ? {} : { "Content-Type": "application/json" }),
+      ...(auth && token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: data === undefined ? undefined : JSON.stringify(data),
+    signal: AbortSignal.timeout(30000),
+  });
+  const result = await response.json();
+  if (!response.ok) {
+    const error = new Error(
+      typeof result.detail === "string"
+        ? result.detail
+        : `Request failed (${response.status}). Check your input.`,
+    );
+    error.retryAt = result.retryAt;
+    throw error;
+  }
+  return result;
+}
+
+function addDialogue(name, text) {
+  const p = document.createElement("p"),
+    strong = document.createElement("strong");
+  strong.textContent = name;
+  p.append(strong, document.createTextNode(text));
+  $("dialogue").append(p);
+  while ($("dialogue").children.length > 100) $("dialogue").firstChild.remove();
+  $("dialogue").scrollTop = $("dialogue").scrollHeight;
+}
+
+async function action(data, throwErrors = false) {
+  if (!connected) {
+    if (throwErrors)
+      throw Error("Disconnected. Wait for the world to reconnect.");
+    feedback("Disconnected. Actions are paused until the server reconnects.");
+    return null;
+  }
+  try {
+    const result = await api("/api/command", {
+      ...data,
+      request_id: data.request_id || crypto.randomUUID(),
+    });
+    feedback(result.reply || "Done.");
+    return result;
+  } catch (error) {
+    feedback(error.message);
+    if (throwErrors) throw error;
+    return null;
+  }
+}
+
+function tile(x, y) {
+  const cx = Math.floor(x / 16),
+    cy = Math.floor(y / 16),
+    chunk = chunks.get(`${cx},${cy}`);
+  if (!chunk) return "unknown";
+  return chunk.tiles[
+    (((Math.floor(y) % 16) + 16) % 16) * 16 + (((Math.floor(x) % 16) + 16) % 16)
+  ];
+}
+
+async function loadChunks(p) {
+  const cx = Math.floor(p.x / 16),
+    cy = Math.floor(p.y / 16);
+  for (let y = cy - 1; y <= cy + 1; y++)
+    for (let x = cx - 1; x <= cx + 1; x++) {
+      const key = `${x},${y}`;
+      if (chunks.has(key) || pendingChunks.has(key) || !chunkRetry.ready(key))
+        continue;
+      pendingChunks.add(key);
+      api(`/api/chunk?cx=${x}&cy=${y}`)
+        .then((chunk) => {
+          chunks.set(key, chunk);
+          chunkRetry.succeeded(key);
+        })
+        .catch((error) => {
+          chunkRetry.failed(key, error);
+          feedback(error.message);
+        })
+        .finally(() => pendingChunks.delete(key));
+    }
+  // Nearby cache stays bounded during long journeys.
+  for (const [key, chunk] of chunks)
+    if (Math.abs(chunk.cx - cx) > 4 || Math.abs(chunk.cy - cy) > 4)
+      chunks.delete(key);
+}
+
+function display(state) {
+  if (state.notice && state.notice !== snapshot?.notice) feedback(state.notice);
+  snapshot = state;
+  workshop?.update(state);
+  $("player-name").textContent = state.self.name;
+  $("coords").textContent =
+    `${state.self.x.toFixed(1)}, ${state.self.y.toFixed(1)} · ${state.world.members} settlers · ${state.world.radius * 2}² tiles`;
+  const inventory = [
+    ["Wood", state.self.wood],
+    ["Planks", state.self.planks || 0],
+    ["Stone", state.self.stone],
+    ["Food", state.self.food],
+    ["Research", state.self.research],
+    ["Credits", state.self.credits],
+    ["Reputation", state.self.reputation],
+  ];
+  $("inventory").replaceChildren(
+    ...inventory.map(([label, value]) => {
+      const s = document.createElement("span");
+      s.textContent = `${label} · ${value}`;
+      return s;
+    }),
+  );
+  const recipients = JSON.stringify(
+    state.players.map((p) => ({ id: p.id, name: p.name })),
+  );
+  if (recipients !== lastRecipients) {
+    lastRecipients = recipients;
+    const selected = $("recipient").value;
+    $("recipient").replaceChildren(
+      ...state.players.map((p) => {
+        const o = document.createElement("option");
+        o.value = p.id;
+        o.textContent = p.name;
+        return o;
+      }),
+    );
+    if (state.players.some((p) => p.id === selected))
+      $("recipient").value = selected;
+  }
+  for (const msg of state.messages)
+    if (!seenMessages.has(msg.id)) {
+      seenMessages.add(msg.id);
+      addDialogue(`${msg.name} · world`, msg.text);
+    }
+  if (seenMessages.size > 1000)
+    seenMessages = new Set(state.messages.map((m) => m.id));
+  loadChunks(state.self);
+  view?.update(state);
+}
+
+function connect() {
+  clearTimeout(reconnect);
+  lastSnapshot = 0;
+  socket = new WebSocket(server.replace(/^http/, "ws") + "/ws");
+  socket.onopen = () => socket.send(JSON.stringify({ token }));
+  socket.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.type === "snapshot") {
+      lastSnapshot = performance.now();
+      connected = true;
+      $("connection").textContent = "● Connected to shared world";
+      display(data);
+    } else if (data.type === "error") feedback(data.message);
+    else if (data.reply) feedback(data.reply);
+  };
+  socket.onclose = (event) => {
+    connected = false;
+    keys.clear();
+    pad = { x: 0, y: 0 };
+    $("connection").textContent = "○ Disconnected · actions paused";
+    if (event.code === 1008) {
+      storage.remove(`eov:token:${server}`);
+      $("entry-error").textContent =
+        "Session expired or server access denied. Please log in again.";
+      $("entry").hidden = false;
+      $("session").hidden = true;
+      return;
+    }
+    feedback(
+      event.code === 1013
+        ? "World server is full. Retrying shortly."
+        : "Connection lost. Your saved world stays on the server. Reconnecting…",
+    );
+    reconnect = setTimeout(connect, 3000 + Math.random() * 2000);
+  };
+  socket.onerror = () => {
+    $("connection").textContent = "○ Cannot reach world server";
+  };
+}
+
+async function start() {
+  const initial = await api("/api/world");
+  $("entry").hidden = true;
+  $("session").hidden = false;
+  $("session").append($("game-tools"));
+  $("game-tools").hidden = false;
+  $("mode-label").textContent = modes[mode];
+  const module = await import(`./${mode}.js`);
+  view = module.mount($("scene"), { tile, feedback, action, api });
+  $("controls-help").textContent =
+    mode === "firstperson"
+      ? "WASD to walk · ← → to turn · drag to look · E gather"
+      : mode === "isometric"
+        ? "WASD / arrows to walk · E gather · R sample soil"
+        : "Choose a village scene and speak with its inhabitants";
+  display(initial);
+  connect();
+}
+
+async function authenticate(create) {
+  $("entry-error").textContent = "";
+  if (!$("auth").reportValidity()) return;
+  $("join").disabled = $("login").disabled = true;
+  try {
+    const result = await api(
+      create ? "/api/session" : "/api/login",
+      { name: $("name").value, password: $("password").value },
+      false,
+    );
+    token = result.token;
+    storage.set(`eov:token:${server}`, token);
+    $("password").value = "";
+    await start();
+  } catch (error) {
+    $("entry-error").textContent = error.message;
+  } finally {
+    $("join").disabled = $("login").disabled = false;
+  }
+}
+
+let lastInputAt = 0;
+let wasMoving = false;
+let tradeRefreshTimer;
+let activeTradeRequest = null;
+let tradeBusy = false;
+let tradeData = null;
+function inputTick() {
+  if (document.querySelector("dialog[open]")) return;
+  if (!connected || socket?.readyState !== WebSocket.OPEN) return;
+  let x = pad.x + (keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0),
+    y =
+      pad.y +
+      (keys.has("s") || keys.has("arrowdown") ? 1 : 0) -
+      (keys.has("w") || keys.has("arrowup") ? 1 : 0);
+  if (mode !== "firstperson")
+    x += (keys.has("arrowright") ? 1 : 0) - (keys.has("arrowleft") ? 1 : 0);
+  else
+    view?.turn(
+      ((keys.has("arrowright") ? 1 : 0) - (keys.has("arrowleft") ? 1 : 0)) *
+        0.085,
+    );
+  x = Math.max(-1, Math.min(1, x));
+  y = Math.max(-1, Math.min(1, y));
+  const direction = view?.direction ? view.direction(x, y) : { dx: x, dy: y };
+  const length = Math.max(1, Math.hypot(direction.dx, direction.dy));
+  direction.dx /= length;
+  direction.dy /= length;
+  const moving = !!(direction.dx || direction.dy);
+  const now = performance.now();
+  // Keep active movement below the server's 300ms expiry. Idle clients only
+  // heartbeat every 30 seconds to conserve the shared free request allowance.
+  if (
+    moving ? now - lastInputAt < 150 : !wasMoving && now - lastInputAt < 30000
+  )
+    return;
+  socket.send(JSON.stringify({ type: "input", ...direction }));
+  lastInputAt = now;
+  wasMoving = moving;
+}
+
+if (modes[mode]) {
+  $("landing").hidden = true;
+  $("game").hidden = false;
+  $("entry-title").textContent = modes[mode];
+  document
+    .querySelector(`[data-tool-mode="${mode}"]`)
+    .setAttribute("aria-current", "page");
+  document.querySelectorAll("[data-tool-target]").forEach((button) => {
+    button.onclick = async () => {
+      if (button.dataset.toolTarget === "talk") {
+        keys.clear();
+        pad.x = pad.y = 0;
+        $("chat-dialog").showModal();
+        $("message").focus();
+        return;
+      }
+      if (button.dataset.toolTarget === "workshop") {
+        keys.clear();
+        pad.x = pad.y = 0;
+        if (!workshop) {
+          const { mountWorkshop } = await import("./workshop.js");
+          workshop = mountWorkshop({
+            api,
+            action: (data) => action(data, true),
+            getState: () => snapshot,
+          });
+        }
+        await workshop.open();
+        return;
+      }
+      if (button.dataset.toolTarget === "trade") {
+        keys.clear();
+        pad.x = pad.y = 0;
+        $("trade-dialog").showModal();
+        refreshTrades();
+        clearInterval(tradeRefreshTimer);
+        tradeRefreshTimer = setInterval(() => {
+          if ($("trade-dialog").open) refreshTrades();
+        }, 15000);
+        return;
+      }
+      if (button.dataset.toolTarget === "inventory") {
+        const otherDialog = document.querySelector("dialog[open]");
+        const openMenus = $("session").querySelectorAll("details[open]");
+        if (otherDialog || openMenus.length) {
+          feedback("Close all other menus before opening Inventory.");
+          return;
+        }
+        $("inventory-dialog").showModal();
+        return;
+      }
+      const targets = {
+        talk: mode === "story" ? $("story-message") : $("message"),
+        build: document.querySelector('[data-action="build"]'),
+        journal: $("agent-journal"),
+      };
+      const target = targets[button.dataset.toolTarget];
+      if (!target) return;
+      const panel = target.closest("details");
+      if (panel) panel.open = true;
+      target.scrollIntoView({ block: "center" });
+      target.focus({ preventScroll: true });
+    };
+  });
+  try {
+    const config = await fetch("./config.json").then((r) => r.json());
+    server = validatedServer(
+      storage.get("eov:server") ||
+        (isLocal ? location.origin : config.serverUrl || ""),
+    );
+    $("server-url").value = server;
+    if (server) {
+      const health = await api("/health", undefined, false);
+      $("server-status").textContent =
+        `World server ready · ${health.online} online · Expect bugs — alpha`;
+    } else $("server-status").textContent = config.notice;
+    token = storage.get(`eov:token:${server}`) || "";
+    if (token)
+      try {
+        await start();
+      } catch (error) {
+        $("entry-error").textContent = error.message;
+      }
+  } catch (error) {
+    $("server-status").textContent =
+      `World server unavailable: ${error.message}. You can configure another server below.`;
+  }
+  $("auth").onsubmit = (e) => {
+    e.preventDefault();
+    authenticate(true);
+  };
+  $("login").onclick = () => authenticate(false);
+  $("server-form").onsubmit = (e) => {
+    e.preventDefault();
+    try {
+      const next = validatedServer($("server-url").value);
+      storage.set("eov:server", next);
+      location.reload();
+    } catch (error) {
+      $("entry-error").textContent = error.message;
+    }
+  };
+  $("logout").onclick = async () => {
+    try {
+      await api("/api/logout", {});
+    } catch {}
+    storage.remove(`eov:token:${server}`);
+    clearTimeout(reconnect);
+    if (socket) {
+      socket.onclose = null;
+      socket.close();
+    }
+    location.reload();
+  };
+  $("chat-close").onclick = () => $("chat-dialog").close();
+  $("inventory-close").onclick = () => $("inventory-dialog").close();
+  const tradeStatus = (message) => ($("trade-status").textContent = message);
+  const materialName = (value) => value[0].toUpperCase() + value.slice(1);
+  function tradeLine(text) {
+    const row = document.createElement("p");
+    row.textContent = text;
+    return row;
+  }
+  async function refreshTrades() {
+    try {
+      const data = await api("/api/trades");
+      tradeData = data;
+      const select = $("trade-partner"), old = select.value;
+      select.replaceChildren(new Option("Choose a participant", ""));
+      for (const p of data.players)
+        select.add(new Option(`${p.name} · player`, `player:${p.id}`));
+      for (const p of data.samaritans)
+        select.add(new Option(`${p.name} · Samaritan`, `samaritan:${p.id}`));
+      if ([...select.options].some((o) => o.value === old)) select.value = old;
+      updateTradePartner();
+      const activity = $("trade-activity");
+      activity.replaceChildren();
+      if (!data.offers.length && !data.deliveries.some((r) => r.status === "open"))
+        activity.append(tradeLine("No current offers or requests."));
+      for (const offer of data.offers) {
+        const outgoing = offer.sender === snapshot?.self.id,
+          peer = outgoing ? offer.recipientName : offer.senderName,
+          description = `${peer}: ${offer.offerAmount} ${materialName(offer.offerResource)} for ${offer.wantAmount} ${materialName(offer.wantResource)} · ${offer.status}`,
+          row = document.createElement("div");
+        row.append(tradeLine(description));
+        if (offer.actionable) {
+          for (const [label, accept] of [["Accept", true], ["Reject", false]]) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = accept ? "" : "secondary";
+            button.textContent = label;
+            button.disabled = tradeBusy;
+            button.onclick = async () => {
+              await submitTrade({ action: "respond", tradeId: offer.id, accept });
+            };
+            row.append(button);
+          }
+        }
+        activity.append(row);
+      }
+      for (const request of data.deliveries) {
+        activity.append(tradeLine(`${request.name}: ${request.amount} ${materialName(request.resource)} · ${request.reason} · ${request.status}`));
+      }
+    } catch (error) {
+      tradeStatus(error.message);
+    }
+  }
+  function updateTradePartner() {
+    const [type, participant] = $("trade-partner").value.split(":"),
+      isPlayer = type === "player",
+      isSamaritan = type === "samaritan";
+    $("player-trade-form").hidden = !isPlayer;
+    $("samaritan-trade").hidden = !isSamaritan;
+    activeTradeRequest = null;
+    $("samaritan-deliver").disabled = true;
+    if (isSamaritan) {
+      const npc = tradeData?.samaritans.find((n) => n.id === participant);
+      if (npc?.request) {
+        activeTradeRequest = npc.request;
+        $("samaritan-request-status").textContent = `${npc.name} requests ${npc.request.amount} ${npc.request.resource}: ${npc.request.reason}`;
+        $("samaritan-deliver").disabled = (snapshot?.self[npc.request.resource] || 0) < npc.request.amount;
+      } else $("samaritan-request-status").textContent = `${npc?.name || "This Samaritan"} has not made a specific material request. Ask them first.`;
+    }
+  }
+  async function submitTrade(data) {
+    if (tradeBusy) return;
+    tradeBusy = true;
+    try {
+      const result = await api("/api/trades", data);
+      tradeStatus(result.reply || "Trade updated.");
+      await refreshTrades();
+      display(snapshot);
+    } catch (error) {
+      tradeStatus(error.message);
+    } finally {
+      tradeBusy = false;
+    }
+  }
+  $("trade-close").onclick = () => $("trade-dialog").close();
+  $("trade-dialog").addEventListener("close", () => clearInterval(tradeRefreshTimer));
+  $("trade-partner").onchange = updateTradePartner;
+  $("trade-refresh").onclick = refreshTrades;
+  $("player-trade-form").onsubmit = async (event) => {
+    event.preventDefault();
+    const recipient = $("trade-partner").value.replace(/^player:/, "");
+    await submitTrade({
+      action: "offer",
+      recipient,
+      offerResource: $("trade-offer-resource").value,
+      offerAmount: Number($("trade-offer-amount").value),
+      wantResource: $("trade-want-resource").value,
+      wantAmount: Number($("trade-want-amount").value),
+    });
+  };
+  $("samaritan-request").onclick = async () => {
+    const participantId = $("trade-partner").value.replace(/^samaritan:/, "");
+    if (!participantId) return;
+    $("samaritan-request").disabled = true;
+    try {
+      const result = await api("/api/trades", { action: "request", participantId });
+      tradeStatus(result.reply);
+      await refreshTrades();
+      display(snapshot);
+    } catch (error) {
+      tradeStatus(error.message);
+    } finally {
+      $("samaritan-request").disabled = false;
+    }
+  };
+  $("samaritan-deliver").onclick = async () => {
+    if (!activeTradeRequest) return;
+    await submitTrade({ action: "deliver", requestId: activeTradeRequest.id });
+  };
+  $("chat-dialog").addEventListener("click", (e) => {
+    if (e.target === $("chat-dialog")) $("chat-dialog").close();
+  });
+  document.querySelectorAll("[data-action]").forEach(
+    (button) =>
+      (button.onclick = () =>
+        action({
+          type: button.dataset.action,
+          ...(button.dataset.kind ? { kind: button.dataset.kind } : {}),
+        })),
+  );
+  $("chat").onsubmit = async (e) => {
+    e.preventDefault();
+    const text = $("message").value,
+      npc = $("npc").value;
+    const result = await action({
+      type: npc === "world" ? "chat" : "talk",
+      text,
+      npc,
+    });
+    if (result) {
+      $("message").value = "";
+      if (npc !== "world") {
+        addDialogue(snapshot.self.name, text);
+        addDialogue(result.npc || npc, result.reply);
+      }
+    }
+  };
+  $("cooperate").onclick = () => {
+    if ($("npc").value === "world") {
+      feedback("Choose a Samaritan before proposing cooperation.");
+      return;
+    }
+    action({ type: "diplomacy", npc: $("npc").value });
+  };
+  $("ledger").onclick = async () => {
+    try {
+      const rows = await api("/api/ledger");
+      $("ledger-rows").replaceChildren(
+        ...rows.map((row) => {
+          const p = document.createElement("p");
+          p.textContent = `${row.amount > 0 ? "+" : ""}${row.amount} · ${row.reason}`;
+          return p;
+        }),
+      );
+    } catch (error) {
+      feedback(error.message);
+    }
+  };
+  $("agent-journal").onclick = async () => {
+    try {
+      const data = await api("/api/agents");
+      const lines = data.journal.length
+        ? data.journal.map(
+            (row) =>
+              `${new Date(row.created).toLocaleString()} · ${row.agent} · ${row.status}: ${row.intention} ${row.consequence}`,
+          )
+        : ["No independent decisions recorded yet."];
+      lines.push(
+        data.nextCycle
+          ? `Next scheduled decision: ${new Date(data.nextCycle).toLocaleString()}`
+          : "Background reasoning is not scheduled on this server.",
+      );
+      $("agent-journal-rows").replaceChildren(
+        ...lines.map((text) => {
+          const p = document.createElement("p");
+          p.textContent = text;
+          return p;
+        }),
+      );
+    } catch (error) {
+      feedback(error.message);
+    }
+  };
+  $("transfer").onsubmit = (e) => {
+    e.preventDefault();
+    action({
+      type: "transfer",
+      to: $("recipient").value,
+      amount: Number($("amount").value),
+    });
+  };
+  window.addEventListener("keydown", (e) => {
+    if (typeof e.key !== "string") return;
+    const chat = $("chat-dialog");
+    // Escape closes chat wherever focus is. T opens chat and is never a toggle.
+    if (e.key === "Escape" && chat.open) {
+      e.preventDefault();
+      chat.close();
+      return;
+    }
+    if (
+      e.code === "KeyT" &&
+      !e.repeat &&
+      !e.isComposing &&
+      !e.altKey &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !chat.open &&
+      !["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)
+    ) {
+      e.preventDefault();
+      keys.clear();
+      pad.x = pad.y = 0;
+      if (!document.querySelector("dialog[open]")) {
+        chat.showModal();
+        $("message").focus();
+      }
+      return;
+    }
+    const typing = ["INPUT", "SELECT", "TEXTAREA"].includes(
+      document.activeElement.tagName,
+    );
+    if (document.querySelector("dialog[open]") || mode === "story") return;
+    if (
+      ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(
+        document.activeElement.tagName,
+      )
+    )
+      return;
+    const key = e.key.toLowerCase();
+    if (
+      [
+        "w",
+        "a",
+        "s",
+        "d",
+        "arrowup",
+        "arrowdown",
+        "arrowleft",
+        "arrowright",
+      ].includes(key)
+    ) {
+      e.preventDefault();
+      keys.add(key);
+    }
+    if (!e.repeat && key === "e") action({ type: "gather" });
+    if (!e.repeat && key === "r") action({ type: "research" });
+  });
+  window.addEventListener("keyup", (e) => keys.delete(e.key?.toLowerCase()));
+  const stop = () => {
+    keys.clear();
+    pad = { x: 0, y: 0 };
+  };
+  window.addEventListener("blur", stop);
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) stop();
+  });
+  document.querySelectorAll("[data-dx]").forEach((button) => {
+    let started = 0;
+    button.onpointerdown = (e) => {
+      e.preventDefault();
+      button.setPointerCapture(e.pointerId);
+      started = performance.now();
+      pad = { x: Number(button.dataset.dx), y: Number(button.dataset.dy) };
+      inputTick();
+    };
+    button.onpointerup = () => {
+      setTimeout(
+        () => {
+          pad = { x: 0, y: 0 };
+        },
+        Math.max(0, 120 - (performance.now() - started)),
+      );
+    };
+    button.onpointercancel = () => {
+      pad = { x: 0, y: 0 };
+    };
+  });
+  setInterval(inputTick, 50);
+  setInterval(() => {
+    if (connected && !snapshotFresh(lastSnapshot, performance.now())) {
+      connected = false;
+      keys.clear();
+      pad = { x: 0, y: 0 };
+      $("connection").textContent =
+        "○ Server stopped responding · actions paused";
+      feedback("No world updates for five seconds. Reconnecting…");
+      if (socket) {
+        socket.onclose = null;
+        socket.close();
+      }
+      reconnect = setTimeout(connect, 1000);
+    }
+  }, 1000);
+}
