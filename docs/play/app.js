@@ -292,6 +292,10 @@ async function authenticate(create) {
 
 let lastInputAt = 0;
 let wasMoving = false;
+let tradeRefreshTimer;
+let activeTradeRequest = null;
+let tradeBusy = false;
+let tradeData = null;
 function inputTick() {
   if (document.querySelector("dialog[open]")) return;
   if (!connected || socket?.readyState !== WebSocket.OPEN) return;
@@ -342,13 +346,6 @@ if (modes[mode]) {
         $("message").focus();
         return;
       }
-      if (button.dataset.toolTarget === "talk") {
-        keys.clear();
-        pad.x = pad.y = 0;
-        $("chat-dialog").showModal();
-        $("message").focus();
-        return;
-      }
       if (button.dataset.toolTarget === "workshop") {
         keys.clear();
         pad.x = pad.y = 0;
@@ -363,17 +360,36 @@ if (modes[mode]) {
         await workshop.open();
         return;
       }
+      if (button.dataset.toolTarget === "trade") {
+        keys.clear();
+        pad.x = pad.y = 0;
+        $("trade-dialog").showModal();
+        refreshTrades();
+        clearInterval(tradeRefreshTimer);
+        tradeRefreshTimer = setInterval(() => {
+          if ($("trade-dialog").open) refreshTrades();
+        }, 15000);
+        return;
+      }
+      if (button.dataset.toolTarget === "inventory") {
+        const otherDialog = document.querySelector("dialog[open]");
+        const openMenus = $("session").querySelectorAll("details[open]");
+        if (otherDialog || openMenus.length) {
+          feedback("Close all other menus before opening Inventory.");
+          return;
+        }
+        $("inventory-dialog").showModal();
+        return;
+      }
       const targets = {
         talk: mode === "story" ? $("story-message") : $("message"),
         build: document.querySelector('[data-action="build"]'),
-        inventory: $("player-name"),
         journal: $("agent-journal"),
       };
       const target = targets[button.dataset.toolTarget];
       if (!target) return;
       const panel = target.closest("details");
       if (panel) panel.open = true;
-      if (button.dataset.toolTarget === "inventory") target.tabIndex = -1;
       target.scrollIntoView({ block: "center" });
       target.focus({ preventScroll: true });
     };
@@ -429,6 +445,124 @@ if (modes[mode]) {
     location.reload();
   };
   $("chat-close").onclick = () => $("chat-dialog").close();
+  $("inventory-close").onclick = () => $("inventory-dialog").close();
+  const tradeStatus = (message) => ($("trade-status").textContent = message);
+  const materialName = (value) => value[0].toUpperCase() + value.slice(1);
+  function tradeLine(text) {
+    const row = document.createElement("p");
+    row.textContent = text;
+    return row;
+  }
+  async function refreshTrades() {
+    try {
+      const data = await api("/api/trades");
+      tradeData = data;
+      const select = $("trade-partner"), old = select.value;
+      select.replaceChildren(new Option("Choose a participant", ""));
+      for (const p of data.players)
+        select.add(new Option(`${p.name} · player`, `player:${p.id}`));
+      for (const p of data.samaritans)
+        select.add(new Option(`${p.name} · Samaritan`, `samaritan:${p.id}`));
+      if ([...select.options].some((o) => o.value === old)) select.value = old;
+      updateTradePartner();
+      const activity = $("trade-activity");
+      activity.replaceChildren();
+      if (!data.offers.length && !data.deliveries.some((r) => r.status === "open"))
+        activity.append(tradeLine("No current offers or requests."));
+      for (const offer of data.offers) {
+        const outgoing = offer.sender === snapshot?.self.id,
+          peer = outgoing ? offer.recipientName : offer.senderName,
+          description = `${peer}: ${offer.offerAmount} ${materialName(offer.offerResource)} for ${offer.wantAmount} ${materialName(offer.wantResource)} · ${offer.status}`,
+          row = document.createElement("div");
+        row.append(tradeLine(description));
+        if (offer.actionable) {
+          for (const [label, accept] of [["Accept", true], ["Reject", false]]) {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.className = accept ? "" : "secondary";
+            button.textContent = label;
+            button.disabled = tradeBusy;
+            button.onclick = async () => {
+              await submitTrade({ action: "respond", tradeId: offer.id, accept });
+            };
+            row.append(button);
+          }
+        }
+        activity.append(row);
+      }
+      for (const request of data.deliveries) {
+        activity.append(tradeLine(`${request.name}: ${request.amount} ${materialName(request.resource)} · ${request.reason} · ${request.status}`));
+      }
+    } catch (error) {
+      tradeStatus(error.message);
+    }
+  }
+  function updateTradePartner() {
+    const [type, participant] = $("trade-partner").value.split(":"),
+      isPlayer = type === "player",
+      isSamaritan = type === "samaritan";
+    $("player-trade-form").hidden = !isPlayer;
+    $("samaritan-trade").hidden = !isSamaritan;
+    activeTradeRequest = null;
+    $("samaritan-deliver").disabled = true;
+    if (isSamaritan) {
+      const npc = tradeData?.samaritans.find((n) => n.id === participant);
+      if (npc?.request) {
+        activeTradeRequest = npc.request;
+        $("samaritan-request-status").textContent = `${npc.name} requests ${npc.request.amount} ${npc.request.resource}: ${npc.request.reason}`;
+        $("samaritan-deliver").disabled = (snapshot?.self[npc.request.resource] || 0) < npc.request.amount;
+      } else $("samaritan-request-status").textContent = `${npc?.name || "This Samaritan"} has not made a specific material request. Ask them first.`;
+    }
+  }
+  async function submitTrade(data) {
+    if (tradeBusy) return;
+    tradeBusy = true;
+    try {
+      const result = await api("/api/trades", data);
+      tradeStatus(result.reply || "Trade updated.");
+      await refreshTrades();
+      display(snapshot);
+    } catch (error) {
+      tradeStatus(error.message);
+    } finally {
+      tradeBusy = false;
+    }
+  }
+  $("trade-close").onclick = () => $("trade-dialog").close();
+  $("trade-dialog").addEventListener("close", () => clearInterval(tradeRefreshTimer));
+  $("trade-partner").onchange = updateTradePartner;
+  $("trade-refresh").onclick = refreshTrades;
+  $("player-trade-form").onsubmit = async (event) => {
+    event.preventDefault();
+    const recipient = $("trade-partner").value.replace(/^player:/, "");
+    await submitTrade({
+      action: "offer",
+      recipient,
+      offerResource: $("trade-offer-resource").value,
+      offerAmount: Number($("trade-offer-amount").value),
+      wantResource: $("trade-want-resource").value,
+      wantAmount: Number($("trade-want-amount").value),
+    });
+  };
+  $("samaritan-request").onclick = async () => {
+    const participantId = $("trade-partner").value.replace(/^samaritan:/, "");
+    if (!participantId) return;
+    $("samaritan-request").disabled = true;
+    try {
+      const result = await api("/api/trades", { action: "request", participantId });
+      tradeStatus(result.reply);
+      await refreshTrades();
+      display(snapshot);
+    } catch (error) {
+      tradeStatus(error.message);
+    } finally {
+      $("samaritan-request").disabled = false;
+    }
+  };
+  $("samaritan-deliver").onclick = async () => {
+    if (!activeTradeRequest) return;
+    await submitTrade({ action: "deliver", requestId: activeTradeRequest.id });
+  };
   $("chat-dialog").addEventListener("click", (e) => {
     if (e.target === $("chat-dialog")) $("chat-dialog").close();
   });
@@ -513,22 +647,35 @@ if (modes[mode]) {
   };
   window.addEventListener("keydown", (e) => {
     if (typeof e.key !== "string") return;
-    const typing = ["INPUT", "SELECT", "TEXTAREA"].includes(
-      document.activeElement.tagName,
-    );
-    if (e.key.toLowerCase() === "t" && !e.repeat && !typing) {
-      if (document.querySelector("dialog[open]") && !$("chat-dialog").open)
-        return;
+    const chat = $("chat-dialog");
+    // Escape closes chat wherever focus is. T opens chat and is never a toggle.
+    if (e.key === "Escape" && chat.open) {
+      e.preventDefault();
+      chat.close();
+      return;
+    }
+    if (
+      e.code === "KeyT" &&
+      !e.repeat &&
+      !e.isComposing &&
+      !e.altKey &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !chat.open &&
+      !["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)
+    ) {
       e.preventDefault();
       keys.clear();
       pad.x = pad.y = 0;
-      if ($("chat-dialog").open) $("chat-dialog").close();
-      else {
-        $("chat-dialog").showModal();
+      if (!document.querySelector("dialog[open]")) {
+        chat.showModal();
         $("message").focus();
       }
       return;
     }
+    const typing = ["INPUT", "SELECT", "TEXTAREA"].includes(
+      document.activeElement.tagName,
+    );
     if (document.querySelector("dialog[open]") || mode === "story") return;
     if (
       ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(

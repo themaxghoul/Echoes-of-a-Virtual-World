@@ -1,5 +1,6 @@
 import { Agents } from "./agents.js";
 import { Crafting } from "./crafting.js";
+import { Trading } from "./trading.js";
 import { Possibilities, GenerationLimit } from "./possibilities.js";
 /** Free-tier authoritative world. Terrain stays cached after first entry.
  * SQL is accessed on first terrain entry, startup, durable actions and batched saves.
@@ -119,6 +120,7 @@ export class Kernel {
     );
     this.agents = new Agents(this, NPCS);
     this.crafting = new Crafting(this);
+    this.trading = new Trading(this);
   }
   save(p) {
     this.storage.exec(
@@ -416,7 +418,8 @@ export class Kernel {
       players: [...this.online]
         .filter((q) => q !== id)
         .map((q) => this.player(q))
-        .filter((q) => Math.hypot(q.x - p.x, q.y - p.y) < 80),
+        .filter((q) => Math.hypot(q.x - p.x, q.y - p.y) < 80)
+        .map(({ id, name, x, y }) => ({ id, name, x, y })),
       npcs: this.npcs(),
       buildings: this.buildings.filter(
         (b) => Math.abs(b.x - p.x) < 80 && Math.abs(b.y - p.y) < 80,

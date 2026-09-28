@@ -133,6 +133,7 @@
         <button data-tool-target="talk" title="Open chat without moving · T">
           Chat · T
         </button>
+        <button data-tool-target="trade">Trade</button>
         <button data-action="gather">Gather</button>
         <button data-action="research">Sample soil</button>
         <button data-tool-target="build">Build</button>
@@ -227,7 +228,6 @@
             <div class="identity">
               <span class="eyebrow">YOUR SETTLER</span>
               <h2 id="player-name"></h2>
-              <div id="inventory"></div>
             </div>
             <details open>
               <summary>Make a beginning</summary>
@@ -346,6 +346,50 @@
         Choose World chat to talk to settlers or a Samaritan to speak with them
         directly. Diplomatic agreements remain explicit.
       </p>
+    </dialog>
+    <dialog id="trade-dialog" class="workshop" aria-labelledby="trade-title">
+      <header>
+        <div>
+          <span class="eyebrow">MATERIALS · EXPLICIT CONSENT</span>
+          <h2 id="trade-title">Trade with a participant</h2>
+        </div>
+        <button id="trade-close" class="secondary">Close</button>
+      </header>
+      <p>Choose an online nearby settler or a Samaritan. Player offers move nothing until accepted. Samaritan deliveries are possible only when they have made a specific request. Experimental credits and real money are excluded.</p>
+      <label>Participant<select id="trade-partner" required>
+        <option value="">Choose a participant</option>
+      </select></label>
+      <form id="player-trade-form" hidden>
+        <div class="dimension-fields">
+          <label>Offer material<select id="trade-offer-resource"><option value="wood">Wood</option><option value="planks">Planks</option><option value="stone">Stone</option><option value="food">Food</option><option value="research">Research</option></select></label>
+          <label>Amount<input id="trade-offer-amount" type="number" min="1" max="100" value="1" required></label>
+        </div>
+        <div class="dimension-fields">
+          <label>Request in return<select id="trade-want-resource"><option value="wood">Wood</option><option value="planks">Planks</option><option value="stone">Stone</option><option value="food">Food</option><option value="research">Research</option></select></label>
+          <label>Amount<input id="trade-want-amount" type="number" min="1" max="100" value="1" required></label>
+        </div>
+        <button>Send offer</button>
+      </form>
+      <section id="samaritan-trade" hidden>
+        <p id="samaritan-request-status" role="status">Ask whether this Samaritan has a specific material request.</p>
+        <button id="samaritan-request" class="secondary">Ask for current request</button>
+        <button id="samaritan-deliver" disabled>Deliver requested materials</button>
+      </section>
+      <h3>Offers and requests</h3>
+      <button id="trade-refresh" class="secondary">Refresh</button>
+      <div id="trade-activity" class="small" role="log" aria-live="polite"></div>
+      <p id="trade-status" role="status" aria-live="polite"></p>
+    </dialog>
+    <dialog id="inventory-dialog" class="chat-dialog" aria-labelledby="inventory-title">
+      <header>
+        <div>
+          <span class="eyebrow">PRIVATE SETTLER HOLDINGS</span>
+          <h2 id="inventory-title">Your inventory</h2>
+        </div>
+        <button id="inventory-close" class="secondary">Close <kbd>Esc</kbd></button>
+      </header>
+      <p class="small">Your material and research holdings are shown only while this inventory is open.</p>
+      <div id="inventory"></div>
     </dialog>
     <footer>
       <span>APEXFORGE COLLECTIVE / ECHOES OF VIRTUALITY</span

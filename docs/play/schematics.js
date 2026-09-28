@@ -148,3 +148,74 @@ export function footprint(design) {
     ? { width: 1, depth: 1 }
     : { width: design.width, depth: design.depth };
 }
+
+/** Curated, editable building plans. Every voxel is one charged material. */
+export const BLUEPRINTS = [
+  { id: "field-shelter", name: "Field shelter · timber and stone", size: "4×4×4" },
+  { id: "field-lab", name: "Field laboratory · stone foundation", size: "4×3×3" },
+  { id: "garden-trellis", name: "Open garden trellis · raised beds", size: "4×3×2" },
+];
+
+export function blueprint(id) {
+  const cells = [];
+  const add = (x, y, z, material) => cells.push([x, y, z, material]);
+  if (id === "field-shelter") {
+    // Full timber floor and roof, a doorway, and stone corner posts.
+    for (let y = 0; y < 4; y++)
+      for (let x = 0; x < 4; x++) {
+        add(x, y, 0, "planks");
+        add(x, y, 3, "planks");
+      }
+    for (let z = 1; z <= 2; z++)
+      for (let y = 0; y < 4; y++)
+        for (let x = 0; x < 4; x++)
+          if (x === 0 || x === 3 || y === 0 || y === 3) {
+            if (y === 0 && x === 1 && z === 1) continue;
+            const corner = (x === 0 || x === 3) && (y === 0 || y === 3);
+            add(x, y, z, corner ? "stone" : "planks");
+          }
+    return validateSchematic({
+      kind: "structure", name: BLUEPRINTS[0].name,
+      width: 4, depth: 4, height: 4, cells,
+    });
+  }
+  if (id === "field-lab") {
+    for (let y = 0; y < 3; y++)
+      for (let x = 0; x < 4; x++) add(x, y, 0, "stone");
+    for (let y = 0; y < 3; y++)
+      for (let x = 0; x < 4; x++) {
+        if (!(x === 0 || x === 3 || y === 0 || y === 2)) continue;
+        if (x === 1 && y === 0) continue; // Entry
+        const corner = (x === 0 || x === 3) && (y === 0 || y === 2);
+        add(x, y, 1, corner ? "stone" : "planks");
+      }
+    // A plank worktable and a complete rain-shedding roof.
+    add(1, 1, 1, "planks");
+    for (let y = 0; y < 3; y++)
+      for (let x = 0; x < 4; x++) add(x, y, 2, "planks");
+    return validateSchematic({
+      kind: "structure", name: BLUEPRINTS[1].name,
+      width: 4, depth: 3, height: 3, cells,
+    });
+  }
+  if (id === "garden-trellis") {
+    // A low stone edging surrounds a timber path and open trellis.
+    for (let y = 0; y < 3; y++)
+      for (let x = 0; x < 4; x++)
+        add(x, y, 0,
+          x === 0 || x === 3 || y === 0 || y === 2 ? "stone" : "planks");
+    for (let y = 0; y < 3; y++) {
+      add(0, y, 1, "planks");
+      add(3, y, 1, "planks");
+    }
+    for (let x = 1; x < 3; x++) {
+      add(x, 0, 1, "planks");
+      add(x, 2, 1, "planks");
+    }
+    return validateSchematic({
+      kind: "structure", name: BLUEPRINTS[2].name,
+      width: 4, depth: 3, height: 2, cells,
+    });
+  }
+  throw Error("Choose a curated blueprint.");
+}

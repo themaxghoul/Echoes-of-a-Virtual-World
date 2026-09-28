@@ -188,6 +188,31 @@ export class World extends DurableObject {
         this.rate("schematics:" + id, 10, 10000);
         return json(this.game.crafting.list(id));
       }
+      if (path === "/api/trades" && request.method === "GET") {
+        this.rate("trades:" + id, 10, 10000);
+        return json(this.game.trading.participants(id));
+      }
+      if (path === "/api/trades" && request.method === "POST") {
+        this.rate("trade-write:" + id, 20, 10000);
+        const data = await readJson(request);
+        if (data.action === "offer")
+          return json(this.game.trading.offer(id, data));
+        if (data.action === "respond")
+          return json(this.game.trading.respond(id, data.tradeId, data.accept));
+        if (data.action === "deliver")
+          return json(this.game.trading.deliver(id, data.requestId));
+        if (data.action === "request") {
+          const local = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+          return json(
+            await this.game.trading.askSamaritan(
+              id,
+              data.participantId,
+              local ? null : this.env.AI,
+            ),
+          );
+        }
+        throw Error("Choose offer, respond, deliver or request.");
+      }
       if (path === "/api/schematics/generate" && request.method === "POST") {
         this.rate("design:" + id, 5, 60000);
         return json(

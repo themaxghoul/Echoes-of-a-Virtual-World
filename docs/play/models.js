@@ -168,8 +168,9 @@ export function previewProjection(
     (height - padding * 2) / (h + (w + d) * 0.4),
   );
   const centerV = (0.4 * (w + d) - h) / 2;
+  const centerH = (w - d) / 2;
   return (x, y, z) => ({
-    x: width / 2 + (x - y) * scale,
+    x: width / 2 + (x - y - centerH) * scale,
     y: height / 2 + (0.4 * (x + y) - z - centerV) * scale,
     depth: -x - y - z * 0.01,
   });

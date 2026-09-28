@@ -21,6 +21,10 @@ Create a named account with a password and retain that password. There is no pas
 
 The world starts with radius 512 tiles. Each new account's first join expands it by 32 tiles. Reconnects and mode changes do not expand it. Terrain retains the original stored seed and coordinate algorithm. Chunks are instantiated on demand, then stored with versioned hierarchical seed provenance. Saved chunks are never rerolled by a replacement generator. World → region → settlement → parcel seeds are recorded; new construction adds structure, room and object seed records (these are provenance, not rendered interiors). A global limit of 1000 newly instantiated chunks per UTC day protects the free database allowance; existing chunks remain readable. Clients can request only nearby chunks. This is one shared world, not separate personal universes. Camps, farms and labs persist, but farms/labs do not yet run production chains. Soil research is a small procedural experiment, not a validated scientific model.
 
+The Workshop processes wood into planks and supports editable, grid-based schematics, bounded AI suggestions, and server-validated persistent construction. Geometry is procedural and derived from saved block cells; it is not a remote 3D asset download. See [CRAFTING_DESIGN.md](CRAFTING_DESIGN.md) for limits and validation rules.
+
+Trading is available in the shared bottom toolbar. Player offers exchange two selected material types and move nothing until the recipient explicitly accepts; either player can reject, and both balances are rechecked at acceptance. The Samaritan flow asks an AI character whether it has a specific need; if it chooses one, delivery of the exact requested amount is an explicit player action and becomes part of that Samaritan's supplies and memory. Material trades exclude experimental credits, BTC and real money. See [TRADING_DESIGN.md](TRADING_DESIGN.md).
+
 Mira, Oren and Sol now have persistent positions, intentions, personal supplies and bounded memories. Their former clock-driven wandering is removed. One independent model decision is scheduled every two hours across the three agents (up to 12/day); decisions can reflect, gather, research, explore or speak in the activity journal. Physics, resource ownership and allowed actions are checked by the server. A rejected or interrupted decision has no committed physical consequence. The journal reports the outcome and next scheduled cycle. This is a bounded free-runtime adaptation, not full parity with the legacy autonomy router or continuous real-time cognition. The original village characters remain narrative characters.
 
 Workers AI enriches HTTP conversations with remembered context. The shared budget is 50 calls per UTC day, including autonomous decisions. Timeout, quota exhaustion or model errors fall back to contextual conversation. Ordinary dialogue never directly executes world commands; messages to the three Samaritans can inform their later independent decisions. Diplomacy remains an explicit limited cooperation action. It is not a model-negotiated treaty engine.
@@ -98,9 +102,14 @@ The new Main726 story adapter currently runs on the Cloudflare backend only. The
 
 ## Bottom game toolbar and chat (2026-09-28)
 A responsive dock is available in Story, isometric and first-person sessions. It
-switches perspectives and opens game tools. The separate Talk with the Samaritans
-sidebar section has been removed. Press T or choose Chat · T to open one accessible
-conversation dialog from any mode without moving; it holds world chat, individual
+switches perspectives and opens game tools. Press T or choose Chat · T to open one
+accessible conversation dialog from any mode without moving; Esc closes it. T only
+opens chat, never closes it. The dialog holds world chat, individual
 Samaritan dialogue and explicit diplomacy. The Story mode remains the single
 text-based perspective. Its village conversation and saved narrative stay there.
-The workshop can also open from any mode and remains keyboard/touch accessible.
+The workshop and trade dialogs can also open from any mode and remain keyboard/touch
+accessible. Personal holdings appear only in Inventory, which requires other menus
+to be closed; peer snapshots contain positions and names, never another settler's
+balances. Curated shelter, laboratory, and garden blueprints use correctly scaled
+block geometry and charge each plank or stone cell; their exact costs are shown in
+the Workshop before construction.

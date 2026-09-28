@@ -1,4 +1,10 @@
-import { template, validateSchematic, footprint } from "./schematics.js";
+import {
+  BLUEPRINTS,
+  blueprint,
+  template,
+  validateSchematic,
+  footprint,
+} from "./schematics.js";
 import { drawModel, modelFor, previewProjection } from "./models.js";
 
 export function mountWorkshop({ api, action: sendAction, getState }) {
@@ -22,7 +28,10 @@ export function mountWorkshop({ api, action: sendAction, getState }) {
     <label>Design type<select id="design-kind"><option value="workbench">Workbench</option><option value="structure">Structure</option></select></label>
     <label>Name<input id="design-name" maxlength="60" required></label>
     <div class="dimension-fields"><label>Width<input id="design-width" type="number" min="2" max="4" value="3"></label><label>Depth<input id="design-depth" type="number" min="2" max="4" value="2"></label><label>Height<input id="design-height" type="number" min="2" max="4" value="2"></label></div>
-    <button id="design-template" class="secondary">Start new template</button>
+    <label>Curated building blueprint<select id="blueprint-choice"><option value="">Choose a blueprint</option>${BLUEPRINTS.map((b) => `<option value="${b.id}">${b.name} · ${b.size}</option>`).join("")}</select></label>
+    <button id="design-blueprint" class="secondary">Load blueprint for editing</button>
+    <p class="small">Blueprint cells show their actual scale and allocation: one saved block consumes one plank or stone. These shelters and garden beds are visual construction; farm production is not simulated yet.</p>
+    <button id="design-template" class="secondary">Start custom template</button>
     <form id="design-generate"><label>Describe your design<textarea id="design-prompt" maxlength="500" rows="3" required placeholder="A broad wooden workbench with stone legs…"></textarea></label><button>Suggest with AI</button></form>
     <p class="small">AI chooses a small template; you edit its blocks. Free allowance is shared with conversations. Manual design always works.</p>
   </section><section>
@@ -171,6 +180,16 @@ export function mountWorkshop({ api, action: sendAction, getState }) {
         }),
       );
       status("New template. Edit any layer before saving.");
+    } catch (e) {
+      status(e.message);
+    }
+  };
+  $("design-blueprint").onclick = () => {
+    try {
+      const id = $("blueprint-choice").value;
+      if (!id) throw Error("Choose a curated blueprint first.");
+      load(blueprint(id));
+      status("Blueprint loaded for editing. Review its exact plank and stone costs before saving or construction.");
     } catch (e) {
       status(e.message);
     }
