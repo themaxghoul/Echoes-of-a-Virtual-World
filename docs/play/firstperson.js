@@ -1,3 +1,4 @@
+import { groundColor, modelFor, drawModel } from "./models.js";
 import { colors, canvasLoop, interpolate } from "./graphics.js";
 export function mount(container, { tile }) {
   let state,
@@ -30,7 +31,7 @@ export function mount(container, { tile }) {
           Math.abs(wx) >= state.world.radius ||
           Math.abs(wy) >= state.world.radius
             ? "#152118"
-            : colors[tile(wx, wy)];
+            : groundColor(tile(wx, wy), wx, wy, state.world.seed);
         ctx.fillRect(x, y, 8, 6);
       }
     }
@@ -53,25 +54,34 @@ export function mount(container, { tile }) {
         dy = item.y - camera.y,
         depth = dx * Math.cos(angle) + dy * Math.sin(angle),
         side = -dx * Math.sin(angle) + dy * Math.cos(angle);
-      if (depth < 0.35 || depth > 45) continue;
+      if (
+        item.schematic
+          ? depth < -(item.width || 1) - (item.depth || 1) || depth > 53
+          : depth < 0.35 || depth > 45
+      )
+        continue;
       const x = w / 2 + (side / depth) * projection,
         size = Math.min(h * 2, projection / depth),
         ground = horizon + size * 0.55;
-      if (x < -size || x > w + size) continue;
-      if (item.kind === "tree") {
-        ctx.fillStyle = "#3b4130";
-        ctx.fillRect(
-          x - size * 0.06,
-          ground - size * 0.9,
-          size * 0.12,
-          size * 0.9,
-        );
-        ctx.fillStyle = "#426e45";
-        ctx.beginPath();
-        ctx.moveTo(x, ground - size * 1.8);
-        ctx.lineTo(x + size * 0.5, ground - size * 0.35);
-        ctx.lineTo(x - size * 0.5, ground - size * 0.35);
-        ctx.fill();
+      if (!item.schematic && (x < -size || x > w + size)) continue;
+      if (
+        item.kind === "tree" ||
+        item.schematic ||
+        ["player", "npc"].includes(item.kind)
+      ) {
+        const project = (wx, wy, z) => {
+          const dx = wx - camera.x,
+            dy = wy - camera.y;
+          const depth = dx * Math.cos(angle) + dy * Math.sin(angle);
+          const side = -dx * Math.sin(angle) + dy * Math.cos(angle);
+          return {
+            x: w / 2 + (side / Math.max(depth, 0.12)) * projection,
+            y: horizon + ((0.55 - z) * projection) / Math.max(depth, 0.12),
+            depth,
+          };
+        };
+        project.near = 0.12;
+        drawModel(ctx, modelFor(item, state.world.seed), item, project);
       } else if (["camp", "lab", "farm"].includes(item.kind)) {
         ctx.fillStyle = item.kind === "lab" ? "#acbcb5" : "#b39773";
         ctx.fillRect(x - size * 0.45, ground - size, size * 0.9, size);

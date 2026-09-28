@@ -130,10 +130,13 @@
         <a href="?mode=firstperson" data-tool-mode="firstperson"
           >First person</a
         >
-        <button data-tool-target="talk">Talk</button>
+        <button data-tool-target="talk" title="Open chat without moving · T">
+          Chat · T
+        </button>
         <button data-action="gather">Gather</button>
         <button data-action="research">Sample soil</button>
         <button data-tool-target="build">Build</button>
+        <button data-tool-target="workshop">Workshop</button>
         <button data-tool-target="inventory">Inventory</button>
         <button data-tool-target="journal">Activity</button>
         <button data-action="home">Home</button>
@@ -247,39 +250,10 @@
             <button data-action="home" class="secondary compact">
               Return to protected commons
             </button>
-            <details open id="conversation-panel">
-              <summary>Talk with the Samaritans</summary>
-              <label class="small"
-                >Choose a conversation partner<select id="npc">
-                  <option value="mira">Mira · Ecologist</option>
-                  <option value="oren">Oren · Builder</option>
-                  <option value="sol">Sol · Mediator</option>
-                  <option value="world">World chat · all players</option>
-                </select></label
-              >
-              <div id="dialogue" class="dialogue" role="log" aria-live="polite">
-                <p>
-                  Ask what they need, request help, or tell them what you
-                  discovered.
-                </p>
-              </div>
-              <form id="chat">
-                <label class="sr-only" for="message">Your message</label
-                ><input
-                  id="message"
-                  maxlength="1000"
-                  required
-                  placeholder="How can I help you?"
-                /><button>Send</button>
-              </form>
-              <button id="cooperate" class="secondary">
-                Propose cooperation
-              </button>
-              <p class="small">
-                Contextual dialogue with memory. Cooperation is an explicit
-                knowledge-sharing agreement.
-              </p>
-            </details>
+            <p class="small">
+              Press <kbd>T</kbd> or choose Chat to talk with settlers and the
+              Samaritans. No movement required.
+            </p>
             <details>
               <summary>Experimental ledger</summary>
               <p class="small">
@@ -328,6 +302,51 @@
         </div>
       </section>
     </main>
+    <dialog id="chat-dialog" class="chat-dialog" aria-labelledby="chat-title">
+      <header>
+        <div>
+          <span class="eyebrow">CONVERSATION · NO MOVEMENT REQUIRED</span>
+          <h2 id="chat-title">Chat with the world</h2>
+        </div>
+        <button id="chat-close" class="secondary">Close <kbd>Esc</kbd></button>
+      </header>
+      <p class="small">
+        <a href="?mode=story">Open the text story mode</a> · switch perspectives
+        from the bottom bar; this chat stays available in each view.
+      </p>
+      <div class="chat-dialog-content">
+        <div id="conversation-panel">
+          <label class="small"
+            >Choose a conversation partner<select id="npc">
+              <option value="mira">Mira · Ecologist</option>
+              <option value="oren">Oren · Builder</option>
+              <option value="sol">Sol · Mediator</option>
+              <option value="world">World chat · all players</option>
+            </select></label
+          >
+          <div id="dialogue" class="dialogue" role="log" aria-live="polite">
+            <p>
+              Ask what they need, request help, or tell them what you
+              discovered.
+            </p>
+          </div>
+          <form id="chat">
+            <label class="sr-only" for="message">Your message</label
+            ><input
+              id="message"
+              maxlength="1000"
+              required
+              placeholder="How can I help you?"
+            /><button>Send</button>
+          </form>
+          <button id="cooperate" class="secondary">Propose cooperation</button>
+        </div>
+      </div>
+      <p class="small">
+        Choose World chat to talk to settlers or a Samaritan to speak with them
+        directly. Diplomatic agreements remain explicit.
+      </p>
+    </dialog>
     <footer>
       <span>APEXFORGE COLLECTIVE / ECHOES OF VIRTUALITY</span
       ><span>Small beginnings. Persistent consequences.</span>

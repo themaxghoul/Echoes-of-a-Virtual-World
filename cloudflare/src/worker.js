@@ -184,6 +184,22 @@ export class World extends DurableObject {
           intervalHours: 2,
         });
       }
+      if (path === "/api/schematics" && request.method === "GET") {
+        this.rate("schematics:" + id, 10, 10000);
+        return json(this.game.crafting.list(id));
+      }
+      if (path === "/api/schematics/generate" && request.method === "POST") {
+        this.rate("design:" + id, 5, 60000);
+        return json(
+          await this.game.crafting.generate(
+            id,
+            await readJson(request),
+            ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)
+              ? null
+              : this.env.AI,
+          ),
+        );
+      }
       if (path === "/api/chunk" && request.method === "GET") {
         this.rate("chunk:" + id, 30, 1000);
         const p = this.game.player(id),

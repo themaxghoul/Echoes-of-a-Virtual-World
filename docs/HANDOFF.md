@@ -96,5 +96,11 @@ The persistence update is tracked in PR #8 and docs/PERSISTENT_WORLD_PLAN.md. Fi
 
 The new Main726 story adapter currently runs on the Cloudflare backend only. The optional Python alpha retains its original shared-world commands and is not a feature-equivalent substitute for /api/story.
 
-## Bottom game toolbar (2026-09-23)
-The shared client now shows a bottom dock in story, isometric and first-person sessions. Mode links retain the saved account. Talk focuses the story composer in story mode and the Samaritan chat elsewhere. Build, Inventory and Activity reveal the existing sidebar controls; Gather, Sample soil and Home reuse the existing validated commands. The dock is hidden outside an active session, scrolls horizontally on narrow screens, and accounts for mobile safe areas. No new world mechanics or renderer changes were introduced.
+## Bottom game toolbar and chat (2026-09-28)
+A responsive dock is available in Story, isometric and first-person sessions. It
+switches perspectives and opens game tools. The separate Talk with the Samaritans
+sidebar section has been removed. Press T or choose Chat · T to open one accessible
+conversation dialog from any mode without moving; it holds world chat, individual
+Samaritan dialogue and explicit diplomacy. The Story mode remains the single
+text-based perspective. Its village conversation and saved narrative stay there.
+The workshop can also open from any mode and remains keyboard/touch accessible.

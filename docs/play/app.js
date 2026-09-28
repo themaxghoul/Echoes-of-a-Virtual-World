@@ -1,6 +1,7 @@
 import { snapshotFresh } from "./connection.js";
 import { ChunkRetry } from "./chunk-retry.js";
 const chunkRetry = new ChunkRetry();
+let workshop;
 const $ = (id) => document.getElementById(id);
 const mode = new URLSearchParams(location.search).get("mode");
 const modes = {
@@ -101,20 +102,23 @@ function addDialogue(name, text) {
   $("dialogue").scrollTop = $("dialogue").scrollHeight;
 }
 
-async function action(data) {
+async function action(data, throwErrors = false) {
   if (!connected) {
+    if (throwErrors)
+      throw Error("Disconnected. Wait for the world to reconnect.");
     feedback("Disconnected. Actions are paused until the server reconnects.");
     return null;
   }
   try {
     const result = await api("/api/command", {
       ...data,
-      request_id: crypto.randomUUID(),
+      request_id: data.request_id || crypto.randomUUID(),
     });
     feedback(result.reply || "Done.");
     return result;
   } catch (error) {
     feedback(error.message);
+    if (throwErrors) throw error;
     return null;
   }
 }
@@ -158,11 +162,13 @@ async function loadChunks(p) {
 function display(state) {
   if (state.notice && state.notice !== snapshot?.notice) feedback(state.notice);
   snapshot = state;
+  workshop?.update(state);
   $("player-name").textContent = state.self.name;
   $("coords").textContent =
     `${state.self.x.toFixed(1)}, ${state.self.y.toFixed(1)} · ${state.world.members} settlers · ${state.world.radius * 2}² tiles`;
   const inventory = [
     ["Wood", state.self.wood],
+    ["Planks", state.self.planks || 0],
     ["Stone", state.self.stone],
     ["Food", state.self.food],
     ["Research", state.self.research],
@@ -287,6 +293,7 @@ async function authenticate(create) {
 let lastInputAt = 0;
 let wasMoving = false;
 function inputTick() {
+  if (document.querySelector("dialog[open]")) return;
   if (!connected || socket?.readyState !== WebSocket.OPEN) return;
   let x = pad.x + (keys.has("d") ? 1 : 0) - (keys.has("a") ? 1 : 0),
     y =
@@ -327,7 +334,35 @@ if (modes[mode]) {
     .querySelector(`[data-tool-mode="${mode}"]`)
     .setAttribute("aria-current", "page");
   document.querySelectorAll("[data-tool-target]").forEach((button) => {
-    button.onclick = () => {
+    button.onclick = async () => {
+      if (button.dataset.toolTarget === "talk") {
+        keys.clear();
+        pad.x = pad.y = 0;
+        $("chat-dialog").showModal();
+        $("message").focus();
+        return;
+      }
+      if (button.dataset.toolTarget === "talk") {
+        keys.clear();
+        pad.x = pad.y = 0;
+        $("chat-dialog").showModal();
+        $("message").focus();
+        return;
+      }
+      if (button.dataset.toolTarget === "workshop") {
+        keys.clear();
+        pad.x = pad.y = 0;
+        if (!workshop) {
+          const { mountWorkshop } = await import("./workshop.js");
+          workshop = mountWorkshop({
+            api,
+            action: (data) => action(data, true),
+            getState: () => snapshot,
+          });
+        }
+        await workshop.open();
+        return;
+      }
       const targets = {
         talk: mode === "story" ? $("story-message") : $("message"),
         build: document.querySelector('[data-action="build"]'),
@@ -393,6 +428,10 @@ if (modes[mode]) {
     }
     location.reload();
   };
+  $("chat-close").onclick = () => $("chat-dialog").close();
+  $("chat-dialog").addEventListener("click", (e) => {
+    if (e.target === $("chat-dialog")) $("chat-dialog").close();
+  });
   document.querySelectorAll("[data-action]").forEach(
     (button) =>
       (button.onclick = () =>
@@ -473,7 +512,24 @@ if (modes[mode]) {
     });
   };
   window.addEventListener("keydown", (e) => {
-    if (typeof e.key !== "string" || mode === "story") return;
+    if (typeof e.key !== "string") return;
+    const typing = ["INPUT", "SELECT", "TEXTAREA"].includes(
+      document.activeElement.tagName,
+    );
+    if (e.key.toLowerCase() === "t" && !e.repeat && !typing) {
+      if (document.querySelector("dialog[open]") && !$("chat-dialog").open)
+        return;
+      e.preventDefault();
+      keys.clear();
+      pad.x = pad.y = 0;
+      if ($("chat-dialog").open) $("chat-dialog").close();
+      else {
+        $("chat-dialog").showModal();
+        $("message").focus();
+      }
+      return;
+    }
+    if (document.querySelector("dialog[open]") || mode === "story") return;
     if (
       ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(
         document.activeElement.tagName,

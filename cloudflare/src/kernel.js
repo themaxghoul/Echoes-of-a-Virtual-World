@@ -1,4 +1,5 @@
 import { Agents } from "./agents.js";
+import { Crafting } from "./crafting.js";
 import { Possibilities, GenerationLimit } from "./possibilities.js";
 /** Free-tier authoritative world. Terrain stays cached after first entry.
  * SQL is accessed on first terrain entry, startup, durable actions and batched saves.
@@ -117,6 +118,7 @@ export class Kernel {
       "CREATE TABLE IF NOT EXISTS ecosystem(key TEXT PRIMARY KEY,remaining INTEGER,updated REAL)",
     );
     this.agents = new Agents(this, NPCS);
+    this.crafting = new Crafting(this);
   }
   save(p) {
     this.storage.exec(
@@ -315,7 +317,11 @@ export class Kernel {
       Math.abs(y) < this.world.radius &&
       this.terrain(x, y) !== "water" &&
       !this.buildings.some(
-        (b) => b.x === Math.floor(x) && b.y === Math.floor(y),
+        (b) =>
+          Math.floor(x) >= b.x &&
+          Math.floor(x) < b.x + (b.width || 1) &&
+          Math.floor(y) >= b.y &&
+          Math.floor(y) < b.y + (b.depth || 1),
       )
     );
   }
@@ -446,6 +452,9 @@ export class Kernel {
     if (
       ![
         "gather",
+        "craft_planks",
+        "save_schematic",
+        "construct",
         "build",
         "research",
         "transfer",
@@ -490,6 +499,8 @@ export class Kernel {
     });
   }
   act(id, data) {
+    if (["craft_planks", "save_schematic", "construct"].includes(data.type))
+      return this.crafting.act(id, data);
     const p = this.players.get(id),
       kind = data.type;
     if (kind === "home") {

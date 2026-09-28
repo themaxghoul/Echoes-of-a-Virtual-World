@@ -1,3 +1,4 @@
+import { groundColor, modelFor, drawModel } from "./models.js";
 import { colors, canvasLoop, interpolate } from "./graphics.js";
 export function mount(container, { tile }) {
   let state,
@@ -37,7 +38,7 @@ export function mount(container, { tile }) {
           y,
           Math.abs(x) >= state.world.radius || Math.abs(y) >= state.world.radius
             ? "#162019"
-            : colors[terrain],
+            : groundColor(terrain, x, y, state.world.seed),
         );
       }
     const objects = [];
@@ -61,18 +62,21 @@ export function mount(container, { tile }) {
       }
       const p = project(world.x, world.y);
       if (p.x < -90 || p.x > w + 90 || p.y < -90 || p.y > h + 120) continue;
-      if (item.kind === "tree") {
-        ctx.fillStyle = "#203828";
-        ctx.fillRect(p.x - 3, p.y - 24, 6, 28);
-        ctx.fillStyle = "#83a069";
-        ctx.beginPath();
-        ctx.moveTo(p.x, p.y - 55);
-        ctx.lineTo(p.x + 15, p.y - 12);
-        ctx.lineTo(p.x - 15, p.y - 12);
-        ctx.fill();
-        continue;
-      }
-      if (["camp", "farm", "lab"].includes(item.kind)) {
+      if (
+        item.kind === "tree" ||
+        item.schematic ||
+        ["self", "player", "npc"].includes(item.kind)
+      ) {
+        drawModel(ctx, modelFor(item, state.world.seed), world, (x, y, z) => {
+          const projected = project(x, y);
+          return {
+            ...projected,
+            y: projected.y - z * 30,
+            depth: -x - y - z * 0.01,
+          };
+        });
+        if (item.kind === "tree") continue;
+      } else if (["camp", "farm", "lab"].includes(item.kind)) {
         ctx.fillStyle =
           item.kind === "lab"
             ? "#b5c1bd"
@@ -88,21 +92,6 @@ export function mount(container, { tile }) {
         ctx.fill();
         ctx.fillStyle = "#344235";
         ctx.fillRect(p.x - 4, p.y - 9, 8, 14);
-      } else {
-        ctx.fillStyle = "#10231966";
-        ctx.beginPath();
-        ctx.ellipse(p.x, p.y + 3, 10, 5, 0, 0, 7);
-        ctx.fill();
-        ctx.fillStyle =
-          item.kind === "self"
-            ? "#e4eea7"
-            : item.kind === "npc"
-              ? "#e8b780"
-              : "#a3c9d2";
-        ctx.fillRect(p.x - 5, p.y - 18, 10, 18);
-        ctx.beginPath();
-        ctx.arc(p.x, p.y - 24, 6, 0, 7);
-        ctx.fill();
       }
       ctx.textAlign = "center";
       ctx.font = "10px sans-serif";
