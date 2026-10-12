@@ -26,7 +26,7 @@ const Leaderboard = () => {
           endpoint = '/api/ranks/leaderboard';
           break;
         case 'earnings':
-          endpoint = '/api/rt-tasks/leaderboard/hourly';
+          endpoint = '/api/entity-earnings/leaderboard';
           break;
         case 'compute':
           endpoint = '/api/economy/leaderboard/compute';

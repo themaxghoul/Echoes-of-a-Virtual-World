@@ -573,6 +573,13 @@ async def chat_with_ai(request: ChatRequest):
     except Exception as e:
         logger.error(f"Failed to create memories: {e}")
     
+    # AI Cognitive Yield — hybrid economy mining for meaningful NPC conversation
+    try:
+        from hybrid_economy_router import record_contribution
+        await record_contribution(request.character_id, "ai_cognitive", 1.0, source="npc_chat")
+    except Exception as mine_err:
+        logger.debug(f"VE0 cognitive yield skipped: {mine_err}")
+    
     return ChatResponse(
         conversation_id=conversation_id,
         response=clean_response,

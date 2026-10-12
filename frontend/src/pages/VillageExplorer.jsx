@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import axios from 'axios';
 import { pushNavHistory } from '@/components/GameNavigation';
 import MultiplayerChat from '@/components/MultiplayerChat';
+import useVE0Mining from '@/hooks/useVE0Mining';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -59,6 +60,7 @@ const ALL_LOCATIONS_OPEN = true;
 
 const VillageExplorer = () => {
   const navigate = useNavigate();
+  useVE0Mining();
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   
@@ -418,7 +420,7 @@ const VillageExplorer = () => {
                 </h3>
                 <div className="grid grid-cols-2 gap-2">
                   <button
-                    onClick={() => navigate('/world-explorer')}
+                    onClick={() => navigate('/play')}
                     className="p-3 rounded-sm border border-green-500/30 bg-green-500/10 hover:bg-green-500/20 transition-all text-left"
                     data-testid="sidebar-explore-btn"
                   >

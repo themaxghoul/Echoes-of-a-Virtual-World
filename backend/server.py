@@ -2489,6 +2489,11 @@ async def startup_event():
         {"$unset": {"profile_picture": "", "profile_logo": ""}}
     )
     asyncio.create_task(task_factory_scheduler_loop())
+    try:
+        from hybrid_economy_router import ensure_ve0_migration
+        await ensure_ve0_migration()
+    except Exception as e:
+        logging.error(f"VE0 migration failed: {e}")
     logger.info("AI Village initialized with Sirix-1, NPCs, AI Villagers and Task Factory scheduler")
 
 # ============ API Routes ============
@@ -3070,7 +3075,7 @@ async def send_location_message(location_id: str, sender_id: str, sender_name: s
         "message_type": message_type,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
-    await db.multiplayer_messages.insert_one(message)
+    await db.multiplayer_messages.insert_one(dict(message))
     
     # Broadcast to connected users
     await broadcast_to_location(location_id, {
@@ -3389,19 +3394,6 @@ async def build_structure(request: BuildRequest):
         "remaining_materials": new_materials
     }
 
-@api_router.get("/buildings/{location_id}")
-async def get_location_buildings(location_id: str):
-    """Get all buildings at a location"""
-    buildings = await db.buildings.find({"location_id": location_id}, {"_id": 0}).to_list(100)
-    
-    # Add schematic details to each building
-    for building in buildings:
-        schematic = SCHEMATICS.get(building.get("schematic_id"))
-        if schematic:
-            building["schematic"] = schematic
-    
-    return buildings
-
 @api_router.get("/buildings/global")
 async def get_all_buildings():
     """Get all buildings in the world"""
@@ -3422,6 +3414,19 @@ async def get_all_buildings():
         "total": len(buildings),
         "by_location": by_location
     }
+
+@api_router.get("/buildings/{location_id}")
+async def get_location_buildings(location_id: str):
+    """Get all buildings at a location"""
+    buildings = await db.buildings.find({"location_id": location_id}, {"_id": 0}).to_list(100)
+    
+    # Add schematic details to each building
+    for building in buildings:
+        schematic = SCHEMATICS.get(building.get("schematic_id"))
+        if schematic:
+            building["schematic"] = schematic
+    
+    return buildings
 
 # ============ Trading Routes ============
 
@@ -6262,8 +6267,9 @@ async def get_oracle_status():
             "vision_cooldown": 0,
             "created_at": datetime.now(timezone.utc).isoformat()
         }
-        await db.ai_villagers.insert_one(oracle)
+        await db.ai_villagers.insert_one(dict(oracle))
     
+    oracle.pop("_id", None)
     return {
         "oracle": oracle,
         "available": True,
@@ -6909,7 +6915,7 @@ async def websocket_endpoint(websocket: WebSocket, location_id: str, user_id: st
                         "message_type": data.get("message_type", "chat"),
                         "timestamp": datetime.now(timezone.utc).isoformat()
                     }
-                    await db.multiplayer_messages.insert_one(message)
+                    await db.multiplayer_messages.insert_one(dict(message))
                     await broadcast_to_location(location_id, {"type": "chat", "data": message})
             
             elif data["type"] == "emote":
@@ -6929,14 +6935,6 @@ async def websocket_endpoint(websocket: WebSocket, location_id: str, user_id: st
 # Include router
 app.include_router(api_router)
 
-# Include earnings router
-try:
-    from earnings_router import earnings_router
-    app.include_router(earnings_router, prefix="/api")
-    logging.info("Earnings router loaded successfully")
-except ImportError as e:
-    logging.warning(f"Could not load earnings router: {e}")
-
 # Include NPC gaming router
 try:
     from npc_gaming_router import npc_gaming_router
@@ -6944,14 +6942,6 @@ try:
     logging.info("NPC Gaming router loaded successfully")
 except ImportError as e:
     logging.warning(f"Could not load NPC gaming router: {e}")
-
-# Include task providers router
-try:
-    from task_providers_router import task_providers_router
-    app.include_router(task_providers_router, prefix="/api")
-    logging.info("Task providers router loaded successfully")
-except ImportError as e:
-    logging.warning(f"Could not load task providers router: {e}")
 
 # Include Stripe payout router
 try:
@@ -6992,14 +6982,6 @@ try:
     logging.info("Memory System router loaded successfully")
 except ImportError as e:
     logging.warning(f"Could not load Memory System router: {e}")
-
-# Include Jobs & Career System router
-try:
-    from jobs_router import jobs_router
-    app.include_router(jobs_router, prefix="/api")
-    logging.info("Jobs & Career router loaded successfully")
-except ImportError as e:
-    logging.warning(f"Could not load Jobs router: {e}")
 
 # Include Unity Offload router (Cross-platform Unity support)
 try:
@@ -7049,14 +7031,6 @@ try:
 except ImportError as e:
     logging.warning(f"Could not load Entity Earnings router: {e}")
 
-# Include Task Marketplace router (Human & Robot task integration)
-try:
-    from task_marketplace_router import task_marketplace_router
-    app.include_router(task_marketplace_router, prefix="/api")
-    logging.info("Task Marketplace router loaded successfully")
-except ImportError as e:
-    logging.warning(f"Could not load Task Marketplace router: {e}")
-
 # Include Building System router (2D grid-based building)
 try:
     from building_system_router import building_system_router
@@ -7072,14 +7046,6 @@ try:
     logging.info("World Map router loaded successfully")
 except ImportError as e:
     logging.warning(f"Could not load World Map router: {e}")
-
-# Include Real-Time Tasks router (Micro-task system)
-try:
-    from realtime_tasks_router import rt_tasks_router
-    app.include_router(rt_tasks_router, prefix="/api")
-    logging.info("Real-Time Tasks router loaded successfully")
-except ImportError as e:
-    logging.warning(f"Could not load Real-Time Tasks router: {e}")
 
 # Include Currency & Compute router (AI Compute Marketplace)
 try:
@@ -7146,13 +7112,6 @@ try:
     logging.info("Universal Possession Ledger router loaded successfully")
 except ImportError as e:
     logging.warning(f"Could not load Possession Ledger router: {e}")
-
-try:
-    from bounty_board_router import bounty_board_router
-    app.include_router(bounty_board_router, prefix="/api")
-    logging.info("Bounty Board router loaded successfully")
-except ImportError as e:
-    logging.warning(f"Could not load Bounty Board router: {e}")
 
 try:
     from npc_memory_router import router as npc_memory_router
@@ -7258,13 +7217,29 @@ try:
 except ImportError as e:
     logging.warning(f"Could not load Cosmetics router: {e}")
 
-# Include Field Ops router (real-world tasks: photo / voice / video)
+# Include Hybrid Economy router (VE0 / VE Vouchers / VE$ — BTC-indexed hybrid growth)
 try:
-    from field_ops_router import field_ops_router
-    app.include_router(field_ops_router, prefix="/api")
-    logging.info("Field Ops router loaded successfully")
+    from hybrid_economy_router import hybrid_economy_router
+    app.include_router(hybrid_economy_router, prefix="/api")
+    logging.info("Hybrid Economy router loaded successfully")
 except ImportError as e:
-    logging.warning(f"Could not load Field Ops router: {e}")
+    logging.warning(f"Could not load Hybrid Economy router: {e}")
+
+# Include Society Standing router (social / political / economic / undercover)
+try:
+    from society_router import society_router
+    app.include_router(society_router, prefix="/api")
+    logging.info("Society router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Society router: {e}")
+
+# Include Crafting router (Minecraft-style recipes, Sims-depth specs)
+try:
+    from crafting_router import crafting_router
+    app.include_router(crafting_router, prefix="/api")
+    logging.info("Crafting router loaded successfully")
+except ImportError as e:
+    logging.warning(f"Could not load Crafting router: {e}")
 
 app.add_middleware(
     CORSMiddleware,

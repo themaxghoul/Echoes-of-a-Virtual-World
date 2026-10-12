@@ -78,14 +78,14 @@ const IsometricBuilder = () => {
         axios.get(`${API}/isometric-building/plots/${userId}`),
         axios.get(`${API}/isometric-building/prefabs`),
         axios.get(`${API}/isometric-building/plot-sizes`),
-        axios.get(`${API}/earnings/account/${userId}`).catch(() => ({ data: { available_balance_usd: 0 } })),
+        axios.get(`${API}/cosmetics/wallet/${userId}`).catch(() => ({ data: { balance_ve: 0 } })),
         axios.get(`${API}/isometric-building/stats/${userId}`).catch(() => ({ data: null }))
       ]);
       
       setPlots(plotsRes.data.plots || []);
       setPrefabs(prefabsRes.data.categories || {});
       setPlotSizes(sizesRes.data.plot_sizes || {});
-      setBalance(balanceRes.data.available_balance_usd || 0);
+      setBalance(balanceRes.data.balance_ve || 0);
       if (statsRes.data) setStats(statsRes.data);
     } catch (error) {
       console.error('Failed to load:', error);

@@ -288,30 +288,30 @@ const ModeSelection = () => {
             </CardContent>
           </Card>
 
-          {/* World Explorer - Unified Exploration Mode */}
+          {/* First-Person RPG - Unified immersive experience */}
           <Card 
             className="bg-surface/80 border-border/50 rounded-sm hover:border-green-500/50 transition-all duration-300 cursor-pointer group"
-            onClick={() => selectMode('explore', '/world-explorer')}
+            onClick={() => selectMode('explore', '/play')}
             data-testid="explore-mode-card"
           >
             <CardContent className="p-6 text-center">
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-green-500/20 border border-green-500/30 flex items-center justify-center group-hover:scale-110 transition-transform">
                 <Compass className="w-8 h-8 text-green-400" />
               </div>
-              <h3 className="font-cinzel text-lg text-foreground mb-2">World Explorer</h3>
+              <h3 className="font-cinzel text-lg text-foreground mb-2">First-Person RPG</h3>
               <p className="font-manrope text-sm text-muted-foreground mb-4">
-                Explore the infinite world. Same coordinates across 2D, Isometric, and 3D views.
+                Immersive RPG world. Societal standing (Tab), chat (/), crafting (C), science and exploration.
               </p>
               <div className="flex flex-wrap gap-2 justify-center mb-4">
-                <Badge className="bg-green-500/10 text-green-400 text-xs rounded-sm">Unified Seed</Badge>
-                <Badge className="bg-green-500/10 text-green-400 text-xs rounded-sm">Multi-View</Badge>
+                <Badge className="bg-green-500/10 text-green-400 text-xs rounded-sm">Societal Standing</Badge>
+                <Badge className="bg-green-500/10 text-green-400 text-xs rounded-sm">Crafting</Badge>
               </div>
               <Button 
                 data-testid="select-explore-btn"
                 className="w-full bg-green-600 text-white hover:bg-green-500 font-cinzel rounded-sm"
               >
                 <Compass className="w-5 h-5 mr-2" />
-                Explore World
+                Enter the World
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
             </CardContent>
@@ -357,18 +357,6 @@ const ModeSelection = () => {
           <Button
             variant="outline"
             onClick={() => {
-              pushNavHistory('/jobs');
-              navigate('/jobs');
-            }}
-            className="border-blue-400/30 text-blue-400 hover:bg-blue-400/10 rounded-sm"
-            data-testid="jobs-btn"
-          >
-            <Briefcase className="w-4 h-4 mr-2" />
-            Career Hub
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
               pushNavHistory('/isometric-builder');
               navigate('/isometric-builder');
             }}
@@ -388,18 +376,6 @@ const ModeSelection = () => {
           >
             <ArrowLeftRight className="w-4 h-4 mr-2" />
             Trading
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              pushNavHistory('/earnings');
-              navigate('/earnings');
-            }}
-            className="border-green-400/30 text-green-400 hover:bg-green-400/10 rounded-sm"
-            data-testid="earnings-btn"
-          >
-            <DollarSign className="w-4 h-4 mr-2" />
-            Earn VE$
           </Button>
           <Button
             variant="outline"
@@ -463,18 +439,6 @@ const ModeSelection = () => {
           <Button
             variant="outline"
             onClick={() => {
-              pushNavHistory('/marketplace');
-              navigate('/marketplace');
-            }}
-            className="border-emerald-400/30 text-emerald-400 hover:bg-emerald-400/10 rounded-sm"
-            data-testid="marketplace-btn"
-          >
-            <ShoppingBag className="w-4 h-4 mr-2" />
-            Marketplace
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
               pushNavHistory('/ai-partners');
               navigate('/ai-partners');
             }}
@@ -523,30 +487,6 @@ const ModeSelection = () => {
           <Button
             variant="outline"
             onClick={() => {
-              pushNavHistory('/task-factory');
-              navigate('/task-factory');
-            }}
-            className="border-violet-400/30 text-violet-400 hover:bg-violet-400/10 rounded-sm"
-            data-testid="task-factory-btn"
-          >
-            <Cpu className="w-4 h-4 mr-2" />
-            Task Factory
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
-              pushNavHistory('/task-workbench');
-              navigate('/task-workbench');
-            }}
-            className="border-cyan-400/30 text-cyan-400 hover:bg-cyan-400/10 rounded-sm"
-            data-testid="task-workbench-btn"
-          >
-            <Hammer className="w-4 h-4 mr-2" />
-            Task Workbench
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => {
               pushNavHistory('/avatar-studio');
               navigate('/avatar-studio');
             }}
@@ -569,18 +509,6 @@ const ModeSelection = () => {
             VE$ Boutique
           </Button>
           <Button
-            variant="outline"
-            onClick={() => {
-              pushNavHistory('/field-ops');
-              navigate('/field-ops');
-            }}
-            className="border-amber-400/30 text-amber-400 hover:bg-amber-400/10 rounded-sm"
-            data-testid="field-ops-btn"
-          >
-            <Camera className="w-4 h-4 mr-2" />
-            Field Ops
-          </Button>
-          <Button
             onClick={() => {
               pushNavHistory('/economy');
               navigate('/economy');
@@ -589,7 +517,7 @@ const ModeSelection = () => {
             data-testid="economy-hub-btn"
           >
             <Coins className="w-4 h-4 mr-2" />
-            Economy Hub
+            Economy Nexus
           </Button>
         </div>
 

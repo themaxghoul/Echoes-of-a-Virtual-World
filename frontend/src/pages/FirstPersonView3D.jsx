@@ -21,6 +21,9 @@ import InteractiveMap from '@/components/InteractiveMap';
 import LayoutCustomization, { useGameLayout } from '@/components/LayoutCustomization';
 import NotificationCenter, { NotificationBell } from '@/components/NotificationCenter';
 import { pushNavHistory } from '@/components/GameNavigation';
+import useVE0Mining from '@/hooks/useVE0Mining';
+import SocietyStandingOverlay from '@/components/SocietyStandingOverlay';
+import CraftingOverlay from '@/components/CraftingOverlay';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -482,6 +485,7 @@ const ExitPortal = ({ exit, playerPos, isNearby, onClick }) => {
 
 const FirstPersonView3D = () => {
   const navigate = useNavigate();
+  useVE0Mining();
   const gameLoopRef = useRef(null);
   
   // Game state
@@ -513,6 +517,8 @@ const FirstPersonView3D = () => {
   const [showMap, setShowMap] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showLayoutSettings, setShowLayoutSettings] = useState(false);
+  const [showSociety, setShowSociety] = useState(false);
+  const [showCrafting, setShowCrafting] = useState(false);
   const [availableCommands, setAvailableCommands] = useState({});
   const [availableChannels, setAvailableChannels] = useState([]);
   
@@ -669,6 +675,31 @@ const FirstPersonView3D = () => {
     const handleKeyDown = (e) => {
       if (showChat || showCommands) return;
       
+      // Tab — societal standing menu
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        setShowCrafting(false);
+        setShowSociety(s => !s);
+        return;
+      }
+      // While an overlay is open, only allow close keys (so typing doesn't move the player)
+      if (showSociety || showCrafting) {
+        if (e.key === 'Escape') { setShowSociety(false); setShowCrafting(false); }
+        return;
+      }
+      // Forward slash — open chat
+      if (e.key === '/') {
+        e.preventDefault();
+        setShowMultiplayerChat(true);
+        return;
+      }
+      // C — crafting workshop
+      if (e.key.toLowerCase() === 'c') {
+        setShowSociety(false);
+        setShowCrafting(true);
+        return;
+      }
+      
       switch(e.key.toLowerCase()) {
         case 'w': case 'arrowup': setMovement(m => ({ ...m, up: true })); break;
         case 's': case 'arrowdown': setMovement(m => ({ ...m, down: true })); break;
@@ -697,7 +728,7 @@ const FirstPersonView3D = () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
-  }, [showChat, showCommands]);
+  }, [showChat, showCommands, showSociety, showCrafting]);
   
   // Handle interaction
   const handleInteract = useCallback(async () => {
@@ -1277,6 +1308,27 @@ const FirstPersonView3D = () => {
                 >
                   <MessageCircle className="w-5 h-5 mr-3" />
                   Multiplayer Chat
+                  <Badge className="ml-auto bg-cyan-500/30 text-cyan-300 text-xs font-mono">/</Badge>
+                </Button>
+                
+                <Button
+                  onClick={() => { setIsPaused(false); setShowSociety(true); }}
+                  className="w-full justify-start bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 rounded-sm"
+                  data-testid="society-menu-btn"
+                >
+                  <Users className="w-5 h-5 mr-3" />
+                  Societal Standing
+                  <Badge className="ml-auto bg-rose-500/30 text-rose-300 text-xs font-mono">TAB</Badge>
+                </Button>
+                
+                <Button
+                  onClick={() => { setIsPaused(false); setShowCrafting(true); }}
+                  className="w-full justify-start bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 rounded-sm"
+                  data-testid="crafting-menu-btn"
+                >
+                  <Package className="w-5 h-5 mr-3" />
+                  Crafting Workshop
+                  <Badge className="ml-auto bg-amber-500/30 text-amber-300 text-xs font-mono">C</Badge>
                 </Button>
                 
                 <Button
@@ -1422,6 +1474,22 @@ const FirstPersonView3D = () => {
             </ScrollArea>
           </Card>
         </div>
+      )}
+      
+      {/* Societal Standing (Tab) */}
+      {showSociety && (
+        <SocietyStandingOverlay
+          userId={userProfile?.id || localStorage.getItem('userId')}
+          onClose={() => setShowSociety(false)}
+        />
+      )}
+      
+      {/* Crafting Workshop (C) */}
+      {showCrafting && (
+        <CraftingOverlay
+          userId={userProfile?.id || localStorage.getItem('userId')}
+          onClose={() => setShowCrafting(false)}
+        />
       )}
       
       {/* Multiplayer Chat */}

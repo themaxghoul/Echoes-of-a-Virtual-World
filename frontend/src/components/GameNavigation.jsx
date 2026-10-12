@@ -56,7 +56,7 @@ const PAGE_TITLES = {
   '/inventory': 'Inventory',
   '/quests': 'Quests',
   '/profile': 'Profile',
-  '/earnings': 'Earnings Hub',
+  '/economy': 'Economy Nexus',
   '/dataspace': 'Dataspace'
 };
 
@@ -86,7 +86,7 @@ export const GameNavigation = ({
         '/inventory': '/select-mode',
         '/quests': '/select-mode',
         '/profile': '/select-mode',
-        '/earnings': '/select-mode',
+        '/economy': '/select-mode',
         '/dataspace': '/select-mode',
         '/create-character': '/auth',
         '/select-mode': '/auth'
@@ -193,11 +193,11 @@ export const GameModeBar = ({ currentMode = 'story' }) => {
       <Button
         variant={currentMode === 'earnings' ? 'default' : 'ghost'}
         size="sm"
-        onClick={() => navigate('/earnings')}
+        onClick={() => navigate('/economy')}
         className={`rounded-sm ${currentMode === 'earnings' ? 'bg-green-600 text-white' : ''}`}
       >
         <DollarSign className="w-4 h-4 mr-1" />
-        Earn
+        Economy
       </Button>
     </div>
   );

@@ -49,10 +49,6 @@ class TaskTemplate(BaseModel):
     repeat_batch_size: int = Field(default=10, description="Tasks to generate per repeat")
     max_instances: int = Field(default=100)
 
-class SubmitTaskRequest(BaseModel):
-    worker_id: str
-    output: Dict[str, Any]
-
 class GenerateTasksRequest(BaseModel):
     template_id: str
     count: int = 10
@@ -197,121 +193,6 @@ async def get_task(instance_id: str):
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
-
-@data_api_router.post("/factory/task/{instance_id}/claim")
-async def claim_task(instance_id: str, worker_id: str):
-    """Worker claims a task"""
-    db = get_db()
-    
-    task = await db.factory_task_instances.find_one({"instance_id": instance_id})
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    if task["status"] != "available":
-        raise HTTPException(status_code=400, detail=f"Task not available (status: {task['status']})")
-    
-    if task.get("compute_cost", 0) > 0:
-        wallet = await db.entity_wallets.find_one({"entity_id": worker_id})
-        if (wallet.get("compute_balance", 0) if wallet else 0) < task["compute_cost"]:
-            raise HTTPException(status_code=400, detail=f"Insufficient compute. Need: {task['compute_cost']}")
-    
-    await db.factory_task_instances.update_one(
-        {"instance_id": instance_id},
-        {"$set": {"status": "claimed", "claimed_by": worker_id, "claimed_at": datetime.now(timezone.utc).isoformat()}}
-    )
-    
-    return {"claimed": True, "instance_id": instance_id, "title": task["title"], "objective": task["objective"],
-            "inputs": task["inputs"], "process": task["process"], "output_spec": task["output_spec"]}
-
-@data_api_router.post("/factory/task/{instance_id}/submit")
-async def submit_task(instance_id: str, data: SubmitTaskRequest):
-    """Submit task output for validation"""
-    db = get_db()
-    
-    task = await db.factory_task_instances.find_one({"instance_id": instance_id})
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    if task["status"] != "claimed":
-        raise HTTPException(status_code=400, detail="Task not claimed")
-    if task.get("claimed_by") != data.worker_id:
-        raise HTTPException(status_code=403, detail="Not your task")
-    
-    if task.get("compute_cost", 0) > 0:
-        await db.entity_wallets.update_one({"entity_id": data.worker_id}, {"$inc": {"compute_balance": -task["compute_cost"]}})
-    
-    validation_result = await validate_output(task, data.output)
-    new_status = "completed" if validation_result["passed"] else "failed"
-    
-    await db.factory_task_instances.update_one(
-        {"instance_id": instance_id},
-        {"$set": {"status": new_status, "submitted_output": data.output, "submitted_at": datetime.now(timezone.utc).isoformat(),
-                  "validation_result": validation_result, "completed_at": datetime.now(timezone.utc).isoformat()}}
-    )
-    
-    reward_paid = 0
-    boost_applied = False
-    if validation_result["passed"]:
-        reward_paid = task.get("reward_ve", 0)
-        # Apply Forge Surge boost (VE$ Boutique) if active
-        from cosmetics_router import get_boost_multiplier
-        multiplier = await get_boost_multiplier(db, data.worker_id, "task_reward")
-        if multiplier > 1.0:
-            reward_paid = round(reward_paid * multiplier, 4)
-            boost_applied = True
-        await db.entity_wallets.update_one(
-            {"entity_id": data.worker_id},
-            {"$inc": {"balance_ve": reward_paid, "total_earned": reward_paid}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
-            upsert=True
-        )
-        await db.factory_templates.update_one({"template_id": task["template_id"]}, {"$inc": {"stats.instances_completed": 1, "stats.total_ve_paid": reward_paid}})
-    else:
-        await db.factory_templates.update_one({"template_id": task["template_id"]}, {"$inc": {"stats.instances_failed": 1}})
-    
-    return {"submitted": True, "status": new_status, "validation": validation_result, "reward_ve": reward_paid, "boost_applied": boost_applied}
-
-async def validate_output(task: dict, output: dict) -> dict:
-    """Validate task output against spec"""
-    validation_config = task.get("validation", {"type": "auto"})
-    output_spec = task.get("output_spec", {})
-    
-    result = {"passed": True, "type": validation_config.get("type", "auto"), "checks": [], "timestamp": datetime.now(timezone.utc).isoformat()}
-    
-    for field in output_spec.get("required_fields", []):
-        if field not in output:
-            result["passed"] = False
-            result["checks"].append({"field": field, "status": "missing"})
-        else:
-            result["checks"].append({"field": field, "status": "present"})
-    
-    for field, expected_type in output_spec.get("field_types", {}).items():
-        if field in output:
-            actual = type(output[field]).__name__
-            if expected_type == "array":
-                expected_type = "list"
-            if actual != expected_type:
-                result["passed"] = False
-                result["checks"].append({"field": field, "status": "wrong_type", "expected": expected_type, "got": actual})
-    
-    for field, constraint in output_spec.get("constraints", {}).items():
-        if field in output:
-            val = output[field]
-            if "min" in constraint and val < constraint["min"]:
-                result["passed"] = False
-                result["checks"].append({"field": field, "status": "below_min"})
-            if "max" in constraint and val > constraint["max"]:
-                result["passed"] = False
-                result["checks"].append({"field": field, "status": "above_max"})
-            if "min_length" in constraint and len(val) < constraint["min_length"]:
-                result["passed"] = False
-                result["checks"].append({"field": field, "status": "too_short"})
-    
-    for rule in validation_config.get("rules", []):
-        if rule.get("type") == "not_empty":
-            field = rule.get("field")
-            if field and (field not in output or not output[field]):
-                result["passed"] = False
-                result["checks"].append({"rule": "not_empty", "field": field, "status": "failed"})
-    
-    return result
 
 @data_api_router.get("/factory/stats")
 async def get_factory_stats():
