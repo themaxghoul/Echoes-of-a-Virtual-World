@@ -204,7 +204,7 @@ const ModeSelection = () => {
                         className="h-1.5 flex-1" 
                       />
                       <span className="text-xs text-muted-foreground w-12 text-right">
-                        {isTranscendent ? '∞' : `${character.health}/${character.max_health}`}
+                        {isTranscendent ? 'âˆž' : `${character.health}/${character.max_health}`}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -214,7 +214,7 @@ const ModeSelection = () => {
                         className="h-1.5 flex-1" 
                       />
                       <span className="text-xs text-muted-foreground w-12 text-right">
-                        {isTranscendent ? '∞' : `${Math.round(character.stamina)}/${character.max_stamina}`}
+                        {isTranscendent ? 'âˆž' : `${Math.round(character.stamina)}/${character.max_stamina}`}
                       </span>
                     </div>
                   </div>
@@ -226,22 +226,22 @@ const ModeSelection = () => {
                 <div className="text-center">
                   <Swords className="w-4 h-4 mx-auto text-red-400 mb-1" />
                   <span className="text-xs text-muted-foreground">STR</span>
-                  <p className="font-mono text-sm text-foreground">{isTranscendent ? '∞' : character.strength}</p>
+                  <p className="font-mono text-sm text-foreground">{isTranscendent ? 'âˆž' : character.strength}</p>
                 </div>
                 <div className="text-center">
                   <Shield className="w-4 h-4 mx-auto text-blue-400 mb-1" />
                   <span className="text-xs text-muted-foreground">DEF</span>
-                  <p className="font-mono text-sm text-foreground">{isTranscendent ? '∞' : character.endurance}</p>
+                  <p className="font-mono text-sm text-foreground">{isTranscendent ? 'âˆž' : character.endurance}</p>
                 </div>
                 <div className="text-center">
                   <Zap className="w-4 h-4 mx-auto text-yellow-400 mb-1" />
                   <span className="text-xs text-muted-foreground">AGI</span>
-                  <p className="font-mono text-sm text-foreground">{isTranscendent ? '∞' : character.agility}</p>
+                  <p className="font-mono text-sm text-foreground">{isTranscendent ? 'âˆž' : character.agility}</p>
                 </div>
                 <div className="text-center">
                   <Sparkles className="w-4 h-4 mx-auto text-purple-400 mb-1" />
                   <span className="text-xs text-muted-foreground">INT</span>
-                  <p className="font-mono text-sm text-foreground">{isTranscendent ? '∞' : character.intelligence}</p>
+                  <p className="font-mono text-sm text-foreground">{isTranscendent ? 'âˆž' : character.intelligence}</p>
                 </div>
               </div>
             </CardContent>
@@ -279,7 +279,7 @@ const ModeSelection = () => {
             </CardContent>
           </Card>
 
-          {/* 3D First Person Mode (Web) */}
+          {/* Primary 2.5D Isometric Mode */}
           <Card 
             className="bg-surface/80 border-border/50 rounded-sm hover:border-slate-blue/50 transition-all duration-300 cursor-pointer group"
             onClick={() => selectMode('firstperson', '/play')}
@@ -289,20 +289,20 @@ const ModeSelection = () => {
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-blue/20 border border-slate-blue/30 flex items-center justify-center group-hover:scale-110 transition-transform">
                 <Gamepad2 className="w-8 h-8 text-slate-blue" />
               </div>
-              <h3 className="font-cinzel text-lg text-foreground mb-2">First Person 3D</h3>
+              <h3 className="font-cinzel text-lg text-foreground mb-2">Isometric Settlement</h3>
               <p className="font-manrope text-sm text-muted-foreground mb-4">
-                Immersive 3D in browser. Walk through the village, interact with NPCs.
+                Build the persistent settlement in a readable 2.5D isometric world.
               </p>
               <div className="flex flex-wrap gap-2 justify-center mb-4">
-                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">Web 3D</Badge>
-                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">D-Pad</Badge>
+                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">2.5D Alpha</Badge>
+                <Badge className="bg-slate-blue/10 text-slate-blue text-xs rounded-sm">Construction</Badge>
               </div>
               <Button 
                 data-testid="select-firstperson-btn"
                 className="w-full bg-slate-blue text-white hover:bg-slate-blue-light font-cinzel rounded-sm"
               >
                 <Gamepad2 className="w-5 h-5 mr-2" />
-                Enter 3D Web
+                Enter Settlement
                 <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
             </CardContent>
@@ -432,7 +432,7 @@ const ModeSelection = () => {
       {/* Footer */}
       <footer className="relative z-10 p-4 text-center border-t border-border/30">
         <p className="font-mono text-xs text-muted-foreground/50">
-          Story Mode = 2D Chat + Building | First Person = 3D Models
+          Primary Client = 2.5D Isometric | Legacy views remain available during integration
         </p>
       </footer>
     </div>
