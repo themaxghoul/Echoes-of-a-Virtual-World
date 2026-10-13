@@ -1,0 +1,39 @@
+{
+  "summary": "Iteration 30 verification of hybrid-economy restructure + deletion of VE$ grind features + new /play keybind overlays. Backend: 24/24 pytest cases pass covering hybrid-economy status/mine/presence/wallet/admin-guard/BTC-override, 10 deleted endpoints returning 404, society standing/cover/event, crafting recipes/craft/station-gate. Frontend: all 11 routes (/, /auth, /select-mode, /economy, /quests, /store, /boutique, /avatar-studio, /leaderboard, /isometric-builder, /village) load WITHOUT compile errors — bug-fix verified. /select-mode shows zero remnants of Field Ops/Career Hub/Earn VE$/Marketplace/Task Factory/Task Workbench/Bounty Board/Jobs Hub/Earnings Hub; Economy Nexus button + First-Person RPG card (data-testid=explore-mode-card) present. /economy renders VE0 balance (3710.10), 3 currency cards, CoinGecko attribution, Stabilize button functional, Overview/Mining/Vouchers/Guide/Spend/Admin tabs. /play keybinds confirmed: Tab -> society-overlay (4 standing meters + cover UI), C -> crafting-overlay (14 recipes with station gates), / -> chat panel. No console errors.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/crafting/craft", "issue": "sirix_1_supreme profile.materials has {wood:None, stone:None, iron:None, crystal:None, obsidian:None} — seed-data regression. Caused 500 TypeError '< not supported between NoneType and int' at crafting_router.py:117. Fixed defensively in router (coerce None->0), but seed data still needs to be repopulated so sirix can actually craft."},
+      {"endpoint": "/api/hybrid-economy/presence/tick", "issue": "Rate-limit response uses HTTP 200 with {accepted:false, reason:'rate_limited', retry_in:N} while /api/hybrid-economy/mine quantum_entropy uses HTTP 429. Inconsistent — consider standardizing on 429 for both, or document the difference."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration30_hybrid_economy.py",
+    "/app/test_reports/pytest/iteration30.xml"
+  ],
+  "action_items": [
+    "RESEED sirix_1_supreme user_profiles.materials with real int values (wood/stone/iron/crystal/obsidian) — currently all None, blocking real end-to-end crafting demo. Backend router now defends against None (returns 400 'Missing materials') so no 500s, but UI shows wood:0 stone:0 etc. for the admin which contradicts the handoff note 'sirix has materials seeded'.",
+    "OPTIONAL: Standardize rate-limit HTTP status between /mine (429) and /presence/tick (200+accepted:false)."
+  ],
+  "critical_code_review_comments": [
+    "crafting_router.py original _get_materials returned raw dict from Mongo, exposing it to None values from seed/migration. Hardened to coerce None->0 before comparison.",
+    "hybrid_economy_router.py uses in-memory dicts _last_tick / _last_stab for per-user rate limiting. Will not survive worker restarts and will not deduplicate across multiple pods — acceptable for MVP but note for scale-up.",
+    "society_router.py CoverRequest.alias has min_length=2 which is correctly enforced (422); good.",
+    "Admin-guard pattern: GET /config uses query-param admin_id, PUT /config uses body admin_id. Minor API shape inconsistency but documented via Pydantic model."
+  ],
+  "updated_files": [
+    "/app/backend/crafting_router.py (defensive None-coercion in _get_materials)",
+    "/app/backend/tests/test_iteration30_hybrid_economy.py (new pytest file, 24 cases)"
+  ],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "100% (all target flows verified)"},
+  "test_credentials": "sirix_1 / HCLynnTV04, userId=sirix_1_supreme, characterId=d70e5d9e-7e08-47bf-80cd-2b185abe0d71",
+  "seed_data_creation": "None created. Used existing sirix character for /play testing. Did NOT drain daily mining caps (one quantum + one presence call only).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Economy is still in pre-launch state (launched=false, progress ~0.1%). Do NOT call POST /api/hybrid-economy/launch/force. Materials for sirix_1_supreme are all None in DB — real crafting cannot be exercised without reseeding. Rate-limit cooldowns are 20s (quantum_entropy) and 45s (presence/tick) — space calls accordingly. All 9 deleted VE$ earner endpoints verified 404. Character ID for /play E2E: d70e5d9e-7e08-47bf-80cd-2b185abe0d71. Keybinds Tab/C/ all confirmed working with data-testid overlays."
+}

@@ -78,9 +78,17 @@ class CraftRequest(BaseModel):
     recipe_id: str
 
 
-async def _get_materials(user_id: str) -> dict:
-    profile = await db.user_profiles.find_one({"id": user_id}, {"_id": 0, "materials": 1}) or {}
-    return profile.get("materials", {}) or {}
+async def _get_materials(user_id: str):
+    profile = await db.user_profiles.find_one(
+        {"id": user_id}, {"_id": 0, "materials": 1, "is_transcendent": 1}
+    ) or {}
+    transcendent = bool(profile.get("is_transcendent"))
+    raw = profile.get("materials", {}) or {}
+    # Transcendent accounts (Sirix-1) have immeasurable resources — treat as infinite
+    if transcendent:
+        return {k: 999999 for k in (raw.keys() or ["wood", "stone", "iron", "crystal", "obsidian"])}, True
+    # Defensive: coerce None values to 0 (seed data may contain None)
+    return {k: (v if isinstance(v, (int, float)) else 0) for k, v in raw.items()}, False
 
 
 async def _owned_stations(user_id: str) -> set:
@@ -92,11 +100,11 @@ async def _owned_stations(user_id: str) -> set:
 
 @crafting_router.get("/recipes/{user_id}")
 async def list_recipes(user_id: str):
-    materials = await _get_materials(user_id)
+    materials, transcendent = await _get_materials(user_id)
     stations = await _owned_stations(user_id)
     out = []
     for rid, r in RECIPES.items():
-        missing = {m: need - materials.get(m, 0) for m, need in r["materials"].items() if materials.get(m, 0) < need}
+        missing = {} if transcendent else {m: need - materials.get(m, 0) for m, need in r["materials"].items() if materials.get(m, 0) < need}
         station_ok = r["station"] is None or r["station"] in stations
         out.append({
             "recipe_id": rid,
@@ -105,7 +113,7 @@ async def list_recipes(user_id: str):
             "missing_materials": missing,
             "station_owned": station_ok,
         })
-    return {"recipes": out, "player_materials": materials, "stations_owned": sorted(stations)}
+    return {"recipes": out, "player_materials": materials, "stations_owned": sorted(stations), "transcendent": transcendent}
 
 
 @crafting_router.post("/craft")
@@ -113,18 +121,19 @@ async def craft(req: CraftRequest):
     recipe = RECIPES.get(req.recipe_id)
     if not recipe:
         raise HTTPException(status_code=404, detail="Unknown recipe")
-    materials = await _get_materials(req.user_id)
-    missing = {m: need - materials.get(m, 0) for m, need in recipe["materials"].items() if materials.get(m, 0) < need}
+    materials, transcendent = await _get_materials(req.user_id)
+    missing = {} if transcendent else {m: need - materials.get(m, 0) for m, need in recipe["materials"].items() if materials.get(m, 0) < need}
     if missing:
         raise HTTPException(status_code=400, detail=f"Missing materials: {missing}")
     if recipe["station"] and recipe["station"] not in await _owned_stations(req.user_id):
         raise HTTPException(status_code=400, detail=f"Requires a {RECIPES[recipe['station']]['name']} — craft one first")
 
-    # Deduct materials
+    # Deduct materials (transcendent accounts have infinite resources — no deduction)
     new_materials = dict(materials)
-    for m, need in recipe["materials"].items():
-        new_materials[m] = materials[m] - need
-    await db.user_profiles.update_one({"id": req.user_id}, {"$set": {"materials": new_materials}})
+    if not transcendent:
+        for m, need in recipe["materials"].items():
+            new_materials[m] = materials[m] - need
+        await db.user_profiles.update_one({"id": req.user_id}, {"$set": {"materials": new_materials}})
 
     # Quality roll — surplus materials improve odds (Sims-style craftsmanship variance)
     surplus = sum(materials.get(m, 0) / max(need, 1) for m, need in recipe["materials"].items()) / len(recipe["materials"])

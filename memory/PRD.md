@@ -1551,8 +1551,51 @@ Last Updated: June 9, 2026
 - iteration_29.json: backend 21/21 passed, frontend all pages pass after ProfileSettings fix
 - pytest suite: /app/backend/tests/test_iteration29_boutique_avatar_workbench.py
 
+## HYBRID ECONOMY RESTRUCTURE + RPG SOCIETAL LAYER (June 2026)
+
+### TORCHED (user-requested deletion of ALL VE$ earning game modes)
+- DELETED backend routers: field_ops, bounty_board, task_marketplace, realtime_tasks,
+  earnings, jobs, task_providers (+ task_providers/ dir)
+- DELETED pages: FieldOps, BountyBoard, TaskMarketplace, TasksDashboard, JobsHub,
+  EarningsHub, TaskFactory, TaskWorkbench, EconomyHub, WorldExplorer
+- Task Factory = INTERNAL ONLY recycler now (claim/submit player endpoints removed from data_api_router)
+- QuestBoard rewritten quests-only (bounties gone); Leaderboard Top Earners → entity-earnings
+
+### NEW: Hybrid-Growth Economy (`hybrid_economy_router.py`, page `/economy` EconomyNexus.jsx)
+- 3 layers: VE0 proto-currency (active now) → VE Vouchers (bronze/silver/gold/quantum/systemic,
+  BTC-unit certificates, auto-award at 50/200/600/1500/4000 lifetime VE0 per channel) → VE$ (LOCKED)
+- Formula: f(BTC)=α·ln(BTC)+β+γ·BTC^δ, capped 1% BTC. Defaults α1.8 β5 γ0.02 δ0.22
+- BTC via CoinGecko (COINGECKO_API_KEY in backend/.env, 5-min cache, admin override,
+  attribution "Data provided by CoinGecko" REQUIRED in UI)
+- Old VE$ → VE0 migrated 1:1 at startup (one-time, flag ve_migration_done)
+- Mining channels (daily caps): presence 30, xr_spatial 45, ai_cognitive 40 (hooked in
+  ai_chat_router NPC chat), quantum_entropy 50 (Stabilizer button). Rate limits: tick 45s, stab 20s (429)
+- Launch: quantum_progress >= milestone_target (25k default) → Quantum Awakening: gold mine
+  "The Aurum Breach" world event, VE0→VE$ @0.25 ratio, vouchers pay f(BTC_launch)×units×multiplier
+- Admin (sirix_1_supreme): GET/PUT /api/hybrid-economy/config, POST /launch/force
+- Frontend hook useVE0Mining.js (60s presence ticks) wired in VillageExplorer + FirstPersonView3D
+
+### NEW: First-Person RPG Societal Layer
+- Tab key in /play → SocietyStandingOverlay: social/political/economic/undercover standings
+  computed live (society_router.py); cover identity adopt/drop (integrity 100, erodes via /society/event)
+- / key → opens multiplayer chat; C key → CraftingOverlay
+- Crafting (crafting_router.py): 14 recipes, station gating (workbench→forge→lab),
+  quality rolls (crude→masterwork), Sims-style specs (durability/weight/aesthetics/utility/comfort/precision)
+- Sirix-1 is_transcendent → infinite materials (initialize_sirix_1 resets materials to None every
+  startup BY DESIGN; crafting treats transcendent as infinite — do not "fix" the None seed)
+- World Explorer mode card REPLACED by First-Person RPG card → /play (/world-explorer routes there too)
+
+### Docs & Testing
+- /app/HANDBOOK.md — creator's handbook (for user's 15-year-old brother; keep it updated)
+- iteration_30.json: backend 24/24, frontend 100% (compile bug + all new flows verified)
+- pytest: /app/backend/tests/test_iteration30_hybrid_economy.py
+- Google sign-in: already integrated (Emergent-managed), verified present
+
 ## REMAINING BACKLOG
 - P2: VR voice input/output integration
+- P2: Gold Mine (Aurum Breach) visual in 3D world post-launch; broadcast Awakening via websocket
+- P2: Undercover gameplay hooks (NPC exposure checks eroding cover integrity)
 - Future: Consensus validation mode for Task Factory (multi-worker agreement)
 - Future: Data API rate limiting and billing
-- Refactor: split data_api_router.py (analytics vs factory vs scheduler); ProfileSettings.jsx >800 lines
+- Backlog (user): pull wingman Kimso GitHub branch TextChatOnly (user said skip for now)
+- Refactor: split data_api_router.py; ProfileSettings.jsx >800 lines; PRD.md >700 lines (split into CHANGELOG/ROADMAP)

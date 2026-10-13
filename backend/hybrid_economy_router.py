@@ -497,7 +497,7 @@ async def presence_tick(tick: PresenceTick):
     now = time.time()
     last = _last_tick.get(tick.entity_id, 0)
     if now - last < 45:
-        return {"accepted": False, "reason": "rate_limited", "retry_in": round(45 - (now - last))}
+        raise HTTPException(status_code=429, detail=f"Presence tick rate-limited. Retry in {round(45 - (now - last))}s")
     _last_tick[tick.entity_id] = now
     presence = await record_contribution(tick.entity_id, "presence", tick.seconds / 60.0, source="presence_tick")
     spatial = {"minted": 0.0}

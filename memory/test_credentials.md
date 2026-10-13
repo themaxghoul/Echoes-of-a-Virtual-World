@@ -19,3 +19,10 @@ Set before navigating to authed pages:
 
 ## Data API
 - Demo analytics key: `demo_analytics_key` (GET /api/data-api/analytics/summary?api_key=...)
+
+## Hybrid Economy / RPG testing notes (June 2026)
+- Character ID for /play E2E: d70e5d9e-7e08-47bf-80cd-2b185abe0d71 (localStorage currentCharacterId)
+- sirix_1_supreme is_transcendent=true -> INFINITE crafting materials (materials show 999999).
+  initialize_sirix_1() resets materials to None at every backend startup BY DESIGN - do not reseed.
+- Economy is PRE-LAUNCH (launched=false). Do NOT POST /api/hybrid-economy/launch/force unless intended (one-way).
+- Mining rate limits: presence/tick 45s, quantum mine 20s (both HTTP 429 on retry).
