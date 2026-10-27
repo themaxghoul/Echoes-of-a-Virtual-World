@@ -1,0 +1,19 @@
+# Paid persistent hosting. Review the provider's displayed charges before deployment.
+services:
+  - type: web
+    name: echoes-world-alpha
+    runtime: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    numInstances: 1
+    disk:
+      name: echoes-world-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: EOV_DATABASE
+        value: /data/eov.sqlite3
+      - key: EOV_ORIGINS
+        value: https://themaxghoul.github.io

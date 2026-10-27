@@ -22,3 +22,18 @@ test('public support page describes playtest limits and does not claim an active
   assert.match(html, /issues/);
   assert.doesNotMatch(html, /Donate now|Buy CU|Withdraw funds/i);
 });
+
+test('browser alpha and Alpha 36 desktop test are clearly separate playtest environments', () => {
+  const html = page();
+  assert.match(html, /Try the existing browser alpha/);
+  assert.match(html, /do not share accounts, saves, or world state/i);
+  assert.match(html, /self-hosted local services/i);
+});
+
+test('GitHub Pages publishes support beside the existing browser alpha', () => {
+  const root = path.join(__dirname, '..', '..', '..');
+  const workflow = fs.readFileSync(path.join(root, '.github', 'workflows', 'pages.yml'), 'utf8');
+  assert.match(workflow, /cp -a docs\/play\/\. _site\//);
+  assert.match(workflow, /cp -a docs\/support\/\. _site\/support\//);
+  assert.match(workflow, /path: _site/);
+});

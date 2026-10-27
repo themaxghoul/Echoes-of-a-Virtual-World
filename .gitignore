@@ -107,7 +107,6 @@ credentials.json
 *.pem
 *.key
 .credentials
-
 # Isolated feature worktrees
 .worktrees/
 
@@ -119,3 +118,13 @@ credentials.json
 /frontend/out/
 /frontend/desktop-stage/
 /frontend/release/
+
+# Public alpha durable state and local environments (never publish player data).
+data/
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
+.venv/
+.wrangler/
+.dev.vars*
+cloudflare/node_modules/

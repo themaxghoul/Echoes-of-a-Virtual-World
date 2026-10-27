@@ -61,13 +61,13 @@
 
 **Files:**
 - Create: `docs/support/index.html`
-- Create: `.github/workflows/deploy-support-pages.yml`
+- Modify: `.github/workflows/pages.yml` to deploy the existing browser alpha plus `/support/` through one protected-branch workflow
 - Create: `docs/support/README.md`
 - Test: `frontend/src/lib/supportPage.test.cjs`
 
 - [ ] Add content-contract tests for current build status, matching release filenames, server setup, feedback link, and absence of active donation claims.
 - [ ] Build a responsive accessible EoV-themed landing page with playtest assets, transparent requirements/limits, contribution links, and no unsupported checkout.
-- [ ] Configure Pages deployment from `docs/` via GitHub Actions and document the required repository Pages setting.
+- [ ] Configure Pages deployment from `docs/play/` and `docs/support/` via GitHub Actions and document the required repository Pages setting.
 
 ### Task 4: Reproducible Alpha 36 Release assets
 

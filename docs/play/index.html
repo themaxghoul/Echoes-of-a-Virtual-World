@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#101e19" />
+    <meta
+      name="description"
+      content="A shared experimental world. Explore, settle, study, and talk with the Samaritans. Expect bugs — public alpha."
+    />
+    <title>Echoes of a Virtual World · Alpha</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <a class="brand" href="./"
+        >E<span>◈</span>V <small>ECHOES OF A VIRTUAL WORLD</small></a
+      ><span class="alpha">EXPECT BUGS — ALPHA</span
+      ><a href="https://github.com/themaxghoul/Echoes-of-a-Virtual-World"
+        >GitHub ↗</a
+      >
+    </header>
+    <main id="landing">
+      <div class="hero">
+        <div class="eyebrow">A WORLD WE BUILD TOGETHER / 001</div>
+        <h1>Begin with curiosity.<br /><em>Leave an echo.</em></h1>
+        <p>
+          A shared frontier for experiments, everyday life, and a civilization
+          of your own. Find a place, build something useful, and get to know the
+          minds living alongside you.
+        </p>
+        <div class="world-rule">
+          <span class="seed-mark">✳</span>
+          <div>
+            <strong>One seed. Room to discover.</strong><br />Land expands when
+            new settlers join. Your discoveries stay where you left them.
+          </div>
+        </div>
+      </div>
+      <section class="mode-section">
+        <div class="section-label">
+          <h2>Choose your window into the world</h2>
+          <span>NO FULL CLIENT REQUIRED</span>
+        </div>
+        <div class="modes">
+          <a class="mode-card" href="?mode=story"
+            ><span class="mode-number">01 / LIGHTWEIGHT</span>
+            <div class="mode-art text-art">
+              “<span>A conversation<br />can change a future.</span>”
+            </div>
+            <h3>Story & conversation</h3>
+            <p>
+              Text-based exploration, Samaritan dialogue, and explicit
+              diplomacy. No graphics engine download.
+            </p>
+            <span class="mode-link">Enter story mode ↗</span></a
+          >
+          <a class="mode-card featured" href="?mode=isometric"
+            ><span class="mode-number">02 / EXPLORE & SETTLE</span>
+            <div class="mode-art iso-art"><i></i><i></i><i></i><i></i></div>
+            <h3>The isometric world</h3>
+            <p>
+              Walk the landscape, gather resources, build a camp, and conduct
+              your first field experiments.
+            </p>
+            <span class="mode-link">Enter 2.5D world ↗</span></a
+          >
+          <a class="mode-card" href="?mode=firstperson"
+            ><span class="mode-number">03 / ON THE GROUND</span>
+            <div class="mode-art perspective-art"><span>+</span></div>
+            <h3>First-person explorer</h3>
+            <p>
+              A lightweight first-person canvas view of the same terrain,
+              people, and settlements.
+            </p>
+            <span class="mode-link">Enter first person ↗</span></a
+          >
+          <article class="mode-card future">
+            <span class="mode-number">04 / IN DEVELOPMENT</span>
+            <div class="mode-art unity-art">U<span>CLIENT</span></div>
+            <h3>Unity client</h3>
+            <p>
+              Native client development continues separately. No playable Unity
+              build has been published here yet.
+            </p>
+            <a
+              class="mode-link"
+              href="https://github.com/themaxghoul/Echoes-of-a-Virtual-World/releases"
+              >Check available releases ↗</a
+            >
+          </article>
+        </div>
+      </section>
+      <section class="notes">
+        <div>
+          <h3>Explore. Observe. Repeat.</h3>
+          <p>
+            Science begins with comparison. The alpha includes simple soil
+            sampling, resource gathering, and persistent construction. Its
+            environmental models are deliberately small and experimental.
+          </p>
+        </div>
+        <div>
+          <h3>A society, not a payout promise.</h3>
+          <p>
+            EoV credits are test currency with a transaction ledger. No cash
+            value, BTC deposits, withdrawals, or conversion. Ordinary
+            conversation does not spend your resources.
+          </p>
+        </div>
+        <div>
+          <h3>Built in the open.</h3>
+          <p>
+            Browser modules load only when needed.
+            <a
+              href="https://github.com/themaxghoul/Echoes-of-a-Virtual-World/tree/main/docs/play"
+              >Download browser source</a
+            >
+            or
+            <a
+              href="https://github.com/themaxghoul/Echoes-of-a-Virtual-World/issues/new"
+              >report an alpha bug</a
+            >. Please include your mode and steps to reproduce.
+          </p>
+        </div>
+      </section>
+      <nav id="game-tools" class="game-tools" aria-label="Game tools" hidden>
+        <a href="?mode=story" data-tool-mode="story">Story</a>
+        <a href="?mode=isometric" data-tool-mode="isometric">Isometric</a>
+        <a href="?mode=firstperson" data-tool-mode="firstperson"
+          >First person</a
+        >
+        <button data-tool-target="talk" title="Open chat without moving · T">
+          Chat · T
+        </button>
+        <button data-tool-target="trade">Trade</button>
+        <button data-action="gather">Gather</button>
+        <button data-action="research">Sample soil</button>
+        <button data-tool-target="build">Build</button>
+        <button data-tool-target="workshop">Workshop</button>
+        <button data-tool-target="inventory">Inventory</button>
+        <button data-tool-target="journal">Activity</button>
+        <button data-action="home">Home</button>
+      </nav>
+    </main>
+    <main id="game" hidden>
+      <section id="entry" class="entry">
+        <a href="./">← All game modes</a>
+        <div class="eyebrow">ENTER THE SHARED WORLD</div>
+        <h1 id="entry-title">Your journey starts here.</h1>
+        <p id="server-status" role="status">Checking world server…</p>
+        <form id="auth">
+          <label
+            >Settler name<input
+              id="name"
+              autocomplete="username"
+              minlength="3"
+              maxlength="24"
+              pattern="[A-Za-z0-9_-]+"
+              required
+              placeholder="e.g. Ada_Explorer" /></label
+          ><label
+            >Password<input
+              id="password"
+              type="password"
+              autocomplete="current-password"
+              minlength="12"
+              maxlength="128"
+              required
+              placeholder="At least 12 characters"
+          /></label>
+          <div class="buttons">
+            <button type="submit" id="join">Create settler</button
+            ><button type="button" id="login" class="secondary">Log in</button>
+          </div>
+          <p class="small">
+            Use a unique password. Alpha accounts have no password recovery yet.
+            Returning settlers can log in on another device.
+          </p>
+        </form>
+        <details>
+          <summary>Connect to another world server</summary>
+          <form id="server-form">
+            <label
+              >Backend HTTPS URL<input
+                id="server-url"
+                type="url"
+                placeholder="https://your-world-server.onrender.com" /></label
+            ><button>Save server</button>
+          </form>
+          <p class="small">
+            Only connect to a server you trust. Your login is sent to the
+            selected server. Local testing accepts localhost HTTP.
+          </p>
+        </details>
+        <p id="entry-error" class="error" role="alert"></p>
+      </section>
+      <section id="session" hidden>
+        <nav class="gamebar">
+          <a href="./">← Modes</a
+          ><strong id="world-title">The shared frontier</strong
+          ><span id="connection" role="status">Connecting…</span
+          ><button id="logout" class="secondary compact">Log out</button>
+        </nav>
+        <div class="workspace">
+          <section class="viewport">
+            <div id="scene"></div>
+            <div class="scene-label">
+              <span id="mode-label"></span><span id="coords"></span>
+            </div>
+            <div id="controls-help" class="controls-help"></div>
+            <div class="dpad" aria-label="Movement controls">
+              <button data-dx="0" data-dy="-1" aria-label="Move forward">
+                ↑
+              </button>
+              <div>
+                <button data-dx="-1" data-dy="0" aria-label="Move left">
+                  ←</button
+                ><button data-dx="0" data-dy="1" aria-label="Move backward">
+                  ↓</button
+                ><button data-dx="1" data-dy="0" aria-label="Move right">
+                  →
+                </button>
+              </div>
+            </div>
+          </section>
+          <aside class="sidebar">
+            <div class="identity">
+              <span class="eyebrow">YOUR SETTLER</span>
+              <h2 id="player-name"></h2>
+            </div>
+            <details open>
+              <summary>Make a beginning</summary>
+              <div class="action-grid">
+                <button data-action="gather">Gather nearby</button
+                ><button data-action="research">Sample soil</button
+                ><button data-action="build" data-kind="camp">
+                  Camp · 8W / 2S</button
+                ><button data-action="build" data-kind="farm">
+                  Farm · 10W / 4S</button
+                ><button data-action="build" data-kind="lab">
+                  Lab · 16W / 10S
+                </button>
+              </div>
+              <p class="small">
+                Forests → wood · Rock → stone · Meadow → food. Construction goes
+                one tile east. Walk beyond the commons to find terrain.
+              </p>
+            </details>
+            <button data-action="home" class="secondary compact">
+              Return to protected commons
+            </button>
+            <p class="small">
+              Press <kbd>T</kbd> or choose Chat to talk with settlers and the
+              Samaritans. No movement required.
+            </p>
+            <details>
+              <summary>Experimental ledger</summary>
+              <p class="small">
+                Credits have no cash value. BTC and payouts are disabled.
+              </p>
+              <button id="ledger" class="secondary">
+                View my transactions
+              </button>
+              <div id="ledger-rows" class="small"></div>
+              <form id="transfer">
+                <label class="small"
+                  >Transfer to a nearby settler<select
+                    id="recipient"
+                  ></select></label
+                ><label class="small"
+                  >Whole credits<input
+                    id="amount"
+                    type="number"
+                    min="1"
+                    max="1000000"
+                    step="1"
+                    value="1" /></label
+                ><button>Transfer credits</button>
+              </form>
+            </details>
+            <details>
+              <summary>Samaritan activity</summary>
+              <p class="small">
+                Persistent intentions and outcomes. The free alpha schedules one
+                independent decision every two hours across the three world
+                Samaritans. Conversations remain available between cycles.
+              </p>
+              <button id="agent-journal" class="secondary">
+                Read activity
+              </button>
+              <div
+                id="agent-journal-rows"
+                class="small"
+                aria-live="polite"
+              ></div>
+            </details>
+            <div id="feedback" role="status" aria-live="polite">
+              Welcome to the frontier.
+            </div>
+          </aside>
+        </div>
+      </section>
+    </main>
+    <dialog id="chat-dialog" class="chat-dialog" aria-labelledby="chat-title">
+      <header>
+        <div>
+          <span class="eyebrow">CONVERSATION · NO MOVEMENT REQUIRED</span>
+          <h2 id="chat-title">Chat with the world</h2>
+        </div>
+        <button id="chat-close" class="secondary">Close <kbd>Esc</kbd></button>
+      </header>
+      <p class="small">
+        <a href="?mode=story">Open the text story mode</a> · switch perspectives
+        from the bottom bar; this chat stays available in each view.
+      </p>
+      <div class="chat-dialog-content">
+        <div id="conversation-panel">
+          <label class="small"
+            >Choose a conversation partner<select id="npc">
+              <option value="mira">Mira · Ecologist</option>
+              <option value="oren">Oren · Builder</option>
+              <option value="sol">Sol · Mediator</option>
+              <option value="world">World chat · all players</option>
+            </select></label
+          >
+          <div id="dialogue" class="dialogue" role="log" aria-live="polite">
+            <p>
+              Ask what they need, request help, or tell them what you
+              discovered.
+            </p>
+          </div>
+          <form id="chat">
+            <label class="sr-only" for="message">Your message</label
+            ><input
+              id="message"
+              maxlength="1000"
+              required
+              placeholder="How can I help you?"
+            /><button>Send</button>
+          </form>
+          <button id="cooperate" class="secondary">Propose cooperation</button>
+        </div>
+      </div>
+      <p class="small">
+        Choose World chat to talk to settlers or a Samaritan to speak with them
+        directly. Diplomatic agreements remain explicit.
+      </p>
+    </dialog>
+    <dialog id="trade-dialog" class="workshop" aria-labelledby="trade-title">
+      <header>
+        <div>
+          <span class="eyebrow">MATERIALS · EXPLICIT CONSENT</span>
+          <h2 id="trade-title">Trade with a participant</h2>
+        </div>
+        <button id="trade-close" class="secondary">Close</button>
+      </header>
+      <p>Choose an online nearby settler or a Samaritan. Player offers move nothing until accepted. Samaritan deliveries are possible only when they have made a specific request. Experimental credits and real money are excluded.</p>
+      <label>Participant<select id="trade-partner" required>
+        <option value="">Choose a participant</option>
+      </select></label>
+      <form id="player-trade-form" hidden>
+        <div class="dimension-fields">
+          <label>Offer material<select id="trade-offer-resource"><option value="wood">Wood</option><option value="planks">Planks</option><option value="stone">Stone</option><option value="food">Food</option><option value="research">Research</option></select></label>
+          <label>Amount<input id="trade-offer-amount" type="number" min="1" max="100" value="1" required></label>
+        </div>
+        <div class="dimension-fields">
+          <label>Request in return<select id="trade-want-resource"><option value="wood">Wood</option><option value="planks">Planks</option><option value="stone">Stone</option><option value="food">Food</option><option value="research">Research</option></select></label>
+          <label>Amount<input id="trade-want-amount" type="number" min="1" max="100" value="1" required></label>
+        </div>
+        <button>Send offer</button>
+      </form>
+      <section id="samaritan-trade" hidden>
+        <p id="samaritan-request-status" role="status">Ask whether this Samaritan has a specific material request.</p>
+        <button id="samaritan-request" class="secondary">Ask for current request</button>
+        <button id="samaritan-deliver" disabled>Deliver requested materials</button>
+      </section>
+      <h3>Offers and requests</h3>
+      <button id="trade-refresh" class="secondary">Refresh</button>
+      <div id="trade-activity" class="small" role="log" aria-live="polite"></div>
+      <p id="trade-status" role="status" aria-live="polite"></p>
+    </dialog>
+    <dialog id="inventory-dialog" class="chat-dialog" aria-labelledby="inventory-title">
+      <header>
+        <div>
+          <span class="eyebrow">PRIVATE SETTLER HOLDINGS</span>
+          <h2 id="inventory-title">Your inventory</h2>
+        </div>
+        <button id="inventory-close" class="secondary">Close <kbd>Esc</kbd></button>
+      </header>
+      <p class="small">Your material and research holdings are shown only while this inventory is open.</p>
+      <div id="inventory"></div>
+    </dialog>
+    <footer>
+      <span>APEXFORGE COLLECTIVE / ECHOES OF VIRTUALITY</span
+      ><span>Small beginnings. Persistent consequences.</span>
+    </footer>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
