@@ -1,0 +1,127 @@
+name: Build and publish Windows public playtest
+
+on:
+  push:
+    tags:
+      - 'eov-alpha36'
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the Alpha 36 GitHub release after checks pass
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated playtest backend dependencies
+        run: python -m pip install -r backend/playtest-requirements.txt
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Verify authoritative Python domains
+        working-directory: backend
+        run: |
+          python -m py_compile auth_security.py owner_policy.py persistent_world.py persistent_world_app.py world_status.py action_engine.py society_engine.py competency_engine.py causal_ledger.py economy/ledger.py economy/policy.py economy/public_ledger.py economy/compute_settlement.py mail/domain.py security/rate_limit.py
+          python -m unittest tests.test_owner_policy tests.test_auth_security tests.test_persistent_world tests.test_persistent_world_app tests.test_action_engine tests.test_society_engine tests.test_competency_engine tests.test_causal_ledger tests.test_simulation_ledger tests.test_compute_settlement tests.test_public_ledger tests.test_mail_domain tests.test_rate_limit
+      - name: Install locked frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Run frontend unit and desktop contract tests
+        working-directory: frontend
+        run: pnpm run test:desktop-store
+      - name: Install Chromium
+        working-directory: frontend
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Run browser playability tests
+        working-directory: frontend
+        run: pnpm run test:e2e
+      - name: Build the client
+        working-directory: frontend
+        env:
+          CI: 'false'
+        run: pnpm run build
+
+  package-and-publish:
+    needs: verify
+    if: startsWith(github.ref, 'refs/tags/eov-alpha36') || inputs.publish == true
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install locked frontend dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Build and package the Windows client
+        working-directory: frontend
+        env:
+          CI: 'false'
+          EOV_STAGE_DIR: desktop-stage-alpha36
+          EOV_BUILD_DIR: build
+        shell: pwsh
+        run: |
+          pnpm run build
+          node electron/prepare-package.cjs
+          pnpm exec electron-packager desktop-stage-alpha36 "Echoes of Virtuality" --platform=win32 --arch=x64 --out=out-alpha36 --overwrite --asar --executable-name=EchoesOfVirtuality
+          New-Item -ItemType Directory -Force -Path ../release-assets | Out-Null
+          Compress-Archive -Path out-alpha36/'Echoes of Virtuality-win32-x64' -DestinationPath ../release-assets/EoV-Alpha36-Windows-x64.zip -CompressionLevel Optimal
+      - name: Assemble the self-hosted server bundle
+        shell: pwsh
+        run: |
+          $bundle = Join-Path $env:RUNNER_TEMP 'eov-alpha36-server'
+          $backendBundle = Join-Path $bundle 'backend'
+          New-Item -ItemType Directory -Force -Path $backendBundle | Out-Null
+          Get-ChildItem backend -File -Filter '*.py' | Copy-Item -Destination $backendBundle
+          foreach ($directory in @('economy', 'mail', 'security')) {
+            Copy-Item (Join-Path backend $directory) -Destination $backendBundle -Recurse
+          }
+          foreach ($filename in @('playtest-requirements.txt', 'PLAYTEST-SETUP.md', 'run_auth_server.ps1', 'run_persistent_server.ps1', '.env.playtest.example')) {
+            Copy-Item (Join-Path backend $filename) -Destination $backendBundle
+          }
+          New-Item -ItemType Directory -Force -Path (Join-Path $backendBundle 'data') | Out-Null
+          Copy-Item compose.yaml (Join-Path $bundle 'compose.yaml')
+          Copy-Item (Join-Path $backendBundle 'PLAYTEST-SETUP.md') (Join-Path $bundle 'README.md')
+          New-Item -ItemType Directory -Force -Path release-assets | Out-Null
+          Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath release-assets/EoV-Alpha36-Persistent-Server.zip -CompressionLevel Optimal
+      - name: Create SHA-256 manifest
+        shell: pwsh
+        run: |
+          $manifest = Get-ChildItem release-assets -File | Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $((Get-Item $_.Path).Name)" }
+          $manifest | Set-Content release-assets/EoV-Alpha36-SHA256.txt -Encoding ascii
+      - name: Publish Alpha 36 release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = if ($env:GITHUB_REF.StartsWith('refs/tags/')) { $env:GITHUB_REF.Substring(10) } else { 'eov-alpha36' }
+          $notes = @'
+          Echoes of Virtuality Alpha 36 is an early public playtest.
+
+          Includes a Windows desktop client and a self-hosted local server bundle. It does not include hosted multiplayer, accounts, personal credentials, or payment processing. Read the bundled README before running the services. Do not expose the development services to the public internet.
+
+          Current focus: persistent isometric exploration, proximity dialogue, and limited autonomous off-duty Samaritan movement among known public places. Combat, first-person, and crafting are not represented as finished features.
+          '@
+          gh release create $tag release-assets/EoV-Alpha36-Windows-x64.zip release-assets/EoV-Alpha36-Persistent-Server.zip release-assets/EoV-Alpha36-SHA256.txt --title 'Echoes of Virtuality Alpha 36 Public Playtest' --notes $notes --latest

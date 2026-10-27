@@ -1,827 +1,112 @@
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Card } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
-import { Badge } from '@/components/ui/badge';
-import { 
-  MapPin, Send, Menu, X, User, BookOpen, 
-  ChevronRight, Loader2, Home, Sparkles, Lock, Unlock,
-  Crown, Shield, Flame, Eye, Moon, Star, Globe, ArrowLeft, History
-} from 'lucide-react';
-import { toast } from 'sonner';
-import { pushNavHistory } from '@/components/GameNavigation';
-import BuildWatermark from '@/components/BuildWatermark';
-import { fetchWorldHealth, fetchWorldSnapshot, submitWorldAction, worldServerConfigured, worldServerUrl } from '@/lib/worldServer';
+import { GameNavigation } from '@/components/GameNavigation';
+import { fetchWorldHealth, fetchWorldSnapshot, submitWorldAction, worldServerConfigured } from '@/lib/worldServer';
 
-// NPC Avatar configurations with visual appearances
-const NPC_AVATARS = {
-  'Elder Morvain': { icon: Crown, color: 'text-gold', bg: 'bg-gold/20', image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop' },
-  'Lyra the Wanderer': { icon: Moon, color: 'text-slate-blue', bg: 'bg-slate-blue/20', image: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop' },
-  'Kael Ironbrand': { icon: Flame, color: 'text-orange-500', bg: 'bg-orange-500/20', image: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&h=100&fit=crop' },
-  'Archivist Nyx': { icon: Eye, color: 'text-purple-400', bg: 'bg-purple-400/20', image: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&h=100&fit=crop' },
-  'Innkeeper Mara': { icon: Star, color: 'text-amber-400', bg: 'bg-amber-400/20', image: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop' },
-  'The Hooded Stranger': { icon: Shield, color: 'text-gray-400', bg: 'bg-gray-400/20', image: null },
-  'The Grove Keeper': { icon: Moon, color: 'text-emerald-400', bg: 'bg-emerald-400/20', image: 'https://images.unsplash.com/photo-1552374196-c4e7ffc6e126?w=100&h=100&fit=crop' },
-  'Sentinel Vex': { icon: Shield, color: 'text-red-400', bg: 'bg-red-400/20', image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&h=100&fit=crop' },
-  'Oracle Veythra': { icon: Eye, color: 'text-cyan-400', bg: 'bg-cyan-400/20', image: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=100&h=100&fit=crop', isOracle: true },
-};
+const { nearbyResidents, speechAction, mergeMessages } = require('@/lib/worldConversation.cjs');
 
-// Location images for each area
-const LOCATION_IMAGES = {
-  'village_square': 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&h=400&fit=crop',
-  'oracle_sanctum': 'https://images.unsplash.com/photo-1534447677768-be436bb09401?w=800&h=400&fit=crop',
-  'the_forge': 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=800&h=400&fit=crop',
-  'ancient_library': 'https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=800&h=400&fit=crop',
-  'wanderers_rest': 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?w=800&h=400&fit=crop',
-  'shadow_grove': 'https://images.unsplash.com/photo-1448375240586-882707db888b?w=800&h=400&fit=crop',
-  'watchtower': 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=800&h=400&fit=crop',
-};
-
-// Milestone system for world progression (ALL MAPS NOW OPEN)
-// Note: All locations are now accessible in chat mode. Milestones track progress but don't lock content.
-const MILESTONES = [
-  { id: 1, name: 'First Steps', description: 'Enter The Echoes', xpRequired: 0, unlocks: ['village_square', 'oracle_sanctum', 'the_forge', 'ancient_library', 'wanderers_rest', 'shadow_grove', 'watchtower', 'outer_realms'] },
-  { id: 2, name: 'Seeker', description: 'Visit 3 locations', xpRequired: 50, unlocks: [] },
-  { id: 3, name: 'Conversationalist', description: 'Have 10 conversations', xpRequired: 150, unlocks: [] },
-  { id: 4, name: 'Explorer', description: 'Discover all initial areas', xpRequired: 300, unlocks: [] },
-  { id: 5, name: 'Trusted', description: 'Build relationships', xpRequired: 500, unlocks: [] },
-  { id: 6, name: 'Awakened', description: 'Unlock the outer realms', xpRequired: 1000, unlocks: [] },
-];
-
-// All locations are always open in Story/Chat mode
-const ALL_LOCATIONS_OPEN = true;
-
-const STORY_SPEECH_RULE = 'Speech may influence memory, trust, rumor, coordination, and later decisions. Physical terrain changes require physical action.';
-
-function formatUptime(totalSeconds = 0) {
-  const seconds = Math.max(0, Number(totalSeconds) || 0);
-  const days = Math.floor(seconds / 86400);
-  const hours = Math.floor((seconds % 86400) / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  return [days ? `${days}d` : null, (days || hours) ? `${hours}h` : null, `${minutes}m`].filter(Boolean).join(' ');
-}
-
-function residentsNearActor(snapshot, actorId, radius = 4) {
-  const actor = snapshot?.state?.players?.[actorId];
-  if (!Array.isArray(actor?.location)) return [];
-  return Object.values(snapshot.state?.npcs || {})
-    .filter((resident) => Array.isArray(resident.location)
-      && Math.abs(resident.location[0] - actor.location[0]) + Math.abs(resident.location[1] - actor.location[1]) <= radius)
-    .sort((left, right) => {
-      const leftDistance = Math.abs(left.location[0] - actor.location[0]) + Math.abs(left.location[1] - actor.location[1]);
-      const rightDistance = Math.abs(right.location[0] - actor.location[0]) + Math.abs(right.location[1] - actor.location[1]);
-      return leftDistance - rightDistance || left.id.localeCompare(right.id);
-    });
-}
-
-const STORY_LOCATIONS = [
-  { id: 'village_square', name: 'Village Square', description: 'The civic heart of the settlement.', atmosphere: 'Footsteps, tools, and low conversation cross the square.', npcs: ['Elder Morvain', 'Lyra the Wanderer'], available_actions: ['Observe the square', 'Inspect the notice board', 'Ask who needs help'] },
-  { id: 'oracle_sanctum', name: 'Oracle Sanctum', description: 'A quiet chamber built for difficult questions.', atmosphere: 'Reflected light shifts across old instruments.', npcs: ['Oracle Veythra'], available_actions: ['Inspect the instruments', 'Record an observation', 'Ask about a hypothesis'] },
-  { id: 'the_forge', name: 'The Forge', description: 'Heat and repeated work give raw material a useful form.', atmosphere: 'Measured hammer blows answer the furnace.', npcs: ['Kael Ironbrand'], available_actions: ['Inspect the work order', 'Check the material stock', 'Offer verified labor'] },
-  { id: 'ancient_library', name: 'Ancient Library', description: 'Research and testimony are kept for later verification.', atmosphere: 'Paper, dust, and cooling machinery mute the room.', npcs: ['Archivist Nyx'], available_actions: ['Review a record', 'Compare two sources', 'Submit a finding'] },
-  { id: 'wanderers_rest', name: "Wanderer's Rest", description: 'Travelers exchange news without guaranteeing its truth.', atmosphere: 'Conversation rises and fades around the common tables.', npcs: ['Innkeeper Mara'], available_actions: ['Listen', 'Ask for local work', 'Check the public ledger'] },
-  { id: 'shadow_grove', name: 'Shadow Grove', description: 'An unmanaged edge where observation matters more than rumor.', atmosphere: 'Branches move above tracks pressed into damp earth.', npcs: ['The Grove Keeper'], available_actions: ['Study the tracks', 'Collect a sample', 'Return without disturbing it'] },
-  { id: 'watchtower', name: 'Watchtower', description: 'Guards record what can be witnessed from the settlement boundary.', atmosphere: 'Wind crosses stone and the distant road remains visible.', npcs: ['Sentinel Vex'], available_actions: ['Survey the road', 'Read the guard log', 'Report an incident'] },
-  { id: 'outer_realms', name: 'Outer Realms', description: 'Unsettled territory beyond reliable civic coverage.', atmosphere: 'No report from here is trusted without a surviving witness or record.', npcs: ['The Hooded Stranger'], available_actions: ['Observe from cover', 'Mark a route', 'Turn back'] },
-];
-
-const VillageExplorer = () => {
+export default function VillageExplorer() {
   const navigate = useNavigate();
-  const messagesEndRef = useRef(null);
-  const inputRef = useRef(null);
-  const seenWorldMessageIds = useRef(new Set());
-  const storyInitialized = useRef(false);
-  const storageOwner = localStorage.getItem('userId') || 'anonymous';
-  const authorityActorId = localStorage.getItem('eovNetworkUserId') || storageOwner;
-  
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [character, setCharacter] = useState(null);
-  const [locations, setLocations] = useState([]);
-  const [currentLocation, setCurrentLocation] = useState(null);
+  const [snapshot, setSnapshot] = useState(null);
+  const [health, setHealth] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [inputMessage, setInputMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isThinking, setIsThinking] = useState(false);
-  const [activeConversationId, setActiveConversationId] = useState(null);  // For conversation history
-  
-  // Milestone & progression state
-  const [playerXP, setPlayerXP] = useState(0);
-  const [currentMilestone, setCurrentMilestone] = useState(MILESTONES[0]);
-  const [unlockedLocations, setUnlockedLocations] = useState(['village_square']);
-  const [conversationCount, setConversationCount] = useState(0);
-  const [visitedLocations, setVisitedLocations] = useState(new Set(['village_square']));
-  const [worldNews, setWorldNews] = useState([]);
-  const [serverSnapshot, setServerSnapshot] = useState(null);
-  const [serverStatus, setServerStatus] = useState(null);
-  const [serverError, setServerError] = useState(null);
-  const [selectedResidentId, setSelectedResidentId] = useState('');
-
-  // Track navigation
+  const [message, setMessage] = useState('');
+  const [recipientId, setRecipientId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [sendError, setSendError] = useState('');
+  const endRef = useRef(null);
+  const receive = (next) => {
+    setSnapshot(current => !current || next.revision >= current.revision ? next : current);
+    setMessages(current => mergeMessages(current, next.state?.communications?.messages || []));
+  };
   useEffect(() => {
-    pushNavHistory('/village');
-    localStorage.setItem('gameMode', 'story');
     const userId = localStorage.getItem('userId');
     if (userId) localStorage.setItem(`eovLastRoute:${userId}`, '/village');
-    
-    // Check for resume conversation
-    const resumeData = localStorage.getItem('resumeConversation');
-    if (resumeData) {
-      try {
-        const data = JSON.parse(resumeData);
-        setActiveConversationId(data.conversation_id);
-        // Pre-populate messages from context
-        if (data.context_messages && data.context_messages.length > 0) {
-          setMessages(data.context_messages.map(m => ({
-            role: m.role,
-            content: m.content
-          })));
-          toast.success(`Resumed conversation with ${data.npc_name || 'NPC'}`);
-        }
-        localStorage.removeItem('resumeConversation');
-      } catch (e) {
-        console.error('Failed to parse resume data:', e);
-      }
-    }
-  }, []);
-
-  // Load progression from localStorage
-  useEffect(() => {
-    const savedXP = parseInt(localStorage.getItem('playerXP') || '0');
-    const savedConvCount = parseInt(localStorage.getItem('conversationCount') || '0');
-    const savedVisited = JSON.parse(localStorage.getItem('visitedLocations') || '["village_square"]');
-    
-    setPlayerXP(savedXP);
-    setConversationCount(savedConvCount);
-    setVisitedLocations(new Set(savedVisited));
-    
-    // ALL LOCATIONS ARE OPEN - Story/Chat mode allows full exploration
-    if (ALL_LOCATIONS_OPEN) {
-      // Unlock all locations immediately
-      const allLocations = ['village_square', 'oracle_sanctum', 'the_forge', 'ancient_library', 'wanderers_rest', 'shadow_grove', 'watchtower', 'outer_realms'];
-      setUnlockedLocations(allLocations);
-    } else {
-      // Legacy: Calculate unlocked locations based on XP
-      const unlocked = ['village_square'];
-      MILESTONES.forEach(m => {
-        if (savedXP >= m.xpRequired) {
-          unlocked.push(...m.unlocks);
-        }
-      });
-      setUnlockedLocations([...new Set(unlocked)]);
-    }
-    
-    // Set current milestone (for tracking, not locking)
-    const milestone = [...MILESTONES].reverse().find(m => savedXP >= m.xpRequired) || MILESTONES[0];
-    setCurrentMilestone(milestone);
-  }, []);
-
-  // Save progression
-  const saveProgression = (xp, convCount, visited) => {
-    localStorage.setItem('playerXP', xp.toString());
-    localStorage.setItem('conversationCount', convCount.toString());
-    localStorage.setItem('visitedLocations', JSON.stringify([...visited]));
-  };
-
-  // Award XP and check milestones
-  const awardXP = (amount, reason) => {
-    const newXP = playerXP + amount;
-    setPlayerXP(newXP);
-    
-    // Check for new milestone
-    const newMilestone = [...MILESTONES].reverse().find(m => newXP >= m.xpRequired);
-    if (newMilestone && newMilestone.id > currentMilestone.id) {
-      setCurrentMilestone(newMilestone);
-      const newUnlocks = newMilestone.unlocks.filter(l => !unlockedLocations.includes(l));
-      if (newUnlocks.length > 0) {
-        setUnlockedLocations(prev => [...prev, ...newUnlocks]);
-        toast.success(`Milestone Reached: ${newMilestone.name}! New areas unlocked.`);
-      }
-    }
-    
-    saveProgression(newXP, conversationCount, visitedLocations);
-  };
-
-  // Story Mode is another perspective on the authoritative persistent world.
-  useEffect(() => {
-    const charId = localStorage.getItem('currentCharacterId');
-    if (!charId) {
-      toast.error('No character found. Please create one first.');
-      navigate('/create-character');
-      return undefined;
-    }
-
-    const startLoc = STORY_LOCATIONS[0];
-    setCharacter({ id: charId, name: localStorage.getItem('characterName') || 'Traveler', current_location: 'village_square', health: 100, max_health: 100, traits: ['Witness', 'Builder'] });
-    setLocations(STORY_LOCATIONS);
-    setCurrentLocation(startLoc);
-
     if (!worldServerConfigured) {
-      setServerError('Persistent world server is not configured. Set its address in Game Settings.');
-      setMessages([{ role: 'narrator', content: 'The story perspective is waiting for the persistent world. No offline conversation has been substituted.' }]);
+      setError('Set the persistent world address in Settings, then sign in to that server.');
       return undefined;
     }
-
     const controller = new AbortController();
     let active = true;
-
-    const appendAudibleWorldMessages = (snapshot) => {
-      const incoming = (snapshot.state?.communications?.messages || [])
-        .filter((message) => message.kind !== 'player' && !seenWorldMessageIds.current.has(message.id))
-        .map((message) => {
-          seenWorldMessageIds.current.add(message.id);
-          return { role: message.kind === 'autonomous' ? 'ambient' : 'assistant', speaker: message.speaker, content: message.content, eventId: message.id };
-        });
-      if (incoming.length) setMessages((current) => [...current, ...incoming]);
-    };
-
-    const synchronize = async () => {
+    let inFlight = false;
+    const refresh = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
-        let [snapshot, health] = await Promise.all([
-          fetchWorldSnapshot(undefined, controller.signal),
-          fetchWorldHealth(controller.signal),
-        ]);
-        if (!snapshot.state?.players?.[authorityActorId]) {
-          await submitWorldAction({ type: 'join', location: [8, 5] }, snapshot.revision);
-          snapshot = await fetchWorldSnapshot(undefined, controller.signal);
+        let next = await fetchWorldSnapshot(undefined, controller.signal);
+        if (next.viewer_id && !next.state?.players?.[next.viewer_id]) {
+          await submitWorldAction({ type: 'join' }, next.revision);
+          next = await fetchWorldSnapshot(undefined, controller.signal);
         }
         if (!active) return;
-        setServerSnapshot(snapshot);
-        setServerStatus(health);
-        setServerError(null);
-        if (!storyInitialized.current) {
-          storyInitialized.current = true;
-          setMessages([{ role: 'narrator', content: `You enter ${startLoc.name} in ${snapshot.state?.name || "Founders' Settlement"}. ${startLoc.description}\n\n${startLoc.atmosphere}` }]);
-        }
-        appendAudibleWorldMessages(snapshot);
-      } catch (error) {
-        if (!active || error.name === 'AbortError') return;
-        setServerSnapshot(null);
-        setServerError(error.message);
-      }
+        receive(next);
+        setError('');
+        // Health failure must not suppress a valid conversation snapshot.
+        try {
+          const status = await fetchWorldHealth(controller.signal);
+          if (active) setHealth(status);
+        } catch { /* Retry on the next poll. */ }
+      } catch (failure) {
+        if (active && failure.name !== 'AbortError') setError(failure.message);
+      } finally { inFlight = false; }
     };
-
-    synchronize();
-    const timer = window.setInterval(synchronize, 3000);
+    refresh();
+    const timer = window.setInterval(refresh, 1000);
     return () => { active = false; controller.abort(); window.clearInterval(timer); };
-  }, [authorityActorId, navigate]);
-
-  // Auto-scroll to bottom
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  const handleLocationChange = async (location) => {
-    if (location.id === currentLocation?.id) return;
-    
-    // In Story/Chat mode, all locations are open
-    const isUnlocked = ALL_LOCATIONS_OPEN || unlockedLocations.includes(location.id);
-    
-    if (!isUnlocked) {
-      const requiredMilestone = MILESTONES.find(m => m.unlocks.includes(location.id));
-      toast.error(`This area requires: ${requiredMilestone?.name || 'Unknown milestone'}`);
-      return;
-    }
-    
-    setCurrentLocation(location);
-    
-    // Track visited locations
-    if (!visitedLocations.has(location.id)) {
-      const newVisited = new Set([...visitedLocations, location.id]);
-      setVisitedLocations(newVisited);
-      saveProgression(playerXP, conversationCount, newVisited);
-    }
-    
-    // Add transition narrative
-    setMessages(prev => [...prev, {
-      role: 'narrator',
-      content: `You travel to ${location.name}...\n\n${location.description}\n\n${location.atmosphere}`
-    }]);
-    
-    setSidebarOpen(false);
-  };
-
-  const handleSendMessage = async () => {
-    if (!inputMessage.trim() || isLoading || !character || !currentLocation) return;
-    if (Number(character.health) <= 0) {
-      toast.error('Dead men tell no tales. This point of view is archived.');
-      return;
-    }
-
-    const userMsg = inputMessage.trim();
-    setInputMessage('');
-    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
-    setIsThinking(true);
-    setIsLoading(true);
-
+  }, []);
+  useEffect(() => { endRef.current?.scrollIntoView({ block: 'nearest' }); }, [messages]);
+  const residents = nearbyResidents(snapshot);
+  const actor = snapshot?.state?.players?.[snapshot.viewer_id];
+  const connected = Boolean(snapshot && !error);
+  const effectiveRecipient = residents.some(r => r.id === recipientId) ? recipientId : '';
+  const speak = async (event) => {
+    event.preventDefault();
+    if (busy || !message.trim() || !connected) return;
+    setBusy(true);
     try {
-      if (!worldServerConfigured || !serverSnapshot) throw new Error('Persistent world is not connected');
-      const response = await submitWorldAction({ type: 'speak', content: userMsg, ...(selectedResidentId ? { target_id: selectedResidentId } : {}) }, serverSnapshot.revision);
-      const result = response.result || response;
-      if (!result.accepted) throw new Error(result.reason || 'Speech was not accepted by the persistent world');
-      const replies = result.replies || [];
-      replies.forEach((reply) => seenWorldMessageIds.current.add(reply.id));
-      if (replies.length) {
-        setMessages((current) => [...current, ...replies.map((reply) => ({ role: 'assistant', speaker: reply.speaker, content: reply.content, eventId: reply.id }))]);
-      } else if (selectedResidentId) {
-        setMessages((current) => [...current, { role: 'narrator', content: 'The directed message was recorded; its acknowledgement is still synchronizing from the persistent world.' }]);
-      } else {
-        setMessages((current) => [...current, { role: 'narrator', content: 'Your words join the local conversation. Nearby residents may respond when they choose.' }]);
-      }
-      setServerSnapshot(await fetchWorldSnapshot());
-      
-      // Conversation accumulates social influence but cannot directly mutate geography.
-      const newConvCount = conversationCount + 1;
-      setConversationCount(newConvCount);
-      saveProgression(playerXP, newConvCount, visitedLocations);
-    } catch (error) {
-      console.error('Chat error:', error);
-      setServerError(error.message);
-      toast.error('The persistent world did not receive your words.');
-      setMessages((current) => [...current, { role: 'narrator', content: `Connection interrupted: ${error.message}. No reply was invented.` }]);
-    } finally {
-      setIsThinking(false);
-      setIsLoading(false);
-      inputRef.current?.focus();
-    }
+      const response = await submitWorldAction(speechAction(snapshot, message, effectiveRecipient), snapshot.revision);
+      if (!response.result?.accepted) throw new Error(response.result?.reason || 'Message not accepted.');
+      setMessages(current => mergeMessages(current, response.result.replies || []));
+      setMessage('');
+      setSendError('');
+      receive(await fetchWorldSnapshot());
+    } catch (failure) { setSendError(failure.message); }
+    finally { setBusy(false); }
   };
-
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
-
-  const audibleResidents = residentsNearActor(serverSnapshot, authorityActorId);
-  const displayedResidents = serverSnapshot ? audibleResidents.map((resident) => resident.name) : [];
-
-  if (!character || !currentLocation) {
-    return (
-      <div className="min-h-screen bg-obsidian flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 text-gold animate-spin mx-auto mb-4" />
-          <p className="font-manrope text-muted-foreground">Entering The Echoes...</p>
-          <BuildWatermark />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="h-screen bg-obsidian flex overflow-hidden">
-      {/* Sidebar Backdrop */}
-      {sidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-      
-      {/* Sidebar */}
-      <aside 
-        className={`fixed lg:relative z-40 h-full bg-surface/95 backdrop-blur-xl border-r border-border/30 transition-all duration-300 overflow-hidden ${
-          sidebarOpen ? 'w-80' : 'w-0'
-        }`}
-      >
-        {sidebarOpen && (
-          <div className="h-full flex flex-col w-80">
-            {/* Character Info */}
-            <div className="p-6 border-b border-border/30">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-12 h-12 rounded-sm bg-gold/20 border border-gold/30 flex items-center justify-center overflow-hidden">
-                  {character?.appearance ? (
-                    <div className="w-full h-full bg-gradient-to-br from-gold/30 to-slate-blue/30 flex items-center justify-center">
-                      <User className="w-6 h-6 text-gold" />
-                    </div>
-                  ) : (
-                    <User className="w-6 h-6 text-gold" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <h2 className="font-cinzel text-lg text-foreground">{character?.name}</h2>
-                  <p className="font-mono text-xs text-muted-foreground">
-                    {character?.traits?.slice(0, 2).join(' • ')}
-                  </p>
-                </div>
-                <button
-                  data-testid="close-sidebar-btn"
-                  onClick={() => setSidebarOpen(false)}
-                  className="text-muted-foreground hover:text-foreground p-1"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              
-              {/* XP Progress */}
-              <div className="mt-4 p-3 bg-obsidian/50 rounded-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-mono text-xs text-muted-foreground">
-                    {currentMilestone.name}
-                  </span>
-                  <span className="font-mono text-xs text-gold">{playerXP} XP</span>
-                </div>
-                <Progress 
-                  value={(playerXP / (MILESTONES.find(m => m.xpRequired > playerXP)?.xpRequired || 1000)) * 100} 
-                  className="h-1.5 bg-border"
-                />
-                <p className="font-manrope text-xs text-muted-foreground mt-2">
-                  Next: {MILESTONES.find(m => m.xpRequired > playerXP)?.name || 'All unlocked'}
-                </p>
-              </div>
-            </div>
-
-            {/* Locations */}
-            <ScrollArea className="flex-1 p-4">
-              <h3 className="font-cinzel text-sm text-muted-foreground mb-4 uppercase tracking-wider">
-                Explore The Village
-              </h3>
-              <div className="space-y-2">
-                {locations.map((location) => {
-                  // All locations are unlocked in Story/Chat mode
-                  const isUnlocked = ALL_LOCATIONS_OPEN || unlockedLocations.includes(location.id);
-                  const isCurrentLocation = currentLocation?.id === location.id;
-                  const residents = isCurrentLocation ? displayedResidents : [];
-                  
-                  return (
-                    <button
-                      key={location.id}
-                      data-testid={`location-${location.id}-btn`}
-                      onClick={() => handleLocationChange(location)}
-                      disabled={!isUnlocked}
-                      className={`w-full text-left p-4 rounded-sm border transition-all duration-300 location-card ${
-                        isCurrentLocation
-                          ? 'border-gold bg-gold/10'
-                          : isUnlocked
-                            ? 'border-border/30 hover:border-slate-blue/50 bg-obsidian/30'
-                            : 'border-border/20 bg-obsidian/20 opacity-50 cursor-not-allowed'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        {isUnlocked ? (
-                          <MapPin className={`w-4 h-4 mt-1 ${isCurrentLocation ? 'text-gold' : 'text-muted-foreground'}`} />
-                        ) : (
-                          <Lock className="w-4 h-4 mt-1 text-muted-foreground/50" />
-                        )}
-                        <div className="flex-1">
-                          <div className="font-cinzel text-sm text-foreground flex items-center gap-2">
-                            {location.name}
-                            {ALL_LOCATIONS_OPEN && !visitedLocations.has(location.id) && (
-                              <Badge variant="outline" className="text-xs font-mono text-slate-blue border-slate-blue/30">
-                                New
-                              </Badge>
-                            )}
-                          </div>
-                          {isUnlocked && residents.length > 0 && (
-                            <div className="flex items-center gap-1 mt-2">
-                              {residents.slice(0, 3).map((npc, i) => {
-                                const avatar = NPC_AVATARS[npc];
-                                const Icon = avatar?.icon || User;
-                                return (
-                                  <div 
-                                    key={i}
-                                    className={`w-6 h-6 rounded-full ${avatar?.bg || 'bg-surface'} flex items-center justify-center overflow-hidden border border-border/30`}
-                                    title={npc}
-                                  >
-                                    {avatar?.image ? (
-                                      <img src={avatar.image} alt={npc} className="w-full h-full object-cover" />
-                                    ) : (
-                                      <Icon className={`w-3 h-3 ${avatar?.color || 'text-muted-foreground'}`} />
-                                    )}
-                                  </div>
-                                );
-                              })}
-                              <span className="font-manrope text-xs text-muted-foreground ml-1">
-                                {residents.length} present
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-              
-              {/* All Areas Open indicator */}
-              {ALL_LOCATIONS_OPEN && (
-                <div className="mt-6 p-4 border border-dashed border-green-500/30 rounded-sm bg-green-500/5">
-                  <div className="flex items-center gap-2 text-green-400 mb-2">
-                    <Unlock className="w-4 h-4" />
-                    <span className="font-cinzel text-sm">All Areas Open</span>
-                  </div>
-                  <p className="font-manrope text-xs text-muted-foreground">
-                    Story Mode grants access to all locations. Explore freely!
-                  </p>
-                </div>
-              )}
-              
-              {/* Legacy locked areas hint (when ALL_LOCATIONS_OPEN is false) */}
-              {!ALL_LOCATIONS_OPEN && unlockedLocations.length < 6 && (
-                <div className="mt-6 p-4 border border-dashed border-border/30 rounded-sm">
-                  <div className="flex items-center gap-2 text-muted-foreground mb-2">
-                    <Lock className="w-4 h-4" />
-                    <span className="font-cinzel text-sm">Locked Areas</span>
-                  </div>
-                  <p className="font-manrope text-xs text-muted-foreground">
-                    Explore and interact to unlock new regions. Progress: {unlockedLocations.length}/6
-                  </p>
-                </div>
-              )}
-            </ScrollArea>
-
-            {/* Bottom Nav */}
-            <div className="p-4 border-t border-border/30 space-y-2">
-              <button
-                data-testid="nav-chat-history-btn"
-                onClick={() => navigate('/chat-history')}
-                className="w-full flex items-center gap-2 p-3 bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 rounded-sm transition-colors"
-              >
-                <History className="w-4 h-4" />
-                <span className="font-manrope text-sm">Chat History</span>
-              </button>
-              <button
-                data-testid="nav-first-person-btn"
-                onClick={() => navigate('/play')}
-                className="w-full flex items-center gap-2 p-3 bg-gold/20 text-gold hover:bg-gold/30 rounded-sm transition-colors"
-              >
-                <Globe className="w-4 h-4" />
-                <span className="font-manrope text-sm">Switch to First Person</span>
-              </button>
-              <button
-                data-testid="nav-quests-btn"
-                onClick={() => navigate('/quests')}
-                className="w-full flex items-center gap-2 p-3 text-muted-foreground hover:text-gold transition-colors"
-              >
-                <Sparkles className="w-4 h-4" />
-                <span className="font-manrope text-sm">Quest Board</span>
-              </button>
-              <button
-                data-testid="nav-profile-btn"
-                onClick={() => navigate('/profile')}
-                className="w-full flex items-center gap-2 p-3 text-muted-foreground hover:text-gold transition-colors"
-              >
-                <User className="w-4 h-4" />
-                <span className="font-manrope text-sm">My Profile</span>
-              </button>
-              <button
-                data-testid="nav-dataspace-btn"
-                onClick={() => navigate('/dataspace')}
-                className="w-full flex items-center gap-2 p-3 text-muted-foreground hover:text-slate-blue transition-colors"
-              >
-                <BookOpen className="w-4 h-4" />
-                <span className="font-manrope text-sm">Global Dataspace</span>
-              </button>
-              <button
-                data-testid="nav-home-btn"
-                onClick={() => navigate('/')}
-                className="w-full flex items-center gap-2 p-3 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Home className="w-4 h-4" />
-                <span className="font-manrope text-sm">Return Home</span>
-              </button>
-            </div>
-          </div>
-        )}
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden">
-        {/* Header */}
-        <header className="flex-shrink-0 glass border-b border-border/30 px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => navigate('/select-mode')}
-              className="rounded-sm hover:bg-gold/10"
-              data-testid="back-to-mode-select"
-            >
-              <ArrowLeft className="w-5 h-5 text-gold" />
-            </Button>
-            <button
-              data-testid="open-sidebar-btn"
-              onClick={() => setSidebarOpen(true)}
-              className={`text-muted-foreground hover:text-foreground transition-colors ${sidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-          </div>
-          <div className="text-center">
-            <h1 className="font-cinzel text-lg text-gold">{currentLocation.name}</h1>
-            <p className="font-mono text-xs text-muted-foreground">
-              {displayedResidents.length} residents in audible range
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-surface/50 rounded-sm">
-              <Sparkles className="w-3 h-3 text-gold" />
-              <span className="font-mono text-xs text-gold">{playerXP} XP</span>
-            </div>
-            {worldNews.length > 0 && (
-              <button
-                data-testid="news-indicator-btn"
-                onClick={() => setInputMessage("What news from the outer world?")}
-                className="hidden sm:flex items-center gap-2 px-3 py-1 bg-slate-blue/20 hover:bg-slate-blue/30 rounded-sm transition-colors"
-                title="Ask about world news"
-              >
-                <Globe className="w-3 h-3 text-slate-blue" />
-                <span className="font-mono text-xs text-slate-blue">News</span>
-              </button>
-            )}
-            <Sparkles className="w-4 h-4 text-slate-blue animate-pulse sm:hidden" />
-          </div>
-        </header>
-
-        <div
-          role="status"
-          aria-label="Persistent world status"
-          className={`flex flex-wrap items-center justify-center gap-x-4 gap-y-1 border-b px-4 py-2 font-mono text-xs ${serverSnapshot ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-300' : 'border-amber-500/30 bg-amber-500/5 text-amber-200'}`}
-        >
-          <strong>{serverSnapshot ? 'Persistent world connected' : 'Persistent world disconnected'}</strong>
-          {serverSnapshot && <span>Tick {serverSnapshot.tick}</span>}
-          {serverStatus && <span>{serverStatus.tick_seconds}s per tick</span>}
-          {serverStatus && <span>Uptime {formatUptime(serverStatus.uptime_seconds)}</span>}
-          {serverSnapshot && <span>Revision {serverSnapshot.revision}</span>}
-          {!serverSnapshot && <span>{serverError || 'Connecting…'}</span>}
-          <span className="hidden lg:inline text-muted-foreground">{worldServerUrl}</span>
-        </div>
-
-        {/* Location Image */}
-        <div className="relative h-48 flex-shrink-0 overflow-hidden">
-          <div 
-            className="absolute inset-0 bg-cover bg-center transition-all duration-500"
-            style={{
-              backgroundImage: `url('${LOCATION_IMAGES[currentLocation.id] || 'https://images.unsplash.com/photo-1607223090232-57bd27efa9cd?w=800&h=400&fit=crop'}')`
-            }}
-          >
-            <div className="atmosphere-overlay" />
-          </div>
-          
-          {/* NPCs Present Overlay */}
-          {displayedResidents.length > 0 && (
-            <div className="absolute top-4 right-4 flex flex-col gap-2">
-              {displayedResidents.map((npc, i) => {
-                const avatar = NPC_AVATARS[npc];
-                const Icon = avatar?.icon || User;
-                return (
-                  <div 
-                    key={i}
-                    className="flex items-center gap-2 bg-black/60 backdrop-blur-sm rounded-sm px-3 py-2"
-                  >
-                    <div className={`w-8 h-8 rounded-full ${avatar?.bg || 'bg-surface'} flex items-center justify-center overflow-hidden border border-white/20`}>
-                      {avatar?.image ? (
-                        <img src={avatar.image} alt={npc} className="w-full h-full object-cover" />
-                      ) : (
-                        <Icon className={`w-4 h-4 ${avatar?.color || 'text-muted-foreground'}`} />
-                      )}
-                    </div>
-                    <span className="font-cinzel text-xs text-foreground">{npc}</span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          
-          <div className="absolute bottom-4 left-6 right-6">
-            <p className="font-manrope text-sm text-foreground/80 italic line-clamp-2">
-              {currentLocation.atmosphere}
-            </p>
-          </div>
-        </div>
-
-        {/* Chat Area */}
-        <ScrollArea className="flex-1 p-6 chat-scroll">
-          <div className="max-w-3xl mx-auto space-y-6">
-            <div className="border-l-2 border-gold/60 bg-gold/5 p-3 text-xs text-muted-foreground">
-              {STORY_SPEECH_RULE}
-            </div>
-            {messages.map((msg, i) => (
-              <div 
-                key={i} 
-                className={`chat-message ${
-                  msg.role === 'user' ? 'flex justify-end' : ''
-                }`}
-                style={{ animationDelay: `${i * 50}ms` }}
-              >
-                {msg.role === 'narrator' ? (
-                  <Card className="bg-slate-blue/10 border-slate-blue/30 rounded-sm p-4">
-                    <p className="font-manrope text-sm text-foreground/90 italic whitespace-pre-wrap leading-relaxed">
-                      {msg.content}
-                    </p>
-                  </Card>
-                ) : msg.role === 'ambient' ? (
-                  <Card className="border-cyan-500/20 bg-cyan-500/5 rounded-sm p-3">
-                    <p className="font-manrope text-sm text-foreground/80"><span className="mr-2 font-cinzel text-cyan-300">{msg.speaker}:</span>{msg.content}</p>
-                    <small className="mt-1 block font-mono text-[9px] text-muted-foreground">AUDIBLE · autonomous local chatter</small>
-                  </Card>
-                ) : msg.role === 'distant' ? (
-                  <p className="px-3 font-manrope text-xs italic text-muted-foreground/60">{msg.content}</p>
-                ) : msg.role === 'user' ? (
-                  <div className="max-w-[80%]">
-                    <Card className="bg-gold/10 border-gold/30 rounded-sm p-4">
-                      <p className="font-manrope text-sm text-foreground">
-                        <span className="text-gold font-cinzel mr-2">{character.name}:</span>
-                        {msg.content}
-                      </p>
-                    </Card>
-                  </div>
-                ) : (
-                  <Card className="bg-surface/80 border-border/50 rounded-sm p-4">
-                    <p className="font-manrope text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
-                      {msg.speaker && <span className="mr-2 font-cinzel text-slate-blue">{msg.speaker}:</span>}
-                      {msg.content}
-                    </p>
-                  </Card>
-                )}
-              </div>
-            ))}
-            
-            {/* Thinking Indicator */}
-            {isThinking && (
-              <Card className="bg-surface/80 border-border/50 rounded-sm p-4 w-fit">
-                <div className="thinking-indicator">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-              </Card>
-            )}
-            
-            <div ref={messagesEndRef} />
-          </div>
-        </ScrollArea>
-
-        {/* Input Area */}
-        <div className="flex-shrink-0 border-t border-border/30 bg-surface/50 backdrop-blur-sm p-4">
-          <div className="max-w-3xl mx-auto">
-            <label className="mb-2 flex items-center gap-3 font-mono text-xs text-muted-foreground">
-              <span>Directed Samaritan</span>
-              <select
-                aria-label="Directed Samaritan"
-                value={selectedResidentId}
-                onChange={(event) => setSelectedResidentId(event.target.value)}
-                className="min-w-48 rounded-sm border border-border/50 bg-obsidian px-3 py-2 text-foreground"
-              >
-                <option value="">Speak generally</option>
-                {audibleResidents.map((resident) => <option key={resident.id} value={resident.id}>{resident.name}</option>)}
-              </select>
-              <span>{selectedResidentId ? 'Acknowledgement expected; elaboration remains their choice.' : 'Nearby residents may hear you; nobody is being directly addressed.'}</span>
-            </label>
-            {/* Main Input Row */}
-            <div className="flex gap-3">
-              <Input
-                ref={inputRef}
-                data-testid="chat-input"
-                value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="What do you do? What do you say?"
-                disabled={isLoading}
-                className="flex-1 bg-obsidian border-border/50 focus:ring-gold/50 focus:border-gold/50 font-manrope rounded-sm py-6"
-              />
-              <Button
-                data-testid="send-message-btn"
-                onClick={handleSendMessage}
-                disabled={isLoading || !inputMessage.trim()}
-                className="bg-gold text-black hover:bg-gold-light rounded-sm px-6 disabled:opacity-50"
-              >
-                {isLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                ) : (
-                  <Send className="w-5 h-5" />
-                )}
-              </Button>
-            </div>
-            
-            {/* Action Buttons - Outside and Below */}
-            <div className="flex items-center justify-between mt-3">
-              <p className="font-mono text-xs text-muted-foreground/50">
-                Press Enter to send
-              </p>
-              
-              {/* Quick Actions - Bottom Right Corner */}
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-xs text-muted-foreground/40 mr-2">Quick:</span>
-                {currentLocation.available_actions.slice(0, 4).map((action, i) => (
-                  <button
-                    key={i}
-                    data-testid={`quick-action-${action}-btn`}
-                    onClick={() => setInputMessage(action)}
-                    className="text-xs text-muted-foreground hover:text-gold px-3 py-1.5 bg-obsidian/80 border border-border/30 hover:border-gold/50 rounded-sm transition-all duration-200"
-                  >
-                    {action}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-    </div>
-  );
-};
-
-export default VillageExplorer;
+  return <div className="h-screen flex flex-col bg-obsidian text-foreground">
+    <GameNavigation title="Settlement conversation" />
+    <header className="px-6 py-3 border-b border-border flex flex-wrap items-center gap-4">
+      <strong>{snapshot?.state?.name || 'Connecting to your world'}</strong>
+      <span role="status" aria-label="Persistent world status" className="text-sm text-muted-foreground">
+        {connected ? `Connected · Tick ${snapshot.tick}` : 'Disconnected'}
+        {health && ` · ${health.tick_seconds}s per tick · uptime ${Math.floor(health.uptime_seconds / 60)}m`}
+      </span>
+      <Button variant="outline" onClick={() => navigate('/play')}>Explore isometric world</Button>
+    </header>
+    {error && <div role="alert" className="px-6 py-3 text-amber-200 bg-amber-900/20">{error} <button className="underline" onClick={() => navigate('/settings')}>Connection settings</button></div>}
+    <main className="flex-1 min-h-0 overflow-y-auto px-6 py-4" aria-label="Settlement conversation history" aria-live="polite">
+      {!messages.length && <p className="text-muted-foreground">Move near a resident in the isometric world, then say hello. Both perspectives share your position.</p>}
+      {messages.map(item => <article key={item.id} className="max-w-3xl mx-auto border-b border-border/40 py-4">
+        <strong className="text-gold">{item.speaker}</strong>
+        <p className="whitespace-pre-wrap mt-1">{item.content}</p>
+        <small className="text-muted-foreground">Tick {item.tick}</small>
+      </article>)}
+      <div ref={endRef} />
+    </main>
+    <footer className="border-t border-border p-4 sm:px-6">
+      <p className="text-sm text-muted-foreground mb-2">{actor?.location ? `At ${actor.location.join(', ')} · ` : ''}{residents.length} Samaritans within hearing</p>
+      {sendError && <p role="alert" className="text-amber-200 mb-2">{sendError}</p>}
+      <form onSubmit={speak} className="flex flex-wrap gap-2">
+        <select aria-label="Speak to" className="bg-surface border border-border rounded-sm p-2" value={effectiveRecipient} onChange={event => setRecipientId(event.target.value)}>
+          <option value="">Nearest resident{residents[0] ? ` · ${residents[0].name}` : ''}</option>
+          {residents.map(resident => <option key={resident.id} value={resident.id}>{resident.name}</option>)}
+        </select>
+        <input aria-label="Story message" className="flex-1 min-w-40 bg-surface border border-border p-3 rounded-sm" value={message} onChange={event => setMessage(event.target.value)} maxLength={500} disabled={!connected || busy} placeholder="Say hello, ask about work, share an idea…" />
+        <Button type="submit" disabled={!connected || busy || !message.trim()}>{busy ? 'Sending…' : 'Speak'}</Button>
+      </form>
+      <details className="mt-2 text-xs text-muted-foreground"><summary>About conversation</summary><p>Words can shape memories and decisions. Changes to land and materials still require physical work.</p></details>
+    </footer>
+  </div>;
+}

@@ -1,61 +1,21 @@
 const { test, expect } = require('@playwright/test');
 
-test('isometric world renders, responds, and restores persistent clock state', async ({ page }) => {
+test('disconnected play does not substitute a local world or expose prototype controls', async ({ page }) => {
   await page.goto('/play');
-  await expect(page.getByRole('region', { name: 'Private Jarvis owner workspace' })).toHaveCount(0);
-  await expect(page.getByRole('heading', { name: "Founders' Settlement" })).toBeVisible();
-  const canvas = page.getByRole('region', { name: 'Isometric settlement viewport' }).locator('canvas');
-  await expect(canvas).toBeVisible();
-  const visual = await canvas.evaluate((element) => {
-    const context = element.getContext('2d');
-    const colors = new Set();
-    for (let y = 20; y < element.height; y += Math.max(20, Math.floor(element.height / 8))) {
-      for (let x = 20; x < element.width; x += Math.max(20, Math.floor(element.width / 8))) {
-        colors.add(Array.from(context.getImageData(x, y, 1, 1).data).join(','));
-      }
-    }
-    return { width: element.width, height: element.height, distinctColors: colors.size };
-  });
-  expect(visual.width).toBeGreaterThan(700);
-  expect(visual.height).toBeGreaterThan(500);
-  expect(visual.distinctColors).toBeGreaterThan(2);
-  await canvas.evaluate((element) => {
-    const box = element.getBoundingClientRect();
-    const clientX = box.left + box.width / 2 + (7 - 9) * 32;
-    const clientY = box.top + 72 + (7 + 9) * 16;
-    element.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientX, clientY }));
-  });
-  await page.waitForTimeout(50);
-  await canvas.evaluate((element) => {
-    const box = element.getBoundingClientRect();
-    const clientX = box.left + box.width / 2 + (7 - 9) * 32;
-    const clientY = box.top + 72 + (7 + 9) * 16;
-    element.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX, clientY }));
-  });
-  await expect(page.getByRole('heading', { name: 'Dev’s tool counter' })).toBeVisible();
-  await page.getByRole('button', { name: /checkout.*Dev.*tool counter/i }).click();
-  await expect(page.getByText(/Inventory axe 1/)).toBeVisible();
-  await page.getByRole('textbox', { name: 'Proximity chat message' }).fill('Hello, what resources can we gather?');
-  await page.getByRole('button', { name: 'Speak', exact: true }).click();
-  await expect(page.getByText(/trees need an axe, seams need a pick/i).first()).toBeVisible();
-  await page.getByRole('button', { name: 'Pause', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Resume', exact: true })).toBeVisible();
-  await page.reload();
-  await expect(page.getByRole('button', { name: 'Resume', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Waiting for your persistent world' })).toBeVisible();
+  await page.getByRole('button', { name: 'Open chat (T)' }).click();
+  await expect(page.getByRole('textbox', { name: 'Proximity chat message' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Reset', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Place blueprint' })).toHaveCount(0);
 });
 
-test('Jarvis workspace is rendered only for the owner session profile', async ({ page }) => {
+test('a local owner flag cannot reveal server owner tools', async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem('userId', 'owner-test-id');
     localStorage.setItem('isOwner', 'true');
-    localStorage.setItem('permissionLevel', 'sirix_1');
   });
   await page.goto('/play');
-  const jarvis = page.getByRole('region', { name: 'Private Jarvis owner workspace' });
-  await expect(jarvis).toBeVisible();
-  await jarvis.getByRole('button', { name: /Directives/ }).click();
-  await expect(jarvis.getByText(/Connect the authenticated persistent-world server/)).toBeVisible();
-  await expect(jarvis.getByRole('button', { name: 'Propose to council' })).toBeDisabled();
+  await expect(page.getByRole('region', { name: 'Private Jarvis owner workspace' })).toHaveCount(0);
 });
 
 test('login does not advertise owner identity and continue requires a valid session', async ({ page }) => {
@@ -94,6 +54,8 @@ test('authoritative stewardship and teaching consequences are visible with reaso
     } }),
   }));
   await page.goto('/play');
+  await page.getByText('Settlement status & work', { exact: true }).click();
+  await page.getByText('Workshop & evidence', { exact: true }).click();
   const panel = page.getByRole('region', { name: 'Persistent work and learning consequences' });
   await expect(panel).toBeVisible();
   await expect(panel.getByText('reforestation at pine-stand')).toBeVisible();

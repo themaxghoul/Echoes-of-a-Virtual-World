@@ -10,6 +10,7 @@ test('story chat uses the persistent world and keeps the speech rule pinned once
   });
 
   const snapshot = {
+    viewer_id: 'player-1',
     world_id: 'founders-settlement',
     revision: 17,
     tick: 144,
@@ -55,17 +56,17 @@ test('story chat uses the persistent world and keeps the speech rule pinned once
   await page.goto('/village');
 
   const authority = page.getByRole('status', { name: 'Persistent world status' });
-  await expect(authority).toContainText('Persistent world connected');
+  await expect(authority).toContainText('Connected');
   await expect(authority).toContainText('Tick 144');
   await expect(authority).toContainText('15s per tick');
-  await expect(authority).toContainText('Uptime 2h 3m');
+  await expect(authority).toContainText('uptime 123m');
 
-  const rule = 'Speech may influence memory, trust, rumor, coordination, and later decisions. Physical terrain changes require physical action.';
+  const rule = 'Words can shape memories and decisions. Changes to land and materials still require physical work.';
   await expect(page.getByText(rule, { exact: true })).toHaveCount(1);
 
-  await page.getByLabel('Directed Samaritan').selectOption('imani');
-  await page.getByTestId('chat-input').fill('Hello, Imani.');
-  await page.getByTestId('send-message-btn').click();
+  await page.getByLabel('Speak to').selectOption('imani');
+  await page.getByLabel('Story message').fill('Hello, Imani.');
+  await page.getByRole('button', { name: 'Speak', exact: true }).click();
   await expect(page.getByText('Hello. I can listen while I finish the clinic inventory.')).toBeVisible();
   await expect(page.getByText(rule, { exact: true })).toHaveCount(1);
   await expect(page.getByText(/responds on their own terms/i)).toHaveCount(0);

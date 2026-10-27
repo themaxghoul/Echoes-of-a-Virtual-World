@@ -3,7 +3,7 @@ const path = require('node:path');
 
 const projectRoot = path.join(__dirname, '..');
 const projectManifest = require(path.join(projectRoot, 'package.json'));
-const stage = path.join(projectRoot, 'desktop-stage');
+const stage = path.resolve(projectRoot, process.env.EOV_STAGE_DIR || 'desktop-stage');
 const buildDirectory = path.resolve(projectRoot, process.env.EOV_BUILD_DIR || 'build');
 
 if (!fs.existsSync(path.join(buildDirectory, 'index.html'))) {

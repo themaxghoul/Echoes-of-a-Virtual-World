@@ -9,8 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, Wand2, X, User, Scroll, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
-
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+import { authApi as API, authRequestConfig } from '@/lib/authServer';
 
 const TRAIT_OPTIONS = [
   'Brave', 'Curious', 'Wise', 'Cunning', 'Kind', 'Mysterious',
@@ -64,8 +63,8 @@ const CharacterCreation = () => {
 
     setIsCreating(true);
     try {
-      const userId = localStorage.getItem('userId') || `user_${Date.now()}`;
-      localStorage.setItem('userId', userId);
+      const userId = localStorage.getItem('userId');
+      if (!userId || !sessionStorage.getItem('eovAccessToken')) throw new Error('Sign in before creating a character.');
 
       const response = await axios.post(`${API}/characters`, {
         user_id: userId,
@@ -73,9 +72,10 @@ const CharacterCreation = () => {
         background: character.background,
         traits: character.traits,
         appearance: character.appearance,
-      });
+      }, authRequestConfig());
 
       localStorage.setItem('currentCharacterId', response.data.id);
+      localStorage.setItem('characterName', response.data.name || character.name);
       toast.success(`${character.name} awakens in The Echoes...`);
       navigate('/select-mode');
     } catch (error) {

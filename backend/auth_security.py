@@ -56,7 +56,15 @@ def verify_session_token(token: str, secret: str, now: int | None = None) -> Dic
     if header != {"alg": "HS256", "typ": "JWT"}:
         raise SessionTokenError("unsupported token header")
     current = int(time.time()) if now is None else now
-    if claims.get("iss") != "eov-api" or claims.get("aud") != "eov-client" or not claims.get("sub") or not claims.get("sid"):
+    if not isinstance(claims, dict):
+        raise SessionTokenError("invalid token claims")
+    if claims.get("iss") != "eov-api" or claims.get("aud") != "eov-client":
+        raise SessionTokenError("invalid token claims")
+    if any(not isinstance(claims.get(key), str) or not claims[key].strip() or claims[key] != claims[key].strip() for key in ("sub", "sid")):
+        raise SessionTokenError("invalid token identity")
+    if any(type(claims.get(key)) is not int for key in ("ver", "iat", "nbf", "exp")):
+        raise SessionTokenError("invalid token claim types")
+    if claims["ver"] < 0 or claims["iat"] > current or claims["exp"] <= claims["nbf"]:
         raise SessionTokenError("invalid token claims")
     if not isinstance(claims.get("exp"), int) or current >= claims["exp"]:
         raise SessionTokenError("session token expired")

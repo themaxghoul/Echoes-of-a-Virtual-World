@@ -9,10 +9,10 @@ import { Eye, EyeOff, Loader2, LogIn, UserPlus, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
 import { clearNavHistory } from '@/components/GameNavigation';
+import { authApi as API, authServerUrl, authRequestConfig } from '@/lib/authServer';
 
 const { applyAuthenticatedIdentity } = require('@/lib/sessionState.cjs');
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const AuthPage = () => {
   const navigate = useNavigate();
@@ -49,7 +49,7 @@ const AuthPage = () => {
 
     setIsLoading(true);
     try {
-      if (window.eovDesktop) {
+      if (window.eovDesktop && !authServerUrl) {
         const result = await window.eovDesktop.login(loginData.identifier, loginData.password);
         if (!result.ok) throw new Error(result.error);
         const { user, character, session } = result;
@@ -105,13 +105,13 @@ const AuthPage = () => {
         
         // Record login stats
         try {
-          await axios.post(`${API}/users/track-login`, { user_id: user.id });
+          await axios.post(`${API}/users/track-login`, { user_id: user.id }, authRequestConfig());
         } catch (e) {
           console.log('Stats tracking skipped');
         }
         
         // Check if user has characters
-        const charsRes = await axios.get(`${API}/characters/${user.id}`);
+        const charsRes = await axios.get(`${API}/characters/${user.id}`, authRequestConfig());
         
         if (charsRes.data && charsRes.data.length > 0) {
           // Has character, go to mode selection
@@ -164,7 +164,7 @@ const AuthPage = () => {
 
     setIsLoading(true);
     try {
-      if (window.eovDesktop) {
+      if (window.eovDesktop && !authServerUrl) {
         const result = await window.eovDesktop.register({
           username: registerData.username,
           email: registerData.email,
@@ -173,6 +173,8 @@ const AuthPage = () => {
         });
         if (!result.ok) throw new Error(result.error);
         const { user, character, session } = result;
+        sessionStorage.removeItem('eovAccessToken');
+        localStorage.removeItem('eovNetworkUserId');
         sessionStorage.setItem('eovDesktopAccessToken', session);
         localStorage.setItem('userId', user.id);
         localStorage.setItem('username', user.username);
@@ -203,6 +205,9 @@ const AuthPage = () => {
         localStorage.setItem('username', user.username);
         localStorage.setItem('displayName', user.display_name);
         localStorage.setItem('isTranscendent', 'false');
+        localStorage.setItem('isOwner', 'false');
+        localStorage.removeItem('currentCharacterId');
+        localStorage.removeItem('characterName');
         localStorage.setItem('permissionLevel', 'basic');
         
         toast.success('Account created! Now create your character.');

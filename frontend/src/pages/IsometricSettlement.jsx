@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Activity, ArrowLeft, Building2, CheckCircle2, Clock3, Hammer, Package, Pause, Play, RotateCcw, Save, Users } from 'lucide-react';
+import { Activity, ArrowLeft, Building2, CheckCircle2, Clock3, Hammer, MessageCircle, Package, Pause, Play, RotateCcw, Save, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import JarvisPanel from '@/components/JarvisPanel';
 import DesktopDiagnostics from '@/components/DesktopDiagnostics';
+import BuildWatermark from '@/components/BuildWatermark';
 import CausalLedgerPanel from '@/components/CausalLedgerPanel';
 import AuthoritativeWorkPanel from '@/components/AuthoritativeWorkPanel';
 import { appendCausalEvent } from '@/lib/causalLedger';
@@ -14,9 +15,14 @@ import './IsometricSettlement.css';
 
 const simulationEngine = require('@/lib/worldSimulation.cjs');
 const { projectObservedFrontier } = require('@/lib/frontierView.cjs');
+const { createCamera, clampZoom, tileAtPoint, visibleBounds } = require('@/lib/isometricCamera.cjs');
+const { stepEntityMotion } = require('@/lib/entityMotion.cjs');
+const { shouldToggleChat } = require('@/lib/gameShortcuts.cjs');
+const { nearbyResidents, speechAction } = require('@/lib/worldConversation.cjs');
 const { approachTileForSite, checkoutLocalStoreItem, fallbackNpcReply, formatResourceReceipt, operationForSite, resourceInteractionOptions } = require('@/lib/isometricInteractions.cjs');
 const { TICK_MS, STAGES, initialSimulation, advanceSimulation, catchUpSimulation, acceptWorkOrder, playerAct, setProductionPriority } = simulationEngine;
 
+const localPracticeEnabled = process.env.REACT_APP_ENABLE_LOCAL_PRACTICE === 'true';
 const MAP_SIZE = 18;
 const TILE_W = 64;
 const TILE_H = 32;
@@ -157,8 +163,15 @@ const IsometricSettlement = () => {
   const simulationStorageKey = `eov-settlement-simulation:${storageOwner}`;
   const navigate = useNavigate();
   const canvasRef = useRef(null);
+  const chatInputRef = useRef(null);
   const frameRef = useRef(null);
   const visualPlayerRef = useRef({ x: INITIAL_WORLD.player.x, y: INITIAL_WORLD.player.y });
+  const npcVisualsRef = useRef({});
+  const cameraRef = useRef(null);
+  const [zoom, setZoom] = useState(1);
+  const [chatBusy, setChatBusy] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [recipientId, setRecipientId] = useState('');
   const movementLockRef = useRef(false);
   const walkToTileRef = useRef(null);
   const [world, setWorld] = useState(INITIAL_WORLD);
@@ -179,7 +192,7 @@ const IsometricSettlement = () => {
   const [repairConditionRecord, setRepairConditionRecord] = useState({ before: '0.30', after: '0.86' });
   const [extractionObservation, setExtractionObservation] = useState({ stockBefore: '10', observedYield: '2' });
   const [pumpDesign, setPumpDesign] = useState({ name: 'Founders lever pump', effortArm: '1.2', loadArm: '0.3', pistonDiameter: '0.12', stroke: '0.5', efficiency: '0.75' });
-  const isOwner = serverOwner ?? (localStorage.getItem('isOwner') === 'true');
+  const isOwner = serverOwner === true;
   const frontierView = useMemo(() => projectObservedFrontier(serverSnapshot, authorityActorId), [authorityActorId, serverSnapshot]);
   const activeMapSize = frontierView.connected ? frontierView.size : MAP_SIZE;
   const routeStatus = frontierView.route?.status === 'traveling'
@@ -205,34 +218,43 @@ const IsometricSettlement = () => {
     if (!worldServerConfigured) return undefined;
     const controller = new AbortController();
     let active = true;
+    let inFlight = false;
     const synchronize = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
-        const snapshot = await fetchWorldSnapshot(undefined, controller.signal);
+        let snapshot = await fetchWorldSnapshot(undefined, controller.signal);
+        if (snapshot.viewer_id && !snapshot.state?.players?.[snapshot.viewer_id]) {
+          await submitWorldAction({ type: 'join' }, snapshot.revision);
+          snapshot = await fetchWorldSnapshot(undefined, controller.signal);
+        }
         if (active && isRenderableServerSnapshot(snapshot)) {
           if (snapshot.viewer_id) {
             setServerActorId(snapshot.viewer_id);
             localStorage.setItem('eovNetworkUserId', snapshot.viewer_id);
           }
           if (typeof snapshot.viewer_is_owner === 'boolean') setServerOwner(snapshot.viewer_is_owner);
-          setServerSnapshot(snapshot);
+          setServerSnapshot(current => !current || snapshot.revision >= current.revision ? snapshot : current);
           const actor = snapshot.state?.players?.[snapshot.viewer_id || authorityActorId];
-          if (actor?.location) setWorld((current) => ({ ...current, player: { x: actor.location[0], y: actor.location[1] } }));
+          if (actor?.location) setWorld((current) => ({ ...current, player: { ...current.player, x: actor.location[0], y: actor.location[1] } }));
           setServerError(null);
         } else if (active) {
-          setServerSnapshot(null);
-          setServerError('World server returned an incomplete snapshot; local persistent view remains active.');
+          setServerError('World server returned an incomplete snapshot. Waiting to reconnect.');
         }
       } catch (error) {
         if (active && error.name !== 'AbortError') setServerError(error.message);
+      } finally {
+        inFlight = false;
       }
     };
     synchronize();
-    const timer = window.setInterval(synchronize, 3000);
+    const timer = window.setInterval(synchronize, 1000);
     return () => { active = false; controller.abort(); window.clearInterval(timer); };
   }, [authorityActorId]);
 
   useEffect(() => {
     localStorage.setItem(`eovLastRoute:${storageOwner}`, '/play');
+    if (worldServerConfigured || !localPracticeEnabled) return undefined;
     let active = true;
     readDurable(worldNamespace, worldStorageKey, INITIAL_WORLD).then((saved) => {
       if (active && saved?.player && Array.isArray(saved.blueprints)) setWorld(ensureWorldState(saved));
@@ -247,7 +269,7 @@ const IsometricSettlement = () => {
   }, [simulationStorageKey, storageOwner, worldNamespace, worldStorageKey]);
 
   useEffect(() => {
-    if (worldServerConfigured) return undefined;
+    if (worldServerConfigured || !localPracticeEnabled) return undefined;
     const timer = window.setInterval(() => {
       setSimulation((current) => {
         const next = advanceSimulation(current, 1);
@@ -283,7 +305,8 @@ const IsometricSettlement = () => {
     return () => window.clearInterval(timer);
   }, [simulationStorageKey, worldNamespace, worldStorageKey]);
 
-  const authoritativeNpcs = serverSnapshot ? Object.values(serverSnapshot.state?.npcs || {}).filter((npc) => Array.isArray(npc.location)).map((npc, index) => ({ ...npc, x: npc.location[0], y: npc.location[1], color: ['#67e8f9', '#fbbf24', '#c084fc', '#fb7185', '#4ade80', '#a78bfa'][index % 6], schedule: { shiftStart: npc.schedule?.shift_start ?? 0, shiftEnd: npc.schedule?.shift_end ?? 24 }, needs: npc.needs || {}, competencies: npc.competencies || {}, task: { label: npc.intention || 'Observe', reason: npc.reason || 'No recorded intention.' } })) : simulation.npcs;
+  const viewerRegion = serverSnapshot?.state?.players?.[serverSnapshot.viewer_id || authorityActorId]?.current_region || 'settlement';
+  const authoritativeNpcs = serverSnapshot ? Object.values(serverSnapshot.state?.npcs || {}).filter((npc) => Array.isArray(npc.location) && (npc.current_region || 'settlement') === viewerRegion).map((npc, index) => ({ ...npc, x: npc.location[0], y: npc.location[1], color: ['#67e8f9', '#fbbf24', '#c084fc', '#fb7185', '#4ade80', '#a78bfa'][index % 6], schedule: { shiftStart: npc.schedule?.shift_start ?? 0, shiftEnd: npc.schedule?.shift_end ?? 24 }, needs: npc.needs || {}, competencies: npc.competencies || {}, task: { label: npc.intention || 'Observe', reason: npc.reason || 'No recorded intention.' } })) : simulation.npcs;
 
   const saveWorld = useCallback(async (nextWorld = world) => {
     const envelope = await writeDurable(worldNamespace, worldStorageKey, nextWorld);
@@ -296,8 +319,18 @@ const IsometricSettlement = () => {
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
     const rect = canvas.getBoundingClientRect();
-    const width = Math.max(800, rect.width);
-    const height = Math.max(600, rect.height);
+    const width = Math.max(1, rect.width);
+    const height = Math.max(1, rect.height);
+    const now = performance.now();
+    const nextNpcVisuals = {};
+    const renderedNpcs = authoritativeNpcs.map((npc) => {
+      const stepped = stepEntityMotion(npcVisualsRef.current[npc.id], { x: npc.x, y: npc.y }, now);
+      nextNpcVisuals[npc.id] = stepped.motion;
+      return { ...npc, x: stepped.position.x, y: stepped.position.y };
+    });
+    npcVisualsRef.current = nextNpcVisuals;
+    canvas.dataset.visibleNpcCount = String(renderedNpcs.length);
+    canvas.dataset.visibleNpcIds = renderedNpcs.map((npc) => npc.id).join(',');
     if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
       canvas.width = width * dpr;
       canvas.height = height * dpr;
@@ -309,17 +342,23 @@ const IsometricSettlement = () => {
     gradient.addColorStop(1, '#020608');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, width, height);
+    if (!localPracticeEnabled && !serverSnapshot) return;
 
     const frontierActive = frontierView.connected;
     const visualPlayer = visualPlayerRef.current;
     visualPlayer.x += (world.player.x - visualPlayer.x) * 0.22;
     visualPlayer.y += (world.player.y - visualPlayer.y) * 0.22;
-    const originX = frontierActive ? width / 2 - (visualPlayer.x - visualPlayer.y) * (TILE_W / 2) : width / 2;
-    const originY = frontierActive ? height / 2 - (visualPlayer.x + visualPlayer.y) * (TILE_H / 2) : 72;
-    const minX = frontierActive ? Math.max(0, Math.floor(visualPlayer.x) - 14) : 0;
-    const maxX = frontierActive ? Math.min(activeMapSize - 1, Math.ceil(visualPlayer.x) + 14) : MAP_SIZE - 1;
-    const minY = frontierActive ? Math.max(0, Math.floor(visualPlayer.y) - 14) : 0;
-    const maxY = frontierActive ? Math.min(activeMapSize - 1, Math.ceil(visualPlayer.y) + 14) : MAP_SIZE - 1;
+    const camera = createCamera(width, height, visualPlayer, zoom);
+    cameraRef.current = camera;
+    canvas.dataset.cameraX = visualPlayer.x.toFixed(3);
+    canvas.dataset.cameraY = visualPlayer.y.toFixed(3);
+    const originX = 0;
+    const originY = 0;
+    const { minX, maxX, minY, maxY } = visibleBounds(camera, activeMapSize);
+    ctx.save();
+    ctx.translate(width / 2, height / 2);
+    ctx.scale(camera.zoom, camera.zoom);
+    ctx.translate(-(visualPlayer.x - visualPlayer.y) * TILE_W / 2, -(visualPlayer.x + visualPlayer.y) * TILE_H / 2);
     for (let sum = minX + minY; sum <= maxX + maxY; sum += 1) {
       for (let x = minX; x <= maxX; x += 1) {
         const y = sum - x;
@@ -329,7 +368,7 @@ const IsometricSettlement = () => {
         const road = !frontierActive && (x === 8 || y === 9);
         const checker = (x + y) % 2 === 0;
         const terrainColor = { grassland: '#304d3a', forest: '#173b2a', rocky: '#465057', wetland: '#253f42', water: '#123246' }[observed?.terrain];
-        drawDiamond(ctx, point.x, point.y - (observed?.elevation || 0) * 2, frontierActive ? (observed ? terrainColor || '#294433' : '#071014') : road ? '#49545a' : checker ? '#304d3a' : '#294433', observed ? 'rgba(126,220,225,.16)' : 'rgba(0,0,0,.35)');
+        drawDiamond(ctx, point.x, point.y, frontierActive ? (observed ? terrainColor || '#294433' : '#071014') : road ? '#49545a' : checker ? '#304d3a' : '#294433', observed ? 'rgba(126,220,225,.16)' : 'rgba(0,0,0,.35)');
         if (observed?.excavationDepthCm) drawDiamond(ctx, point.x, point.y + 3, 'rgba(12,12,10,.68)', '#8a6842');
         if (observed?.preparedFoundation) drawDiamond(ctx, point.x, point.y - 2, 'rgba(194,166,102,.35)', '#d4af37');
         if (observed?.surface?.stock > 0) drawResource(ctx, point, { type: observed.surface.kind === 'tree' ? 'tree' : 'mineral', stock: observed.surface.stock });
@@ -338,7 +377,7 @@ const IsometricSettlement = () => {
         }
 
         const workshop = x === 8 && y === 7 ? { id: simulation.workOrder.id, x, y, type: 'workshop', stage: Math.min(4, simulation.workOrder.stage + 1), name: 'Measurement Workshop' } : null;
-        const structure = world.blueprints.find((item) => item.x === x && item.y === y) || workshop;
+        const structure = !serverSnapshot ? world.blueprints.find((item) => item.x === x && item.y === y) || workshop : null;
         if (structure) {
           const spec = BUILDINGS[structure.type] || BUILDINGS.workshop;
           const completion = structure.stage / 4;
@@ -355,17 +394,57 @@ const IsometricSettlement = () => {
         const resource = visibleResourceNodes.find((item) => item.x === x && item.y === y);
         if (resource) drawResource(ctx, point, resource);
 
-        const npc = authoritativeNpcs.find((item) => item.x === x && item.y === y);
-        if (npc) {
-          ctx.fillStyle = npc.color;
-          ctx.beginPath();
-          ctx.arc(point.x, point.y - 24, 8, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = '#0b1014';
-          ctx.fillRect(point.x - 6, point.y - 16, 12, 19);
-        }
-
       }
+    }
+
+    for (const npc of renderedNpcs) {
+      const route = npc.route;
+      if (route?.status === 'traveling' && Array.isArray(route.path)) {
+        const remaining = route.path.slice(Math.max(0, Number(route.index) || 0));
+        if (remaining.length > 1) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(212,175,55,.64)';
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 5]);
+          ctx.beginPath();
+          remaining.forEach(([x, y], index) => {
+            const point = worldToScreen(x, y, originX, originY);
+            if (index === 0) ctx.moveTo(point.x, point.y - 3);
+            else ctx.lineTo(point.x, point.y - 3);
+          });
+          ctx.stroke();
+          ctx.setLineDash([]);
+          const [targetX, targetY] = remaining.at(-1);
+          const targetPoint = worldToScreen(targetX, targetY, originX, originY);
+          ctx.strokeStyle = 'rgba(240,217,133,.8)';
+          ctx.beginPath();
+          ctx.arc(targetPoint.x, targetPoint.y - 3, 8, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+      const point = worldToScreen(npc.x, npc.y, originX, originY);
+      ctx.save();
+      ctx.shadowColor = npc.color;
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = npc.color;
+      ctx.beginPath();
+      ctx.arc(point.x, point.y - 24, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = '#0b1014';
+      ctx.fillRect(point.x - 6, point.y - 16, 12, 19);
+      const label = npc.name || npc.id;
+      ctx.font = '10px JetBrains Mono, monospace';
+      const labelWidth = ctx.measureText(label).width + 12;
+      ctx.fillStyle = 'rgba(3,9,11,.9)';
+      ctx.fillRect(point.x - labelWidth / 2, point.y - 48, labelWidth, 16);
+      ctx.strokeStyle = 'rgba(126,220,225,.45)';
+      ctx.strokeRect(point.x - labelWidth / 2, point.y - 48, labelWidth, 16);
+      ctx.fillStyle = '#d8e7e4';
+      ctx.textAlign = 'center';
+      ctx.fillText(label, point.x, point.y - 37);
+      ctx.restore();
     }
 
     const playerPoint = worldToScreen(visualPlayer.x, visualPlayer.y, originX, originY);
@@ -377,13 +456,8 @@ const IsometricSettlement = () => {
     ctx.fillRect(playerPoint.x - 7, playerPoint.y - 18, 14, 22);
     ctx.strokeStyle = '#f6d365';
     ctx.strokeRect(playerPoint.x - 10, playerPoint.y - 31, 20, 36);
-
-    ctx.fillStyle = 'rgba(3,8,11,.76)';
-    ctx.fillRect(18, height - 50, 470, 32);
-    ctx.fillStyle = '#d9c991';
-    ctx.font = '13px JetBrains Mono, monospace';
-    ctx.fillText(buildMode ? 'PREPARE LAND · Surveyed tile, shovel, stone, and energy required' : frontierActive ? 'EXPLORE · Click a discovered destination · movement follows a persistent server route' : 'MOVE · WASD / arrows · Click resources, residents, or buildings', 32, height - 29);
-  }, [activeMapSize, authoritativeNpcs, buildMode, frontierView, hoverTile, simulation, visibleResourceNodes, world]);
+    ctx.restore();
+  }, [activeMapSize, authoritativeNpcs, buildMode, frontierView, hoverTile, serverSnapshot, simulation, visibleResourceNodes, world, zoom]);
 
   useEffect(() => {
     const tick = () => {
@@ -396,6 +470,11 @@ const IsometricSettlement = () => {
 
   useEffect(() => {
     const onKeyDown = (event) => {
+      if (shouldToggleChat(event)) {
+        event.preventDefault();
+        setChatOpen((open) => !open);
+        return;
+      }
       if (event.target instanceof HTMLElement && (event.target.matches('input, textarea, select, button') || event.target.isContentEditable)) return;
       const key = event.key.toLowerCase();
       const delta = {
@@ -412,16 +491,16 @@ const IsometricSettlement = () => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [activeMapSize, buildMode, world.player.x, world.player.y]);
 
+  useEffect(() => {
+    if (chatOpen) chatInputRef.current?.focus({ preventScroll: true });
+  }, [chatOpen]);
+
   const eventToTile = (event) => {
     const canvas = canvasRef.current;
     const rect = canvas.getBoundingClientRect();
     const sx = event.clientX - rect.left;
     const sy = event.clientY - rect.top;
-    const originX = frontierView.connected ? rect.width / 2 - (world.player.x - world.player.y) * (TILE_W / 2) : rect.width / 2;
-    const originY = frontierView.connected ? rect.height / 2 - (world.player.x + world.player.y) * (TILE_H / 2) : 72;
-    const tx = (sx - originX) / (TILE_W / 2);
-    const ty = (sy - originY) / (TILE_H / 2);
-    return { x: Math.round((tx + ty) / 2), y: Math.round((ty - tx) / 2) };
+    return tileAtPoint(cameraRef.current || createCamera(rect.width, rect.height, visualPlayerRef.current, zoom), sx, sy);
   };
 
   const handlePointerMove = (event) => {
@@ -430,7 +509,7 @@ const IsometricSettlement = () => {
   };
 
   const walkToTile = async (target) => {
-    if (movementLockRef.current || buildMode) return;
+    if (movementLockRef.current || buildMode || (!localPracticeEnabled && !serverSnapshot)) return;
     movementLockRef.current = true;
     setMovementStatus(`Walking to ${target.x},${target.y}`);
     try {
@@ -460,9 +539,11 @@ const IsometricSettlement = () => {
   };
   walkToTileRef.current = walkToTile;
 
-  const handleCanvasClick = async () => {
-    if (!hoverTile) return;
-    const structure = world.blueprints.find((item) => item.x === hoverTile.x && item.y === hoverTile.y);
+  const handleCanvasClick = async (event) => {
+    const hoverTile = eventToTile(event);
+    if (hoverTile.x < 0 || hoverTile.y < 0 || hoverTile.x >= activeMapSize || hoverTile.y >= activeMapSize) return;
+    if ((!localPracticeEnabled || worldServerConfigured) && (!serverSnapshot || serverError)) return;
+    const structure = !serverSnapshot && world.blueprints.find((item) => item.x === hoverTile.x && item.y === hoverTile.y);
     const npc = authoritativeNpcs.find((item) => item.x === hoverTile.x && item.y === hoverTile.y);
     const resources = visibleResourceNodes.filter((item) => item.x === hoverTile.x && item.y === hoverTile.y);
     const resource = resources[0];
@@ -718,9 +799,19 @@ const IsometricSettlement = () => {
   const sendProximityMessage = async (event) => {
     event.preventDefault();
     const content = chatInput.trim();
-    if (!content) return;
+    if (!content || chatBusy) return;
+    if (worldServerConfigured) {
+      setChatBusy(true);
+      try {
+        if (!serverSnapshot || serverError) throw new Error('Reconnect to the persistent world before speaking.');
+        const effectiveRecipient = nearbyResidents(serverSnapshot).some(resident => resident.id === recipientId) ? recipientId : '';
+        const response = await performAuthorityAction(speechAction(serverSnapshot, content, effectiveRecipient));
+        if (response?.result?.accepted) setChatInput('');
+      } catch (error) { setServerError(error.message); }
+      finally { setChatBusy(false); }
+      return;
+    }
     setChatInput('');
-    if (serverSnapshot) { await performAuthorityAction({ type: 'speak', content, target_id: selectedView?.role ? selectedView.id : undefined }); return; }
     const nearby = simulation.npcs.filter((npc) => Math.abs(npc.x - world.player.x) + Math.abs(npc.y - world.player.y) <= 4).sort((a, b) => a.id.localeCompare(b.id));
     const messages = [{ id: crypto.randomUUID(), tick: simulation.clock.tick, speaker: localStorage.getItem('username') || 'Player', content, kind: 'player' }];
     for (const npc of nearby.slice(0, 2)) {
@@ -734,6 +825,7 @@ const IsometricSettlement = () => {
 
   const currentStage = STAGES[simulation.workOrder.stage];
   const selectedView = authoritativeNpcs.find((npc) => npc.id === selected?.id) || visibleResourceNodes.find((node) => node.id === selected?.id) || selected;
+  const listeners = nearbyResidents(serverSnapshot);
   const selectedResource = visibleResourceNodes.find((node) => node.id === selected?.id)
     || visibleResourceNodes.find((node) => selected?.resourceIds?.includes(node.id));
   const selectedTileResources = selectedResource
@@ -751,6 +843,9 @@ const IsometricSettlement = () => {
   const activeMinute = Number.isFinite(activeClock?.minute) ? activeClock.minute : 0;
   const worldTime = `${String(Math.floor(activeMinute / 60)).padStart(2, '0')}:${String(activeMinute % 60).padStart(2, '0')}`;
   const visibleMessages = serverSnapshot?.state.communications?.messages || world.communications;
+  const visibleResidents = frontierView.connected
+    ? authoritativeNpcs.filter((npc) => Boolean(frontierView.tiles[`${Math.floor(npc.x)},${Math.floor(npc.y)}`]))
+    : authoritativeNpcs;
   const sharedActions = Object.values(serverSnapshot?.state.shared_actions?.records || {}).sort((a, b) => String(a.id).localeCompare(String(b.id)));
   const activeSharedDemand = (serverSnapshot?.state.shared_actions?.demands || []).find((demand) => demand.status !== 'resolved');
   const measurementCompetence = activePlayer.competency_records?.measurement?.demonstrated || 0;
@@ -764,15 +859,15 @@ const IsometricSettlement = () => {
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate('/select-mode')} aria-label="Back to modes"><ArrowLeft /></Button>
           <div>
-            <p className="iso-kicker">ECHOES OF VIRTUALITY · ALPHA 34</p>
+            <p className="iso-kicker">ECHOES OF VIRTUALITY</p>
             <h1>Founders' Settlement</h1>
           </div>
         </div>
         <div className="iso-stats">
           <span><Clock3 size={15} /> {worldTime} · tick {serverSnapshot?.tick ?? simulation.clock.tick}</span>
           <span><Users size={15} /> {settlementStats.residents} residents</span>
-          <span><Building2 size={15} /> {settlementStats.structures} structures</span>
-          <span><Hammer size={15} /> {settlementStats.activeProjects} active</span>
+          <Button variant="outline" onClick={() => navigate('/village')}>Story chat</Button>
+          <Button variant="ghost" onClick={() => navigate('/settings')}>Settings</Button>
         </div>
       </header>
 
@@ -780,6 +875,7 @@ const IsometricSettlement = () => {
         <section className="iso-viewport" aria-label="Isometric settlement viewport">
           <canvas ref={canvasRef} onMouseMove={handlePointerMove} onMouseLeave={() => setHoverTile(null)} onClick={handleCanvasClick} />
           <div className="iso-controls">
+            {localPracticeEnabled && !worldServerConfigured && <>
             <Button variant="outline" disabled={Boolean(serverSnapshot)} onClick={toggleClock}>{serverSnapshot ? <Clock3 size={16} /> : simulation.clock.paused ? <Play size={16} /> : <Pause size={16} />} {serverSnapshot ? 'Server runclock' : simulation.clock.paused ? 'Resume' : 'Pause'}</Button>
             <Button className={buildMode ? 'bg-gold text-black' : ''} variant={buildMode ? 'default' : 'outline'} onClick={() => setBuildMode((value) => !value)}>
               <Hammer size={16} /> {buildMode ? 'Cancel build' : 'Place blueprint'}
@@ -793,20 +889,62 @@ const IsometricSettlement = () => {
             )}
             <Button variant="outline" onClick={() => saveWorld()}><Save size={16} /> Save</Button>
             <Button variant="ghost" onClick={resetSettlement}><RotateCcw size={16} /> Reset</Button>
+            </>}
             {serverError && <span role="status">{serverError}</span>}
             {routeStatus && <span role="status">{routeStatus}</span>}
           </div>
+          <div className="iso-camera-controls" aria-label="Map controls">
+            <Button variant="outline" aria-label="Zoom out" disabled={zoom <= 0.5} onClick={() => setZoom(value => clampZoom(value - 0.25))}>−</Button>
+            <output aria-label="Map zoom">{Math.round(zoom * 100)}%</output>
+            <Button variant="outline" aria-label="Zoom in" disabled={zoom >= 1.75} onClick={() => setZoom(value => clampZoom(value + 0.25))}>+</Button>
+            <span aria-label="Player position">{world.player.x}, {world.player.y}</span>
+            <small>Click to travel · WASD / arrows · camera follows you</small>
+          </div>
+          <Button
+            className="iso-chat-toggle"
+            variant={chatOpen ? 'default' : 'outline'}
+            onClick={() => setChatOpen((open) => !open)}
+            aria-expanded={chatOpen}
+            aria-controls="iso-proximity-chat"
+            aria-label={chatOpen ? 'Close chat (T)' : 'Open chat (T)'}
+          ><MessageCircle size={16} /> Chat <kbd>T</kbd></Button>
+          {chatOpen && <div className="iso-chat-drawer" id="iso-proximity-chat" aria-label="Proximity chat">
+            <div className="iso-chat-drawer-heading">
+              <div><span className="iso-kicker">LOCAL VOICE</span><h2>Nearby conversation</h2></div>
+              <Button variant="ghost" size="icon" onClick={() => setChatOpen(false)} aria-label="Close chat"><span aria-hidden="true">×</span></Button>
+            </div>
+            {serverSnapshot && <select aria-label="Speak to" value={listeners.some(r => r.id === recipientId) ? recipientId : ''} onChange={event => setRecipientId(event.target.value)}>
+              <option value="">Nearest resident{listeners[0] ? ` · ${listeners[0].name}` : ''}</option>
+              {listeners.map(resident => <option key={resident.id} value={resident.id}>{resident.name}</option>)}
+            </select>}
+            <div className="iso-chat-log" aria-live="polite">
+              {visibleMessages.slice(-10).map((message) => <article key={message.id}><b>{message.speaker}</b><span>{message.content}</span><small>tick {message.tick} · {message.kind}</small></article>)}
+              {!visibleMessages.length && <p>No audible speech recorded yet. Nearby residents may speak without being prompted.</p>}
+            </div>
+            <form onSubmit={sendProximityMessage}>
+              <input ref={chatInputRef} value={chatInput} onChange={(event) => setChatInput(event.target.value)} disabled={chatBusy || ((!localPracticeEnabled || worldServerConfigured) && (!serverSnapshot || Boolean(serverError)))} maxLength={500} placeholder="Say hello or ask about work…" aria-label="Proximity chat message" />
+              <Button type="submit" disabled={chatBusy || !chatInput.trim() || ((!localPracticeEnabled || worldServerConfigured) && !serverSnapshot)}>{chatBusy ? 'Sending…' : 'Speak'}</Button>
+            </form>
+          </div>}
+          {!localPracticeEnabled && !serverSnapshot && <div className="iso-connection-overlay" role="status">
+            <h2>Waiting for your persistent world</h2>
+            <p>{serverError || (worldServerConfigured ? 'Connecting…' : 'Choose a world server in Settings, then sign in to join.')}</p>
+            <Button onClick={() => navigate('/settings')}>Connection settings</Button>
+            <Button variant="outline" onClick={() => navigate('/auth')}>Sign in</Button>
+            <BuildWatermark />
+          </div>}
         </section>
 
         <aside className="iso-sidebar">
           {worldServerConfigured && (
-            <div className={`iso-server-authority ${serverSnapshot ? 'connected' : 'offline'}`}>
+            <details className={`iso-server-authority ${serverSnapshot ? 'connected' : 'offline'}`}>
+              <summary>Settlement status &amp; work</summary>
               <p className="iso-kicker">MULTIPLAYER AUTHORITY</p>
               <h2>{serverSnapshot ? 'Persistent server connected' : 'Waiting for world server'}</h2>
               {serverSnapshot ? <>
                 <p>Revision {serverSnapshot.revision} · Tick {serverSnapshot.tick} · {Object.keys(serverSnapshot.state.players).length} connected player records</p>
                 <strong>{serverSnapshot.state.event.title}</strong>
-                <span>Phase: {serverSnapshot.state.event.priorities[serverSnapshot.state.event.phase].replace(/_/g, ' ')}</span>
+                <span>Phase: {serverSnapshot.state.event.priorities[serverSnapshot.state.event.phase]?.replace(/_/g, ' ') || 'Settlement life'}</span>
                 {serverSnapshot.state.institutions?.council?.current_initiative && <>
                   <strong>{serverSnapshot.state.institutions.council.current_initiative.id}</strong>
                   <span>{serverSnapshot.state.institutions.council.current_initiative.status} · {serverSnapshot.state.institutions.council.current_initiative.reason}</span>
@@ -869,8 +1007,24 @@ const IsometricSettlement = () => {
                 </article>)}
                 <small>The server owns time, NPC decisions, state revisions, and catch-up. This client is a synchronized view.</small>
               </> : <><p>{serverError || 'Connecting…'}</p><small>{worldServerUrl}</small></>}
-            </div>
+            </details>
           )}
+          {serverSnapshot && <details className="iso-resident-roster" open>
+            <summary><Users size={14} /> Resident activity <span>{visibleResidents.length} nearby</span></summary>
+            <div className="iso-resident-list">
+              {visibleResidents.map((resident) => {
+                const traveling = resident.route?.status === 'traveling';
+                const status = traveling ? `Walking to ${resident.route.destination_name || 'a nearby place'}` : resident.task?.label || 'Choosing an intention';
+                return <button key={resident.id} type="button" className={selected?.id === resident.id ? 'selected' : ''} onClick={() => setSelected(resident)} aria-label={`Inspect ${resident.name}`}>
+                  <span className="iso-resident-avatar" style={{ '--resident-tint': resident.color }}>{resident.name?.slice(0, 1) || '?'}</span>
+                  <span className="iso-resident-copy"><strong>{resident.name}</strong><small>{status}</small><small>{Math.round(resident.x)}, {Math.round(resident.y)} · {resident.role || 'resident'}</small></span>
+                  <span className={`iso-resident-state ${traveling ? 'traveling' : ''}`}>{traveling ? 'MOVING' : 'HERE'}</span>
+                </button>;
+              })}
+              {!visibleResidents.length && <p className="iso-roster-empty">No residents are within the currently observed area.</p>}
+            </div>
+          </details>}
+          {localPracticeEnabled && !worldServerConfigured && <>
           <div className="iso-simulation-status">
             <p className="iso-kicker">PERSISTENT SETTLEMENT</p>
             <h2>{simulation.workOrder.title}</h2>
@@ -906,7 +1060,8 @@ const IsometricSettlement = () => {
             <small>Only the competency required by the active stage can produce verified progress.</small>
           </div>
 
-          {serverSnapshot && <div className="iso-research-panel">
+          </>}
+          {serverSnapshot && <details className="iso-research-panel"><summary>Workshop &amp; evidence</summary>
             <p className="iso-kicker">MEASUREMENT LAB</p>
             <h2>Canonical production work</h2>
             <p>Every participant uses the same proposal, reservation, execution, verification, and commissioning rules. Physical presence determines which instruments can be perceived.</p>
@@ -967,8 +1122,9 @@ const IsometricSettlement = () => {
               {design.test_result && <small>Observed {design.test_result.observed_liters_per_stroke} L/stroke · error {(design.test_result.relative_error * 100).toFixed(1)}%</small>}
               {design.review?.reason && <small>{design.review.reason}</small>}
             </article>)}
-          </div>}
+          </details>}
 
+          {localPracticeEnabled && !worldServerConfigured && <>
           <div className="iso-economy-panel">
             <p className="iso-kicker">SHADOW VIRTUCONOMY</p>
             <div className="iso-economy-mode"><span>Accounting mode</span><b>{simulation.economy?.mode || 'shadow'}</b></div>
@@ -1003,6 +1159,7 @@ const IsometricSettlement = () => {
             ))}
           </div>
 
+          </>}
           <div className="iso-inspector">
             <p className="iso-kicker">INSPECTOR</p>
             {selectedView ? (
@@ -1011,7 +1168,7 @@ const IsometricSettlement = () => {
                 <p>{selectedView.role || (selectedView.stage === 4 ? 'Commissioned structure' : 'Construction work order pending verification')}</p>
                 {selectedView.needs && <p>Task: {selectedView.task?.label || 'Choosing an intention'}<br /><em>{selectedView.task?.reason || 'Evaluating available actions.'}</em><br />Nutrition {Math.round(selectedView.needs.nutrition)} · Hydration {Math.round(selectedView.needs.hydration)} · Rest {Math.round(selectedView.needs.rest)} · Belonging {Math.round(selectedView.needs.belonging)}</p>}
                 {selectedView.survival_activity && <p>Survival action: {selectedView.survival_activity.kind} · {selectedView.survival_activity.status}{selectedView.survival_activity.blocked_by ? ` · waiting for ${selectedView.survival_activity.blocked_by}` : ''}</p>}
-                {selectedView.schedule && <p>Schedule: {String(selectedView.schedule.shiftStart).padStart(2, '0')}:00–{String(selectedView.schedule.shiftEnd).padStart(2, '0')}:00<br />Inventory: {Object.entries(selectedView.inventory).map(([item, amount]) => `${item} ${amount}`).join(', ') || 'empty'}</p>}
+                {selectedView.schedule && <p>Schedule: {String(selectedView.schedule.shiftStart).padStart(2, '0')}:00–{String(selectedView.schedule.shiftEnd).padStart(2, '0')}:00<br />Inventory: {Object.entries(selectedView.inventory || {}).map(([item, amount]) => `${item} ${amount}`).join(', ') || 'empty'}</p>}
                 {selectedView.memories?.length > 0 && <div className="iso-memories"><strong>Work memories</strong>{selectedView.memories.slice(0, 3).map((memory, index) => <small key={`${memory.tick}-${index}`}>{memory.text}</small>)}</div>}
                 {selectedView.stage && selectedView.stage < 4 && <p>Progress requires an accepted work order, supplied materials, qualified labor time, and inspection evidence.</p>}
                 {selectedResource && <>
@@ -1030,19 +1187,7 @@ const IsometricSettlement = () => {
             <p>Energy {Math.round(activePlayer.energy ?? 100)} · Inventory {Object.entries(activePlayer.inventory || {}).filter(([, amount]) => amount > 0).map(([item, amount]) => `${item} ${Math.floor(amount * 100) / 100}`).join(', ') || 'empty'}</p>
           </div>
 
-          <div className="iso-proximity-chat">
-            <h3>PROXIMITY CHAT</h3>
-            <div className="iso-chat-log">
-              {visibleMessages.slice(-10).map((message) => <article key={message.id}><b>{message.speaker}</b><span>{message.content}</span><small>tick {message.tick} · {message.kind}</small></article>)}
-              {!visibleMessages.length && <p>No audible speech recorded yet. Nearby residents may speak without being prompted.</p>}
-            </div>
-            <form onSubmit={sendProximityMessage}>
-              <input value={chatInput} onChange={(event) => setChatInput(event.target.value)} maxLength={500} placeholder="Speak to residents within four tiles…" aria-label="Proximity chat message" />
-              <Button type="submit">Speak</Button>
-            </form>
-          </div>
-
-          <div className="iso-event-feed">
+          {localPracticeEnabled && !worldServerConfigured && <><div className="iso-event-feed">
             <h3><Activity size={14} /> WORLD EVENTS</h3>
             {simulation.events.slice(0, 10).map((event, index) => (
               <article key={`${event.tick}-${event.actor}-${index}`}><b>{event.actor}</b><span>{event.text}</span><small>tick {event.tick} · {event.type.replace(/_/g, ' ')}</small></article>
@@ -1065,14 +1210,14 @@ const IsometricSettlement = () => {
             <p>The desktop build stores checksummed revisions with a known-good backup. Server-authoritative work orders and CU escrow remain a later milestone.</p>
             {savedAt && <small>Saved {savedAt.toLocaleTimeString()}</small>}
           </div>
+          </>}
           {isOwner && <JarvisPanel
             activity={buildMode ? 'Observing blueprint placement' : selectedView ? `Reviewing ${selectedView.name}` : 'Monitoring settlement activity'}
             directives={serverSnapshot?.state.institutions?.governance?.owner_directives || []}
             canPropose={Boolean(serverSnapshot)}
             onProposeDirective={proposeOwnerDirective}
           />}
-          <DesktopDiagnostics />
-          <CausalLedgerPanel />
+          {isOwner && <details><summary>Operator diagnostics</summary><DesktopDiagnostics /><CausalLedgerPanel /></details>}
         </aside>
       </main>
     </div>

@@ -1,4 +1,8 @@
 import unittest
+import base64
+import hashlib
+import hmac
+import json
 
 from auth_security import SessionTokenError, issue_session_token, verify_session_token
 
@@ -7,6 +11,18 @@ SECRET = "test-only-secret-that-is-longer-than-thirty-two-bytes"
 
 
 class AuthSecurityTests(unittest.TestCase):
+    def test_signed_but_ill_typed_identity_claims_are_rejected(self):
+        token, claims = issue_session_token("user-1", 0, SECRET, now=100)
+        header = token.split(".")[0]
+        for replacement in ({"sub": ["user-1"]}, {"sub": " "}, {"sid": 17},
+                            {"ver": True}, {"iat": "100"}, {"nbf": False}):
+            with self.subTest(replacement=replacement):
+                body = base64.urlsafe_b64encode(json.dumps({**claims, **replacement}).encode()).rstrip(b"=").decode()
+                signed = f"{header}.{body}"
+                signature = base64.urlsafe_b64encode(hmac.new(SECRET.encode(), signed.encode(), hashlib.sha256).digest()).rstrip(b"=").decode()
+                with self.assertRaises(SessionTokenError):
+                    verify_session_token(f"{signed}.{signature}", SECRET, now=101)
+
     def test_signed_session_binds_subject_and_version(self):
         token, issued = issue_session_token("user-1", 3, SECRET, ttl_seconds=60, now=100)
         claims = verify_session_token(token, SECRET, now=120)

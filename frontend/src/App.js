@@ -7,21 +7,8 @@ import AuthPage from "@/pages/AuthPage";
 import CharacterCreation from "@/pages/CharacterCreation";
 import ModeSelection from "@/pages/ModeSelection";
 import VillageExplorer from "@/pages/VillageExplorer";
-import DataspaceView from "@/pages/DataspaceView";
-import QuestBoard from "@/pages/QuestBoard";
-import UserProfilePage from "@/pages/UserProfilePage";
-import BuildingPage from "@/pages/BuildingPage";
-import TradingPage from "@/pages/TradingPage";
-import GuildPage from "@/pages/GuildPage";
-import InventoryPage from "@/pages/InventoryPage";
 import TermsOfService from "@/pages/TermsOfService";
 import GeographicRestrictions from "@/pages/GeographicRestrictions";
-import EarningsHub from "@/pages/EarningsHub";
-import JobsHub from "@/pages/JobsHub";
-import UnityOffload from "@/pages/UnityOffload";
-import ChatHistory from "@/pages/ChatHistory";
-import SkillsPage from "@/pages/SkillsPage";
-import CharacterCustomization from "@/pages/CharacterCustomization";
 import IsometricSettlement from "@/pages/IsometricSettlement";
 import GameSettings from "@/pages/GameSettings";
 
@@ -49,22 +36,13 @@ function App() {
           <Route path="/select-mode" element={<ModeSelection />} />
           <Route path="/village" element={<VillageExplorer />} />
           <Route path="/play" element={<IsometricSettlement />} />
-          <Route path="/play-3d" element={<Navigate to="/select-mode" replace />} />
-          <Route path="/play-classic" element={<Navigate to="/select-mode" replace />} />
-          <Route path="/unity" element={<UnityOffload />} />
-          <Route path="/chat-history" element={<ChatHistory />} />
-          <Route path="/skills" element={<SkillsPage />} />
-          <Route path="/customize-character" element={<CharacterCustomization />} />
+          <Route path="/play-3d" element={<Navigate to="/play" replace />} />
+          <Route path="/play-classic" element={<Navigate to="/play" replace />} />
+          <Route path="/unity" element={<Navigate to="/play" replace />} />
+          <Route path="/chat-history" element={<Navigate to="/village" replace />} />
           <Route path="/settings" element={<GameSettings />} />
-          <Route path="/dataspace" element={<DataspaceView />} />
-          <Route path="/quests" element={<QuestBoard />} />
-          <Route path="/profile" element={<UserProfilePage />} />
-          <Route path="/building" element={<BuildingPage />} />
-          <Route path="/trading" element={<TradingPage />} />
-          <Route path="/guilds" element={<GuildPage />} />
-          <Route path="/inventory" element={<InventoryPage />} />
-          <Route path="/earnings" element={<EarningsHub />} />
-          <Route path="/jobs" element={<JobsHub />} />
+          {['/skills', '/customize-character', '/dataspace', '/quests', '/profile', '/building', '/trading', '/guilds', '/inventory', '/earnings', '/jobs'].map(path => <Route key={path} path={path} element={<Navigate to="/play" replace />} />)}
+          <Route path="*" element={<Navigate to="/select-mode" replace />} />
         </Routes>
       </Router>
       <Toaster 

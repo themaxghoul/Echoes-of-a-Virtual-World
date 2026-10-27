@@ -48,7 +48,7 @@ const PAGE_TITLES = {
   '/create-character': 'Create Character',
   '/select-mode': 'Mode Selection',
   '/village': 'Story Mode',
-  '/play': 'First Person',
+  '/play': 'Isometric World',
   '/play-classic': 'Classic View',
   '/building': 'Building',
   '/trading': 'Trading',
@@ -205,16 +205,7 @@ export const GameModeBar = ({ currentMode = 'story' }) => {
         className={`rounded-sm ${currentMode === 'firstperson' ? 'bg-slate-blue text-white' : ''}`}
       >
         <Gamepad2 className="w-4 h-4 mr-1" />
-        3D View
-      </Button>
-      <Button
-        variant={currentMode === 'earnings' ? 'default' : 'ghost'}
-        size="sm"
-        onClick={() => navigate('/earnings')}
-        className={`rounded-sm ${currentMode === 'earnings' ? 'bg-green-600 text-white' : ''}`}
-      >
-        <DollarSign className="w-4 h-4 mr-1" />
-        Earn
+        Isometric World
       </Button>
     </div>
   );

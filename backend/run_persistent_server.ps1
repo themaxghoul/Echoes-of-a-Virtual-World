@@ -8,5 +8,6 @@ if (-not $env:EOV_SESSION_SECRET) {
     throw "Set EOV_SESSION_SECRET to the same 32-byte-or-longer signing secret used by the EoV authentication API."
 }
 
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Database) | Out-Null
 $env:EOV_WORLD_DATABASE = $Database
 python -m uvicorn persistent_world_app:app --host $HostAddress --port $Port

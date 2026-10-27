@@ -9,7 +9,6 @@ import math
 import sqlite3
 import threading
 import time
-import uuid
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
@@ -29,6 +28,7 @@ SOCIAL_MEMORY_KINDS = {"social_exchange"}
 
 SCHEMA_VERSION = 32
 DEFAULT_WORLD_ID = "founders-settlement"
+SIMULATION_VERSION = "living-workshop-v1"
 
 
 def _living_workshop_state_seed() -> Dict[str, Any]:
@@ -910,7 +910,47 @@ class PersistentWorldStore:
             );
             CREATE INDEX IF NOT EXISTS idx_causal_projections_world_event
                 ON causal_projections(world_id, event_sequence);
+            CREATE TABLE IF NOT EXISTS world_checkpoints (
+                world_id TEXT PRIMARY KEY, metadata_json TEXT NOT NULL,
+                FOREIGN KEY(world_id) REFERENCES worlds(world_id)
+            );
+            CREATE TABLE IF NOT EXISTS action_bindings (
+                world_id TEXT NOT NULL, action_id TEXT NOT NULL, actor_id TEXT NOT NULL,
+                fingerprint TEXT NOT NULL, PRIMARY KEY(world_id, action_id)
+            );
         """)
+        with self.transaction() as connection:
+            for row in connection.execute("SELECT world_id FROM worlds WHERE world_id NOT IN (SELECT world_id FROM world_checkpoints)").fetchall():
+                self._save_checkpoint(connection, row["world_id"])
+
+    def _save_checkpoint(self, connection, world_id, catch_up_pending=None):
+        row = connection.execute("SELECT state_json FROM worlds WHERE world_id=?", (world_id,)).fetchone()
+        state = json.loads(row["state_json"])
+        previous = connection.execute("SELECT metadata_json FROM world_checkpoints WHERE world_id=?", (world_id,)).fetchone()
+        metadata = json.loads(previous["metadata_json"]) if previous else {}
+        metadata.update({
+            "simulation_version": SIMULATION_VERSION,
+            "last_committed_sequence": connection.execute("SELECT COALESCE(MAX(sequence),0) FROM world_events WHERE world_id=?", (world_id,)).fetchone()[0],
+            # All pseudo-random identifiers consume this durable deterministic cursor.
+            "random_cursor": state.get("random_cursor", 0),
+            "pending_action_ids": sorted(key for key, record in state.get("shared_actions", {}).get("records", {}).items() if record.get("state") not in {"commissioned", "refused", "cancelled", "retired", "lost"}),
+            "catch_up_pending": bool(metadata.get("catch_up_pending", False) if catch_up_pending is None else catch_up_pending),
+        })
+        connection.execute("INSERT INTO world_checkpoints VALUES (?, ?) ON CONFLICT(world_id) DO UPDATE SET metadata_json=excluded.metadata_json", (world_id, json.dumps(metadata, sort_keys=True, separators=(",", ":"))))
+
+    def _action_fingerprint(self, action, event_type):
+        return hashlib.sha256(json.dumps([event_type, action], sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+    def _duplicate_action(self, connection, world_id, action_id, actor_id, fingerprint):
+        row = connection.execute("SELECT p.result_json, b.actor_id, b.fingerprint FROM processed_actions p LEFT JOIN action_bindings b ON b.world_id=p.world_id AND b.action_id=p.action_id WHERE p.world_id=? AND p.action_id=?", (world_id, action_id)).fetchone()
+        if row is None:
+            return None
+        # Legacy receipts have no provable principal binding: fail closed.
+        if row["actor_id"] != actor_id:
+            raise PermissionError("Idempotency key belongs to a different or unverified principal")
+        if row["fingerprint"] != fingerprint:
+            raise RevisionConflict("Idempotency key was already used for a different command")
+        return json.loads(row["result_json"])
 
     def close(self) -> None:
         connection = getattr(self._local, "connection", None)
@@ -921,6 +961,10 @@ class PersistentWorldStore:
     @contextmanager
     def transaction(self):
         connection = self._connection()
+        if connection.in_transaction:
+            # Internal causal projection participates in its caller's atomic commit.
+            yield connection
+            return
         connection.execute("BEGIN IMMEDIATE")
         try:
             yield connection
@@ -934,14 +978,15 @@ class PersistentWorldStore:
         state = founding_table_seed(now_ms)
         with self.transaction() as connection:
             connection.execute("INSERT OR IGNORE INTO worlds VALUES (?, ?, ?, ?, ?, ?)", (world_id, 1, 0, now_ms, json.dumps(state, separators=(",", ":")), now_ms))
-            row = connection.execute("SELECT * FROM worlds WHERE world_id = ?", (world_id,)).fetchone()
-        return self._snapshot(row)
+            self._save_checkpoint(connection, world_id)
+        return self.snapshot(world_id)
 
     def _snapshot(self, row: sqlite3.Row) -> Dict[str, Any]:
-        return {"world_id": row["world_id"], "revision": row["revision"], "tick": row["tick"], "last_wall_ms": row["last_wall_ms"], "state": migrate_state(json.loads(row["state_json"])), "updated_ms": row["updated_ms"]}
+        checkpoint = json.loads(row["metadata_json"])
+        return {"world_id": row["world_id"], "revision": row["revision"], "tick": row["tick"], "last_wall_ms": row["last_wall_ms"], "state": migrate_state(json.loads(row["state_json"])), "updated_ms": row["updated_ms"], "checkpoint": checkpoint, "catch_up_pending": checkpoint["catch_up_pending"]}
 
     def snapshot(self, world_id: str = DEFAULT_WORLD_ID) -> Dict[str, Any]:
-        row = self._connection().execute("SELECT * FROM worlds WHERE world_id = ?", (world_id,)).fetchone()
+        row = self._connection().execute("SELECT worlds.*, world_checkpoints.metadata_json FROM worlds JOIN world_checkpoints USING(world_id) WHERE world_id = ?", (world_id,)).fetchone()
         if not row:
             return self.create_world(world_id)
         return self._snapshot(row)
@@ -950,8 +995,13 @@ class PersistentWorldStore:
         return actor_world_view(self.snapshot(world_id), actor_id)
 
     def events(self, world_id: str, after: int = 0, limit: int = 250) -> list[Dict[str, Any]]:
-        rows = self._connection().execute("SELECT * FROM world_events WHERE world_id = ? AND sequence > ? ORDER BY sequence LIMIT ?", (world_id, after, min(limit, 1000))).fetchall()
+        rows = self._connection().execute("SELECT * FROM world_events WHERE world_id = ? AND sequence > ? ORDER BY sequence LIMIT ?", (world_id, max(0, after), max(0, min(limit, 1000)))).fetchall()
         return [{"sequence": row["sequence"], "revision": row["revision"], "tick": row["tick"], "type": row["event_type"], "actor_id": row["actor_id"], "payload": json.loads(row["payload_json"]), "created_ms": row["created_ms"]} for row in rows]
+
+    def stream_batch(self, world_id, after=0, limit=250):
+        """Read projection and bounded ordered evidence from one database version."""
+        with self.transaction():
+            return self.snapshot(world_id), self.events(world_id, after, limit)
 
     def acquire_lease(self, world_id: str, owner_id: str, now_ms: int, lease_ms: int = 5000) -> bool:
         with self.transaction() as connection:
@@ -961,35 +1011,41 @@ class PersistentWorldStore:
             connection.execute("INSERT INTO runclock_lease VALUES (?, ?, ?) ON CONFLICT(world_id) DO UPDATE SET owner_id=excluded.owner_id, expires_ms=excluded.expires_ms", (world_id, owner_id, now_ms + lease_ms))
             return True
 
-    def advance_due(self, world_id: str = DEFAULT_WORLD_ID, now_ms: Optional[int] = None, max_ticks: int = 240) -> Dict[str, Any]:
+    def advance_due(self, world_id: str = DEFAULT_WORLD_ID, now_ms: Optional[int] = None, max_ticks: int = 240, wall_budget_ms: int = 30_000) -> Dict[str, Any]:
         now_ms = now_ms if now_ms is not None else int(time.time() * 1000)
-        with self.transaction() as connection:
-            row = connection.execute("SELECT * FROM worlds WHERE world_id = ?", (world_id,)).fetchone()
-            if not row:
-                state = founding_table_seed(now_ms)
-                connection.execute("INSERT INTO worlds VALUES (?, 1, 0, ?, ?, ?)", (world_id, now_ms, json.dumps(state, separators=(",", ":")), now_ms))
-                row = connection.execute("SELECT * FROM worlds WHERE world_id = ?", (world_id,)).fetchone()
-            state = migrate_state(json.loads(row["state_json"]))
-            tick_ms = int(state["clock"]["tick_seconds"] * 1000)
-            due = 0 if state["clock"].get("paused") else min(max_ticks, max(0, (now_ms - row["last_wall_ms"]) // tick_ms))
-            revision = row["revision"]
-            tick = row["tick"]
-            for _ in range(due):
-                tick += 1
+        deadline = time.monotonic() + max(0, wall_budget_ms) / 1000
+        self.snapshot(world_id)
+        advanced = 0
+        # A tick is the smallest atomic batch. Check time before starting another;
+        # an in-flight tick must finish or roll back, never leave partial physics.
+        while advanced < max(0, max_ticks) and time.monotonic() < deadline:
+            with self.transaction() as connection:
+                row = connection.execute("SELECT * FROM worlds WHERE world_id=?", (world_id,)).fetchone()
+                state = migrate_state(json.loads(row["state_json"]))
+                tick_ms = int(state["clock"]["tick_seconds"] * 1000)
+                if state["clock"].get("paused") or now_ms - row["last_wall_ms"] < tick_ms:
+                    break
+                self.process_causal_events(world_id, now_ms=row["last_wall_ms"])
+                row = connection.execute("SELECT * FROM worlds WHERE world_id=?", (world_id,)).fetchone()
+                state = migrate_state(json.loads(row["state_json"]))
+                tick = row["tick"] + 1
                 emitted = reduce_world_tick(state, tick)
-                revision += 1
+                revision = row["revision"] + 1
+                consumed_wall = row["last_wall_ms"] + tick_ms
                 for event in emitted:
-                    connection.execute("INSERT INTO world_events(world_id, revision, tick, event_type, actor_id, payload_json, created_ms) VALUES (?, ?, ?, ?, ?, ?, ?)", (world_id, revision, tick, event["type"], event["actor_id"], json.dumps(event["payload"], separators=(",", ":")), now_ms))
-            state["clock"]["tick"] = tick
-            if due:
-                state["clock"]["minute"] = (state["clock"]["minute"] + due * 5) % 1440
-            consumed_wall = row["last_wall_ms"] + due * tick_ms
-            connection.execute("UPDATE worlds SET revision=?, tick=?, last_wall_ms=?, state_json=?, updated_ms=? WHERE world_id=?", (revision, tick, consumed_wall, json.dumps(state, separators=(",", ":")), now_ms, world_id))
-            updated = connection.execute("SELECT * FROM worlds WHERE world_id = ?", (world_id,)).fetchone()
-        self.process_causal_events(world_id, now_ms=now_ms)
+                    connection.execute("INSERT INTO world_events(world_id, revision, tick, event_type, actor_id, payload_json, created_ms) VALUES (?, ?, ?, ?, ?, ?, ?)", (world_id, revision, tick, event["type"], event["actor_id"], json.dumps(event["payload"], separators=(",", ":")), consumed_wall))
+                state["clock"]["minute"] = (state["clock"]["minute"] + 5) % 1440
+                connection.execute("UPDATE worlds SET revision=?, tick=?, last_wall_ms=?, state_json=?, updated_ms=? WHERE world_id=?", (revision, tick, consumed_wall, json.dumps(state, separators=(",", ":")), consumed_wall, world_id))
+                self.process_causal_events(world_id, now_ms=consumed_wall)
+                self._save_checkpoint(connection, world_id, now_ms - consumed_wall >= tick_ms)
+                advanced += 1
+        with self.transaction() as connection:
+            snapshot = self.snapshot(world_id)
+            remaining = 0 if snapshot["state"]["clock"].get("paused") else max(0, (now_ms - snapshot["last_wall_ms"]) // int(snapshot["state"]["clock"]["tick_seconds"] * 1000))
+            self._save_checkpoint(connection, world_id, remaining > 0)
         result = self.snapshot(world_id)
-        result["advanced_ticks"] = due
-        result["catchup_remaining"] = max(0, (now_ms - consumed_wall) // tick_ms)
+        result["advanced_ticks"] = advanced
+        result["catchup_remaining"] = remaining
         return result
 
     def apply_action(self, world_id: str, action_id: str, actor_id: str, action: Dict[str, Any], expected_revision: Optional[int] = None, now_ms: Optional[int] = None) -> Dict[str, Any]:
@@ -1004,10 +1060,11 @@ class PersistentWorldStore:
         reason = str(amendment.get("reason", "")).strip()
         if len(reason) < 8:
             raise ValueError("operator amendment requires an auditable reason")
+        fingerprint = self._action_fingerprint(amendment, "operator_amendment")
         with self.transaction() as connection:
-            duplicate = connection.execute("SELECT result_json FROM processed_actions WHERE world_id=? AND action_id=?", (world_id, action_id)).fetchone()
+            duplicate = self._duplicate_action(connection, world_id, action_id, operator_id, fingerprint)
             if duplicate:
-                return json.loads(duplicate["result_json"])
+                return duplicate
             row = connection.execute("SELECT * FROM worlds WHERE world_id=?", (world_id,)).fetchone()
             if not row:
                 raise KeyError(world_id)
@@ -1043,6 +1100,8 @@ class PersistentWorldStore:
             connection.execute("UPDATE worlds SET revision=?, state_json=?, updated_ms=? WHERE world_id=?", (revision, json.dumps(state, separators=(",", ":")), now_ms, world_id))
             connection.execute("INSERT INTO world_events(world_id, revision, tick, event_type, actor_id, payload_json, created_ms) VALUES (?, ?, ?, ?, ?, ?, ?)", (world_id, revision, row["tick"], "operator_amendment", operator_id, json.dumps(payload, separators=(",", ":")), now_ms))
             connection.execute("INSERT INTO processed_actions VALUES (?, ?, ?, ?)", (world_id, action_id, json.dumps(result, separators=(",", ":")), now_ms))
+            connection.execute("INSERT INTO action_bindings VALUES (?, ?, ?, ?)", (world_id, action_id, operator_id, fingerprint))
+            self._save_checkpoint(connection, world_id)
             return result
 
     def apply_owner_directive(self, world_id: str, action_id: str, owner_id: str, directive: Dict[str, Any], expected_revision: Optional[int] = None, now_ms: Optional[int] = None) -> Dict[str, Any]:
@@ -1051,33 +1110,26 @@ class PersistentWorldStore:
 
     def _apply_committed_action(self, world_id: str, action_id: str, actor_id: str, action: Dict[str, Any], expected_revision: Optional[int], now_ms: Optional[int], event_type: str) -> Dict[str, Any]:
         now_ms = now_ms if now_ms is not None else int(time.time() * 1000)
-        was_duplicate = False
+        fingerprint = self._action_fingerprint(action, event_type)
         with self.transaction() as connection:
-            duplicate = connection.execute("SELECT result_json FROM processed_actions WHERE world_id=? AND action_id=?", (world_id, action_id)).fetchone()
+            duplicate = self._duplicate_action(connection, world_id, action_id, actor_id, fingerprint)
             if duplicate:
-                was_duplicate = True
-                result = json.loads(duplicate["result_json"])
-            else:
-                row = connection.execute("SELECT * FROM worlds WHERE world_id=?", (world_id,)).fetchone()
-                if not row:
-                    raise KeyError(world_id)
-                if expected_revision is not None and row["revision"] != expected_revision:
-                    raise RevisionConflict(f"expected revision {expected_revision}, current {row['revision']}")
-                state = migrate_state(json.loads(row["state_json"]))
-                payload = apply_player_action(state, actor_id, action)
-                revision = row["revision"] + 1
-                connection.execute("UPDATE worlds SET revision=?, state_json=?, updated_ms=? WHERE world_id=?", (revision, json.dumps(state, separators=(",", ":")), now_ms, world_id))
-                connection.execute("INSERT INTO world_events(world_id, revision, tick, event_type, actor_id, payload_json, created_ms) VALUES (?, ?, ?, ?, ?, ?, ?)", (world_id, revision, row["tick"], event_type, actor_id, json.dumps(payload, separators=(",", ":")), now_ms))
-                result = {"world_id": world_id, "revision": revision, "tick": row["tick"], "result": payload}
-                connection.execute("INSERT INTO processed_actions VALUES (?, ?, ?, ?)", (world_id, action_id, json.dumps(result, separators=(",", ":")), now_ms))
-        projection = self.process_causal_events(world_id, now_ms=now_ms)
-        if not was_duplicate and projection["revision"] != result["revision"]:
-            result["revision"] = projection["revision"]
-            with self.transaction() as connection:
-                connection.execute(
-                    "UPDATE processed_actions SET result_json=? WHERE world_id=? AND action_id=?",
-                    (json.dumps(result, separators=(",", ":")), world_id, action_id),
-                )
+                return duplicate
+            row = connection.execute("SELECT * FROM worlds WHERE world_id=?", (world_id,)).fetchone()
+            if not row:
+                raise KeyError(world_id)
+            if expected_revision is not None and row["revision"] != expected_revision:
+                raise RevisionConflict(f"expected revision {expected_revision}, current {row['revision']}")
+            state = migrate_state(json.loads(row["state_json"]))
+            payload = apply_player_action(state, actor_id, action)
+            revision = row["revision"] + 1
+            connection.execute("UPDATE worlds SET revision=?, state_json=?, updated_ms=? WHERE world_id=?", (revision, json.dumps(state, separators=(",", ":")), now_ms, world_id))
+            connection.execute("INSERT INTO world_events(world_id, revision, tick, event_type, actor_id, payload_json, created_ms) VALUES (?, ?, ?, ?, ?, ?, ?)", (world_id, revision, row["tick"], event_type, actor_id, json.dumps(payload, separators=(",", ":")), now_ms))
+            projection = self.process_causal_events(world_id, now_ms=now_ms)
+            result = {"world_id": world_id, "revision": projection["revision"], "tick": row["tick"], "result": payload}
+            connection.execute("INSERT INTO processed_actions VALUES (?, ?, ?, ?)", (world_id, action_id, json.dumps(result, separators=(",", ":")), now_ms))
+            connection.execute("INSERT INTO action_bindings VALUES (?, ?, ?, ?)", (world_id, action_id, actor_id, fingerprint))
+            self._save_checkpoint(connection, world_id)
         return result
 
     def process_causal_events(self, world_id: str = DEFAULT_WORLD_ID, now_ms: Optional[int] = None, max_events: int = 1000) -> Dict[str, Any]:
@@ -1096,7 +1148,7 @@ class PersistentWorldStore:
                     AND projection.projector=?
                    WHERE event.world_id=? AND projection.event_sequence IS NULL
                    ORDER BY event.sequence LIMIT ?""",
-                (projector, world_id, min(max_events, 5000)),
+                (projector, world_id, max(0, min(max_events, 5000))),
             ).fetchall()
             state = migrate_state(json.loads(row["state_json"]))
             changed = False
@@ -1121,6 +1173,7 @@ class PersistentWorldStore:
                         "INSERT INTO world_events(world_id, revision, tick, event_type, actor_id, payload_json, created_ms) VALUES (?, ?, ?, ?, ?, ?, ?)",
                         (world_id, revision, row["tick"], event["type"], event["actor_id"], json.dumps(event["payload"], separators=(",", ":")), now_ms),
                     )
+            self._save_checkpoint(connection, world_id)
         return {"world_id": world_id, "projected": len(events), "changed": changed, "revision": revision}
 
 
@@ -3043,6 +3096,16 @@ def _advance_travel_routes(state: Dict[str, Any], tick: int) -> list[Dict[str, A
         if tick <= route.get("last_advanced_tick", -1):
             continue
         route["last_advanced_tick"] = tick
+        if route.get("autonomous_origin") and actor_id in state.get("npcs", {}):
+            needs = actor.get("needs", {})
+            needs_crisis = min(float(needs.get(key, 100)) for key in ("nutrition", "hydration", "rest")) < 40 or float(actor.get("energy", 100)) < 40
+            if needs_crisis or _npc_has_active_commitment(state, actor_id):
+                route["status"] = "interrupted"
+                route["interrupted_tick"] = tick
+                reason = "urgent survival need" if needs_crisis else "accepted work commitment"
+                route["reason"] = f"Leisure travel paused for {reason}."
+                emitted.append({"type": "autonomous_route_interrupted", "actor_id": actor_id, "payload": {"route_id": route.get("id"), "reason": reason}})
+                continue
         path = route.get("path", [])
         next_index = int(route.get("index", 0)) + 1
         if next_index >= len(path):
@@ -3050,13 +3113,16 @@ def _advance_travel_routes(state: Dict[str, Any], tick: int) -> list[Dict[str, A
             continue
         origin = list(actor.get("location", path[next_index - 1]))
         destination = list(path[next_index])
-        if route.get("action_id"):
+        try:
             tile = FrontierGrid(state["frontier"]["seed"], state["frontier"]["size"]).tile_at(*destination)
             passable = state.get("terrain_modifications", {}).get(_tile_key(destination), {}).get("passable", tile.passable)
-            if _distance(origin, destination) != 1 or not passable or actor.get("current_region", "settlement") != route.get("region"):
-                route["status"] = "blocked"
-                route["reason"] = "approved route is no longer traversable"
-                continue
+        except (ValueError, TypeError):
+            passable = False
+        if _distance(origin, destination) != 1 or not passable or actor.get("current_region", "settlement") != route.get("region", actor.get("current_region", "settlement")):
+            route["status"] = "blocked"
+            route["reason"] = "route segment is no longer traversable"
+            emitted.append({"type": "route_blocked", "actor_id": actor_id, "payload": {"route_id": route.get("id"), "from": origin, "to": destination, "reason": route["reason"]}})
+            continue
         actor["location"] = destination
         actor["current_region"] = route.get("region", actor.get("current_region", "settlement"))
         route["index"] = next_index
@@ -3066,6 +3132,121 @@ def _advance_travel_routes(state: Dict[str, Any], tick: int) -> list[Dict[str, A
             route["status"] = "arrived"
             route["arrived_tick"] = tick
         emitted.append({"type": "route_segment_completed", "actor_id": actor_id, "payload": {"from": origin, "to": destination, "route_id": route["id"], "arrived": arrived}})
+        if arrived and route.get("autonomous_origin"):
+            npc = state.get("npcs", {}).get(actor_id)
+            if npc:
+                npc["last_leisure_destination"] = route.get("destination_id")
+                _append_subjective_memory(npc, {
+                    "tick": tick, "kind": "travel_arrival",
+                    "text": f"Reached {route.get('destination_name', 'a nearby place')} after choosing to spend time there.",
+                    "location": list(destination), "route_id": route["id"],
+                })
+            emitted.append({"type": "autonomous_route_arrived", "actor_id": actor_id, "payload": {"route_id": route["id"], "destination_id": route.get("destination_id"), "location": list(destination)}})
+    return emitted
+
+
+def _npc_has_active_commitment(state: Dict[str, Any], npc_id: str) -> bool:
+    """Keep autonomous leisure travel subordinate to accepted work and needs."""
+    if state.get("shared_actions", {}).get("actor_commitments", {}).get(npc_id):
+        return True
+    council = state.get("institutions", {}).get("council", {})
+    initiative = council.get("current_initiative")
+    if initiative and initiative.get("status") not in {"completed", "cancelled"}:
+        blueprint = INITIATIVE_BLUEPRINTS.get(initiative.get("priority"), {})
+        if npc_id in blueprint.get("workers", []) or npc_id == blueprint.get("inspector"):
+            return True
+    assignments = (
+        (state.get("living_workshop", {}).get("work_orders", []), ("assigned_actor_id", "worker", "inspector")),
+        (state.get("water_system", {}).get("work_orders", []), ("collector", "tester")),
+        (state.get("cooking", {}).get("work_orders", []), ("cook", "inspector")),
+        (state.get("environment", {}).get("stewardship_orders", []), ("worker", "inspector")),
+        (state.get("education", {}).get("teaching_orders", []), ("instructor", "learner")),
+        (state.get("institutions", {}).get("governance", {}).get("maintenance_orders", []), ("assigned_to",)),
+    )
+    terminal = {"completed", "cancelled", "rejected", "abandoned"}
+    for orders, actor_fields in assignments:
+        for order in orders:
+            if order.get("status") in terminal:
+                continue
+            if any(order.get(field) == npc_id for field in actor_fields):
+                return True
+    return False
+
+
+def _process_autonomous_roaming(state: Dict[str, Any], tick: int) -> list[Dict[str, Any]]:
+    """Let eligible residents choose and walk a local leisure route on durable ticks."""
+    if tick % 4 != 0:
+        return []
+    emitted: list[Dict[str, Any]] = []
+    public_place_ids = ("meeting_hall", "communal_kitchen", "measurement_lab", "clinic", "water_source", "warehouse")
+    grid = FrontierGrid(state["frontier"]["seed"], state["frontier"]["size"])
+    for npc_id, npc in sorted(state.get("npcs", {}).items()):
+        if not npc.get("autonomous", False) or _npc_has_active_commitment(state, npc_id):
+            continue
+        route = npc.get("route") or {}
+        if route.get("status") in {"traveling", "proposed"}:
+            continue
+        if route.get("status") == "arrived" and tick < int(route.get("arrived_tick", tick)) + 8:
+            continue
+        needs = npc.get("needs", {})
+        if min(float(needs.get(key, 100)) for key in ("nutrition", "hydration", "rest")) < 40 or float(npc.get("energy", 100)) < 40:
+            continue
+        minute = int(state.get("clock", {}).get("minute", 8 * 60)) % 1440
+        hour = minute // 60
+        schedule = npc.get("schedule", {})
+        shift_start = int(schedule.get("shift_start", 7)) % 24
+        shift_end = int(schedule.get("shift_end", 17)) % 24
+        on_shift = shift_start <= hour < shift_end if shift_start < shift_end else hour >= shift_start or hour < shift_end
+        if on_shift:
+            continue
+
+        location = list(npc.get("location", [8, 9]))
+        region = npc.get("current_region", "settlement")
+        _reveal_frontier(state, npc_id, location)
+        known = {tuple(int(part) for part in key.split(",")) for key in state.get("discoveries", {}).get(npc_id, {})}
+        targets = []
+        for place_id in public_place_ids:
+            place = state.get("places", {}).get(place_id, {})
+            target = tuple(place.get("location", ()))
+            if len(target) == 2 and target in known and list(target) != location:
+                targets.append((place_id, place_id.replace("_", " "), target))
+        for site_id, site in state.get("resource_sites", {}).items():
+            target = tuple(site.get("location", ()))
+            if site.get("region") == region and len(target) == 2 and target in known and list(target) != location:
+                targets.append((f"resource:{site_id}", site.get("name", site_id), target))
+
+        routes = []
+        last_destination = npc.get("last_leisure_destination")
+        for destination_id, label, target in targets:
+            if destination_id == last_destination:
+                continue
+            result = grid.find_route(tuple(location), target, known=known, modifications=state.get("terrain_modifications", {}))
+            if result.reached and len(result.path) > 1:
+                routes.append((result.cost_milli, destination_id, label, result))
+        if not routes:
+            continue
+        routes.sort(key=lambda item: (item[0], item[1]))
+        shortlist = routes[:min(4, len(routes))]
+        seed = f"{state['frontier']['seed']}:{npc_id}:{tick // 4}".encode("utf-8")
+        choice = int.from_bytes(hashlib.sha256(seed).digest()[:4], "big") % len(shortlist)
+        cost, destination_id, label, result = shortlist[choice]
+        goal = "seek company" if float(needs.get("belonging", 50)) < 60 else "spend free time"
+        reason = f"Off shift with immediate needs met; chose {label} to {goal}."
+        route_id = f"npc-roam:{npc_id}:{tick}:{destination_id}"
+        npc["route"] = {
+            "id": route_id, "path": [list(position) for position in result.path], "index": 0,
+            "status": "traveling", "region": region, "destination": list(result.path[-1]),
+            "destination_id": destination_id, "destination_name": label, "reason": reason,
+            "cost_milli": cost, "started_tick": tick, "last_advanced_tick": tick,
+            "autonomous_origin": True,
+        }
+        npc["intention"] = f"{goal} at {label}"
+        npc["reason"] = reason
+        _append_subjective_memory(npc, {"tick": tick, "kind": "travel_intention", "text": reason, "route_id": route_id})
+        emitted.append({"type": "autonomous_route_started", "actor_id": npc_id, "payload": {"route_id": route_id, "destination_id": destination_id, "destination": list(result.path[-1]), "path_length": len(result.path), "reason": reason, "goal": goal}})
+        # Stagger residents instead of running a dozen full route searches on
+        # the same world tick. Existing journeys continue to advance together.
+        break
     return emitted
 
 
@@ -3432,6 +3613,7 @@ def reduce_world_tick(state: Dict[str, Any], tick: int) -> list[Dict[str, Any]]:
         emitted.append({"type": "runclock_checkpoint", "actor_id": "server", "payload": {"tick": tick, "phase": state["event"]["phase"]}})
     emitted.extend(_process_justice(state, tick))
     emitted.extend(_process_governance(state, tick))
+    emitted.extend(_process_autonomous_roaming(state, tick))
     emitted.extend(_process_proximity_speech(state, tick))
     return emitted
 
@@ -5929,6 +6111,11 @@ def interact_resource_site(state: Dict[str, Any], actor_id: str, action: Dict[st
     }
 
 
+def _next_world_identifier(state: Dict[str, Any]) -> str:
+    state["random_cursor"] = state.get("random_cursor", 0) + 1
+    return f"world-id:{state['random_cursor']}"
+
+
 def apply_player_action(state: Dict[str, Any], actor_id: str, action: Dict[str, Any]) -> Dict[str, Any]:
     action_type = action.get("type")
     if action_type in {"negotiate_work_order", "respond_work_order"}:
@@ -6369,7 +6556,7 @@ def apply_player_action(state: Dict[str, Any], actor_id: str, action: Dict[str, 
         _remember_consequence(state, state["clock"]["tick"], f"recovery-duty:{actor_id}", f"contact:{bounty['id']}", [actor_id, bounty["subject"]])
         return {"accepted": True, "type": action_type, "bounty_id": bounty["id"], "subject": bounty["subject"], "physical_change": False}
     if action_type == "publish_order":
-        order = {"id": str(uuid.uuid4()), "author": actor_id, "priority": action.get("priority"), "terms": action.get("terms", {}), "status": "proposed", "tick": state["clock"]["tick"]}
+        order = {"id": _next_world_identifier(state), "author": actor_id, "priority": action.get("priority"), "terms": action.get("terms", {}), "status": "proposed", "tick": state["clock"]["tick"]}
         state["event"]["competing_orders"].append(order)
         return {"accepted": True, "type": action_type, "order": order}
     if action_type == "select_order":
@@ -6387,7 +6574,7 @@ def apply_player_action(state: Dict[str, Any], actor_id: str, action: Dict[str, 
             return {"accepted": False, "reason": "join the world and provide audible words"}
         target_id = str(action.get("target_id", "")).strip() or None
         heard = [npc for npc in state["npcs"].values() if _distance(npc["location"], player["location"]) <= 4]
-        player_message = {"id": str(uuid.uuid4()), "tick": state["clock"]["tick"], "speaker_id": actor_id, "speaker": actor_id, "content": content, "kind": "player", "audible_to": [npc["id"] for npc in heard], "location": list(player["location"])}
+        player_message = {"id": _next_world_identifier(state), "tick": state["clock"]["tick"], "speaker_id": actor_id, "speaker": actor_id, "content": content, "kind": "player", "audible_to": [npc["id"] for npc in heard], "location": list(player["location"])}
         state["communications"]["messages"].append(player_message)
         civic_claim = _record_witnessed_discourse(state, player_message)
         replies = []
@@ -6399,7 +6586,7 @@ def apply_player_action(state: Dict[str, Any], actor_id: str, action: Dict[str, 
             decision = _directed_response_decision(target, actor_id, content, state["clock"]["tick"], len(state["communications"]["messages"]))
             response_decisions.append(decision)
             reply_content = _npc_reply(target, content, state, actor_id) if decision["elaborated"] else "I heard you. Give me a moment to consider what you said."
-            reply = {"id": str(uuid.uuid4()), "tick": state["clock"]["tick"], "speaker_id": target["id"], "speaker": target["name"], "content": reply_content, "kind": "reply", "response_to": player_message["id"], "audible_to": [actor_id], "location": list(target["location"]), "decision": copy.deepcopy(decision)}
+            reply = {"id": _next_world_identifier(state), "tick": state["clock"]["tick"], "speaker_id": target["id"], "speaker": target["name"], "content": reply_content, "kind": "reply", "response_to": player_message["id"], "audible_to": [actor_id], "location": list(target["location"]), "decision": copy.deepcopy(decision)}
             state["communications"]["messages"].append(reply)
             replies.append(reply)
         for npc in heard:
