@@ -38,6 +38,13 @@ let webpackConfig = {
     },
     configure: (webpackConfig) => {
 
+      // CRA's asset fallback otherwise emits CommonJS simulation modules as URLs,
+      // leaving the isometric route without its exported runtime functions.
+      const oneOfRule = webpackConfig.module.rules.find((rule) => Array.isArray(rule.oneOf));
+      if (oneOfRule) {
+        oneOfRule.oneOf.unshift({ test: /\.cjs$/, type: 'javascript/auto' });
+      }
+
       // Add ignored patterns to reduce watched directories
         webpackConfig.watchOptions = {
           ...webpackConfig.watchOptions,

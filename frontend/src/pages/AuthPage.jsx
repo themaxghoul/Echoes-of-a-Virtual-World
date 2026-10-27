@@ -5,12 +5,14 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Label } from '@/components/ui/label';
-import { Eye, EyeOff, Loader2, LogIn, UserPlus, Shield, ArrowLeft } from 'lucide-react';
+import { Eye, EyeOff, Loader2, LogIn, UserPlus, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from 'axios';
 import { clearNavHistory } from '@/components/GameNavigation';
+import { authApi as API, authServerUrl, authRequestConfig } from '@/lib/authServer';
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+const { applyAuthenticatedIdentity } = require('@/lib/sessionState.cjs');
+
 
 const AuthPage = () => {
   const navigate = useNavigate();
@@ -18,11 +20,12 @@ const AuthPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   
   // Login state
-  const [loginData, setLoginData] = useState({ username: '', password: '' });
+  const [loginData, setLoginData] = useState({ identifier: '', password: '' });
   
   // Register state
   const [registerData, setRegisterData] = useState({
     username: '',
+    email: '',
     displayName: '',
     password: '',
     confirmPassword: ''
@@ -35,8 +38,8 @@ const AuthPage = () => {
 
   const handleLogin = async (e) => {
     e.preventDefault();
-    if (!loginData.username.trim()) {
-      toast.error('Please enter your username');
+    if (!loginData.identifier.trim()) {
+      toast.error('Please enter your username or email');
       return;
     }
     if (!loginData.password.trim()) {
@@ -46,31 +49,69 @@ const AuthPage = () => {
 
     setIsLoading(true);
     try {
+      if (window.eovDesktop && !authServerUrl) {
+        const result = await window.eovDesktop.login(loginData.identifier, loginData.password);
+        if (!result.ok) throw new Error(result.error);
+        const { user, character, session } = result;
+        let networkToken = null;
+        let networkUserId = null;
+        // A fresh login must never inherit another account's network session.
+        sessionStorage.removeItem('eovAccessToken');
+        localStorage.removeItem('eovNetworkUserId');
+        const configuredAuthUrl = process.env.REACT_APP_BACKEND_URL || (() => {
+          try { return JSON.parse(localStorage.getItem('eov-game-settings') || '{}').authServerUrl || ''; } catch { return ''; }
+        })();
+        if (configuredAuthUrl) {
+          try {
+            const network = await axios.post(`${configuredAuthUrl.replace(/\/$/, '')}/api/auth/login`, {
+              identifier: loginData.identifier.toLowerCase(),
+              username: loginData.identifier.toLowerCase(),
+              password: loginData.password,
+            });
+            if (network.data?.session?.access_token && network.data?.user?.username === user.username) {
+              networkToken = network.data.session.access_token;
+              networkUserId = network.data.user.id;
+            }
+          } catch {
+            // The executable remains usable offline; multiplayer reconnects after a server-authenticated login.
+          }
+        }
+        applyAuthenticatedIdentity({ localStorage, sessionStorage, user, character, desktopToken: session, networkToken, networkUserId });
+        localStorage.setItem(`eovLastRoute:${user.id}`, '/select-mode');
+        toast.success(`Welcome back, ${user.display_name}!`);
+        navigate('/select-mode');
+        return;
+      }
       // Use the proper login endpoint with password
       const response = await axios.post(`${API}/auth/login`, {
-        username: loginData.username.toLowerCase(),
+        identifier: loginData.identifier.toLowerCase(),
+        username: loginData.identifier.toLowerCase(),
         password: loginData.password
       });
       
       if (response.data && response.data.user) {
         const user = response.data.user;
+        if (!response.data.session?.access_token) throw new Error('Server did not issue an authenticated session');
+        sessionStorage.setItem('eovAccessToken', response.data.session.access_token);
+        localStorage.setItem('eovNetworkUserId', user.id);
         
         // Store user data
         localStorage.setItem('userId', user.id);
         localStorage.setItem('username', user.username);
         localStorage.setItem('displayName', user.display_name);
         localStorage.setItem('isTranscendent', user.is_transcendent ? 'true' : 'false');
+        localStorage.setItem('isOwner', user.is_owner ? 'true' : 'false');
         localStorage.setItem('permissionLevel', user.permission_level || 'basic');
         
         // Record login stats
         try {
-          await axios.post(`${API}/users/track-login`, { user_id: user.id });
+          await axios.post(`${API}/users/track-login`, { user_id: user.id }, authRequestConfig());
         } catch (e) {
           console.log('Stats tracking skipped');
         }
         
         // Check if user has characters
-        const charsRes = await axios.get(`${API}/characters/${user.id}`);
+        const charsRes = await axios.get(`${API}/characters/${user.id}`, authRequestConfig());
         
         if (charsRes.data && charsRes.data.length > 0) {
           // Has character, go to mode selection
@@ -91,7 +132,7 @@ const AuthPage = () => {
       } else if (error.response?.status === 404) {
         toast.error('User not found. Please register first.');
       } else {
-        toast.error(error.response?.data?.detail || 'Login failed. Please try again.');
+        toast.error(error.response?.data?.detail || error.message || 'Login failed. Please try again.');
       }
     } finally {
       setIsLoading(false);
@@ -111,8 +152,8 @@ const AuthPage = () => {
       return;
     }
 
-    if (!registerData.password || registerData.password.length < 6) {
-      toast.error('Password must be at least 6 characters');
+    if (!registerData.password || registerData.password.length < 12) {
+      toast.error('Password must be at least 12 characters');
       return;
     }
 
@@ -123,19 +164,50 @@ const AuthPage = () => {
 
     setIsLoading(true);
     try {
+      if (window.eovDesktop && !authServerUrl) {
+        const result = await window.eovDesktop.register({
+          username: registerData.username,
+          email: registerData.email,
+          displayName: registerData.displayName,
+          password: registerData.password,
+        });
+        if (!result.ok) throw new Error(result.error);
+        const { user, character, session } = result;
+        sessionStorage.removeItem('eovAccessToken');
+        localStorage.removeItem('eovNetworkUserId');
+        sessionStorage.setItem('eovDesktopAccessToken', session);
+        localStorage.setItem('userId', user.id);
+        localStorage.setItem('username', user.username);
+        localStorage.setItem('displayName', user.display_name);
+        localStorage.setItem('mailboxAddress', user.mailbox_address);
+        localStorage.setItem('isOwner', 'false');
+        localStorage.setItem('permissionLevel', 'basic');
+        localStorage.setItem('currentCharacterId', character.id);
+        localStorage.setItem('characterName', character.name);
+        toast.success(`Account created with ${user.mailbox_address}`);
+        navigate('/select-mode');
+        return;
+      }
       const response = await axios.post(`${API}/auth/register`, {
         username: registerData.username.toLowerCase(),
+        email: registerData.email.trim().toLowerCase() || null,
         display_name: registerData.displayName,
         password: registerData.password
       });
       
       if (response.data && response.data.user) {
         const user = response.data.user;
+        if (!response.data.session?.access_token) throw new Error('Server did not issue an authenticated session');
+        sessionStorage.setItem('eovAccessToken', response.data.session.access_token);
+        localStorage.setItem('eovNetworkUserId', user.id);
         
         localStorage.setItem('userId', user.id);
         localStorage.setItem('username', user.username);
         localStorage.setItem('displayName', user.display_name);
         localStorage.setItem('isTranscendent', 'false');
+        localStorage.setItem('isOwner', 'false');
+        localStorage.removeItem('currentCharacterId');
+        localStorage.removeItem('characterName');
         localStorage.setItem('permissionLevel', 'basic');
         
         toast.success('Account created! Now create your character.');
@@ -145,7 +217,7 @@ const AuthPage = () => {
       if (error.response?.data?.detail?.includes('already exists')) {
         toast.error('Username already taken. Choose another.');
       } else {
-        toast.error(error.response?.data?.detail || 'Registration failed. Please try again.');
+        toast.error(error.response?.data?.detail || error.message || 'Registration failed. Please try again.');
       }
     } finally {
       setIsLoading(false);
@@ -207,12 +279,13 @@ const AuthPage = () => {
             <TabsContent value="login" className="p-6">
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
-                  <Label className="font-manrope text-sm text-muted-foreground">Username</Label>
+                  <Label className="font-manrope text-sm text-muted-foreground">Username or email</Label>
                   <Input
                     data-testid="login-username"
-                    value={loginData.username}
-                    onChange={(e) => setLoginData(prev => ({ ...prev, username: e.target.value }))}
-                    placeholder="Enter your username"
+                    value={loginData.identifier}
+                    onChange={(e) => setLoginData(prev => ({ ...prev, identifier: e.target.value }))}
+                    placeholder="Enter username or email"
+                    autoComplete="username"
                     className="bg-obsidian border-border/50 rounded-sm mt-1"
                     disabled={isLoading}
                   />
@@ -227,6 +300,7 @@ const AuthPage = () => {
                       value={loginData.password}
                       onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))}
                       placeholder="Enter your password"
+                      autoComplete="current-password"
                       className="bg-obsidian border-border/50 rounded-sm mt-1 pr-10"
                       disabled={isLoading}
                     />
@@ -261,16 +335,6 @@ const AuthPage = () => {
                 </Button>
               </form>
               
-              {/* Special Account Note */}
-              <div className="mt-4 p-3 bg-gold/5 border border-gold/20 rounded-sm">
-                <div className="flex items-center gap-2 text-gold text-xs">
-                  <Shield className="w-4 h-4" />
-                  <span className="font-cinzel">Sirix-1 Admin Account</span>
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Reserved admin login: <code className="text-gold">sirix_1</code>
-                </p>
-              </div>
             </TabsContent>
 
             {/* Register Tab */}
@@ -283,6 +347,20 @@ const AuthPage = () => {
                     value={registerData.username}
                     onChange={(e) => setRegisterData(prev => ({ ...prev, username: e.target.value }))}
                     placeholder="Choose a unique username"
+                    autoComplete="username"
+                    className="bg-obsidian border-border/50 rounded-sm mt-1"
+                    disabled={isLoading}
+                  />
+                </div>
+
+                <div>
+                  <Label className="font-manrope text-sm text-muted-foreground">Email (optional in alpha)</Label>
+                  <Input
+                    type="email"
+                    value={registerData.email}
+                    onChange={(e) => setRegisterData(prev => ({ ...prev, email: e.target.value }))}
+                    placeholder="name@example.com"
+                    autoComplete="email"
                     className="bg-obsidian border-border/50 rounded-sm mt-1"
                     disabled={isLoading}
                   />
@@ -308,7 +386,8 @@ const AuthPage = () => {
                       type={showPassword ? 'text' : 'password'}
                       value={registerData.password}
                       onChange={(e) => setRegisterData(prev => ({ ...prev, password: e.target.value }))}
-                      placeholder="Create a password (min 6 chars)"
+                      placeholder="Create a password (min 12 chars)"
+                      autoComplete="new-password"
                       className="bg-obsidian border-border/50 rounded-sm mt-1 pr-10"
                       disabled={isLoading}
                     />
@@ -336,6 +415,7 @@ const AuthPage = () => {
                     value={registerData.confirmPassword}
                     onChange={(e) => setRegisterData(prev => ({ ...prev, confirmPassword: e.target.value }))}
                     placeholder="Confirm your password"
+                    autoComplete="new-password"
                     className="bg-obsidian border-border/50 rounded-sm mt-1"
                     disabled={isLoading}
                   />
@@ -359,10 +439,6 @@ const AuthPage = () => {
           </Tabs>
         </Card>
 
-        {/* Footer */}
-        <p className="text-center mt-6 font-mono text-xs text-muted-foreground/50">
-          v0.3.0 // Pre-Release for itch.io
-        </p>
       </div>
     </div>
   );

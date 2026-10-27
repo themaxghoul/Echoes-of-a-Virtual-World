@@ -22,8 +22,8 @@ PERMISSION_LEVELS = {
     },
     "sirix_1": {
         "level": 999,
-        "abilities": ["all", "immutable", "supreme_override"],
-        "description": "Supreme authority - cannot be overwritten",
+        "abilities": ["owner_console", "jarvis_private", "audit_world"],
+        "description": "Private owner operations (not an in-world rank)",
         "chat_access": ["local", "city", "state", "country", "global"]
     }
 }

@@ -18,6 +18,7 @@ node_modules/
 
 # Testing
 /coverage
+frontend/test-results/
 
 # Next.js
 /.next/
@@ -106,6 +107,18 @@ credentials.json
 *.pem
 *.key
 .credentials
+# Isolated feature worktrees
+.worktrees/
+
+# Repository-local development runtimes and persistent service data
+/runtime/
+/tools/mongodb/
+
+# Desktop packaging outputs
+/frontend/out/
+/frontend/desktop-stage/
+/frontend/release/
+
 # Public alpha durable state and local environments (never publish player data).
 data/
 *.sqlite3

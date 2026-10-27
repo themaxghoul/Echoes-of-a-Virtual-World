@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Sparkles, Compass, BookOpen } from 'lucide-react';
+import { authApi, authServerUrl, authRequestConfig } from '@/lib/authServer';
+
+const { applyAuthenticatedIdentity } = require('@/lib/sessionState.cjs');
 
 const LandingPage = () => {
   const navigate = useNavigate();
@@ -62,21 +65,56 @@ const LandingPage = () => {
           <button 
             data-testid="continue-journey-btn"
             onClick={async () => {
+              if (window.eovDesktop && !authServerUrl) {
+                const result = await window.eovDesktop.resumeLast();
+                if (result.ok) {
+                  const userId = result.user.id;
+                  // Continue Journey must not discard a valid server session.
+                  // When an auth endpoint is configured, verify the server
+                  // subject before reusing the token for multiplayer writes.
+                  let networkToken = sessionStorage.getItem('eovAccessToken');
+                  let networkUserId = localStorage.getItem('eovNetworkUserId');
+                  const configuredAuthUrl = process.env.REACT_APP_BACKEND_URL || (() => {
+                    try { return JSON.parse(localStorage.getItem('eov-game-settings') || '{}').authServerUrl || ''; } catch { return ''; }
+                  })();
+                  if (networkToken && configuredAuthUrl) {
+                    try {
+                      const response = await fetch(`${configuredAuthUrl.replace(/\/$/, '')}/api/auth/session`, { headers: { Authorization: `Bearer ${networkToken}` } });
+                      const payload = await response.json();
+                      if (!response.ok || payload?.user?.username !== result.user.username) throw new Error('Network identity mismatch');
+                      networkUserId = payload.user.id;
+                    } catch {
+                      networkToken = null;
+                      networkUserId = null;
+                      sessionStorage.removeItem('eovAccessToken');
+                      localStorage.removeItem('eovNetworkUserId');
+                    }
+                  }
+                  applyAuthenticatedIdentity({ localStorage, sessionStorage, user: result.user, character: result.character, desktopToken: sessionStorage.getItem('eovDesktopAccessToken'), networkToken, networkUserId });
+                  const allowed = ['/select-mode', '/village', '/play', '/settings'];
+                  const lastRoute = localStorage.getItem(`eovLastRoute:${userId}`);
+                  navigate(allowed.includes(lastRoute) ? lastRoute : '/select-mode');
+                  return;
+                }
+                navigate('/auth');
+                return;
+              }
               const userId = localStorage.getItem('userId');
               const charId = localStorage.getItem('currentCharacterId');
-              
-              // Must have both userId and charId
-              if (!userId || !charId) {
+              if (!userId || !charId || !sessionStorage.getItem('eovAccessToken')) {
                 navigate('/auth');
                 return;
               }
               
               // Verify character belongs to this user
               try {
-                const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/character/${charId}`);
+                const session = await fetch(`${authApi}/auth/session`, authRequestConfig());
+                const verified = await session.json();
+                if (!session.ok || verified.user?.id !== userId) throw new Error('Session expired');
+                const res = await fetch(`${authApi}/character/${charId}`, authRequestConfig());
                 const char = await res.json();
                 
-                if (char && char.user_id === userId) {
+                if (res.ok && char && char.user_id === userId) {
                   navigate('/select-mode');
                 } else {
                   // Character doesn't belong to this user, clear and redirect
@@ -95,12 +133,12 @@ const LandingPage = () => {
             Continue Journey
           </button>
           <button 
-            data-testid="view-dataspace-btn"
-            onClick={() => navigate('/dataspace')}
+            data-testid="connection-settings-btn"
+            onClick={() => navigate('/settings')}
             className="flex items-center gap-2 text-muted-foreground hover:text-slate-blue transition-colors duration-300 font-manrope"
           >
             <BookOpen className="w-4 h-4" />
-            Global Dataspace
+            Connection settings
           </button>
         </div>
 
@@ -136,10 +174,6 @@ const LandingPage = () => {
         </div>
       </div>
 
-      {/* Version Tag */}
-      <div className="absolute bottom-6 left-6 font-mono text-xs text-muted-foreground/50">
-        v0.1.0 // Phase I: The Awakening
-      </div>
     </div>
   );
 };

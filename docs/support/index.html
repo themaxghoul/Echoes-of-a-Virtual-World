@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071014">
+  <meta name="description" content="Echoes of Virtuality public playtest, downloads, project status, and ways to contribute." />
+  <title>Echoes of Virtuality — Public Playtest</title>
+  <style>
+    :root { color-scheme: dark; --ink:#ecede4; --muted:#99aaa6; --gold:#e5cb72; --cyan:#8fe8ef; --line:#29464b; --panel:#0b171a; --deep:#050a0c; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; color:var(--ink); background:radial-gradient(ellipse at 18% -10%,#23434a 0,transparent 39%),radial-gradient(ellipse at 100% 50%,#1a2a29 0,transparent 44%),linear-gradient(145deg,#071014,#030708 75%); font:16px/1.55 Inter,Segoe UI,system-ui,sans-serif; }
+    a { color:var(--cyan); text-underline-offset:4px; }
+    a:hover { color:#d3fbf5; }
+    a:focus-visible,button:focus-visible { outline:3px solid var(--gold); outline-offset:4px; }
+    .shell { width:min(1120px,calc(100% - 36px)); margin:0 auto; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:24px; min-height:82px; border-bottom:1px solid #ffffff17; }
+    .brand { display:flex; align-items:center; gap:12px; color:var(--ink); text-decoration:none; }
+    .sigil { display:grid; width:40px; height:40px; place-items:center; border:1px solid #77979a; border-radius:50%; color:var(--gold); font:19px Georgia,serif; box-shadow:0 0 25px #8fe8ef22,inset 0 0 14px #8fe8ef17; }
+    .brand strong { display:block; font:700 12px/1.1 ui-monospace,Consolas,monospace; letter-spacing:.14em; }
+    .brand small { color:var(--muted); font-size:11px; }
+    nav { display:flex; gap:18px; align-items:center; font-size:13px; }
+    nav a { color:#bbcfca; }
+    .hero { display:grid; grid-template-columns:1.2fr .8fr; gap:40px; align-items:center; padding:78px 0 54px; }
+    .eyebrow { color:var(--cyan); font:11px ui-monospace,Consolas,monospace; letter-spacing:.2em; text-transform:uppercase; }
+    h1,h2,h3 { font-family:Georgia,'Times New Roman',serif; }
+    h1 { max-width:680px; margin:10px 0 16px; color:#f3e7b1; font-size:clamp(42px,6vw,72px); font-weight:500; line-height:.98; letter-spacing:-.035em; }
+    .hero p { max-width:640px; color:#b8c7c2; font-size:17px; }
+    .hero-card { position:relative; min-height:280px; display:flex; flex-direction:column; justify-content:space-between; padding:24px; overflow:hidden; border:1px solid #72909555; border-radius:16px; background:linear-gradient(150deg,#14282cdd,#071114f2 62%); box-shadow:0 30px 90px #0008,inset 0 1px #ffffff15; }
+    .hero-card:after { content:''; position:absolute; width:260px; height:260px; right:-78px; bottom:-114px; border:1px solid #8fe8ef35; border-radius:50%; box-shadow:0 0 0 24px #8fe8ef08,0 0 0 50px #e5cb7208; }
+    .hero-card > * { position:relative; z-index:1; }
+    .status-pill { width:max-content; padding:6px 10px; border:1px solid #648a79; border-radius:99px; color:#9cdbab; background:#18302688; font:10px ui-monospace,Consolas,monospace; text-transform:uppercase; letter-spacing:.08em; }
+    .hero-card h2 { max-width:280px; margin:26px 0 6px; color:#e9dfbd; font-size:30px; font-weight:500; line-height:1.05; }
+    .hero-card p { margin:0; color:var(--muted); font-size:13px; }
+    .release-label { color:var(--gold); font:11px ui-monospace,Consolas,monospace; letter-spacing:.08em; }
+    .actions { display:flex; flex-wrap:wrap; gap:11px; margin-top:25px; }
+    .button { display:inline-flex; min-height:46px; align-items:center; justify-content:center; gap:8px; padding:0 17px; border:1px solid #548084; border-radius:7px; color:#e8f8f5; background:linear-gradient(135deg,#1a5156,#15383c); box-shadow:0 8px 24px #0004; font-weight:650; text-decoration:none; transition:transform .16s,border-color .16s,filter .16s; }
+    .button:hover { transform:translateY(-2px); border-color:#9de8df; filter:brightness(1.12); }
+    .button.secondary { color:#d8d5c8; border-color:#675c38; background:#151611; }
+    .button[aria-disabled="true"] { color:#78827f; border-color:#384247; background:#111719; box-shadow:none; pointer-events:none; }
+    .release-state { min-height:24px; margin-top:12px; color:#98aaa6; font:11px ui-monospace,Consolas,monospace; }
+    main section { padding:45px 0; border-top:1px solid #ffffff16; }
+    .section-heading { display:flex; justify-content:space-between; align-items:end; gap:20px; margin-bottom:22px; }
+    .section-heading h2 { margin:5px 0 0; color:#e8dfbd; font-size:32px; font-weight:500; }
+    .section-heading p { max-width:520px; margin:0; color:var(--muted); font-size:13px; }
+    .grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:13px; }
+    .panel { padding:19px; border:1px solid var(--line); border-radius:10px; background:linear-gradient(145deg,#102023e8,#081113f4); box-shadow:inset 0 1px #ffffff0a,0 14px 32px #0003; }
+    .panel .number { color:var(--gold); font:11px ui-monospace,Consolas,monospace; }
+    .panel h3 { margin:10px 0 7px; color:#d7ebe5; font-size:20px; font-weight:500; }
+    .panel p { margin:0; color:#9eafab; font-size:13px; }
+    .status-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .status-grid .panel { min-height:138px; }
+    .tag { display:inline-block; margin-top:13px; padding:3px 7px; border:1px solid #3b6964; border-radius:4px; color:#9bd9c0; font:9px ui-monospace,Consolas,monospace; text-transform:uppercase; letter-spacing:.06em; }
+    .tag.planned { border-color:#686044; color:#d6c57d; }
+    .notice { padding:18px 20px; border-left:3px solid var(--gold); border-radius:0 8px 8px 0; color:#b9c5c0; background:#111817; font-size:13px; }
+    .notice strong { color:#f0dda0; }
+    .support-row { display:grid; grid-template-columns:1fr auto; gap:24px; align-items:center; }
+    footer { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; padding:23px 0 34px; border-top:1px solid #ffffff16; color:#7c908b; font-size:11px; }
+    @media (max-width:760px) { .hero { grid-template-columns:1fr; gap:24px; padding:52px 0 36px; } .hero-card { min-height:220px; } .grid { grid-template-columns:1fr; } .section-heading { display:block; } .section-heading p { margin-top:10px; } .support-row { grid-template-columns:1fr; } }
+    @media (max-width:500px) { .shell { width:min(100% - 24px,1120px); } header { min-height:68px; } nav { gap:10px; font-size:11px; } nav a:nth-child(2) { display:none; } .sigil { width:34px;height:34px; } .hero { padding-top:42px; } h1 { font-size:46px; } .hero p { font-size:15px; } main section { padding:34px 0; } .status-grid { grid-template-columns:1fr; } }
+    @media (prefers-reduced-motion:reduce) { *,*:before,*:after { scroll-behavior:auto!important; transition:none!important; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <a class="brand" href="./" aria-label="Echoes of Virtuality public playtest home"><span class="sigil" aria-hidden="true">E</span><span><strong>ECHOES OF VIRTUALITY</strong><small>Persistent-world playtest</small></span></a>
+      <nav aria-label="Page navigation"><a href="#playtest">Playtest</a><a href="#status">Build status</a><a href="#support">Support</a></nav>
+    </header>
+
+    <main>
+      <section class="hero" id="playtest" style="border:0">
+        <div>
+          <span class="eyebrow">A world still becoming</span>
+          <h1>Enter the echoes.</h1>
+          <p>Explore a persistent settlement, meet residents who remember and make their own choices, and help shape the systems that will let this world grow. This is an early public playtest: curious minds and useful bug reports are welcome.</p>
+          <div class="actions">
+            <a class="button secondary" id="browser-preview" href="../">Try the existing browser alpha</a>
+            <a class="button" id="client-download" href="https://github.com/themaxghoul/Echoes-of-a-Virtual-World/releases/latest" aria-disabled="true">Preparing playtest build</a>
+            <a class="button secondary" id="server-download" href="https://github.com/themaxghoul/Echoes-of-a-Virtual-World/releases" aria-disabled="true">World server bundle</a>
+            <a class="button secondary" id="checksum-download" href="https://github.com/themaxghoul/Echoes-of-a-Virtual-World/releases" aria-disabled="true">SHA-256 checksums</a>
+          </div>
+          <div class="release-state" id="release-state" role="status" aria-live="polite">Checking the latest signed release assets…</div>
+        </div>
+        <aside class="hero-card" aria-label="Current test build">
+          <span class="status-pill">Public playtest · Windows x64</span>
+          <div><h2>Build the society, one cause at a time.</h2><p>Player choices and resident work leave visible consequences.</p></div>
+          <span class="release-label" id="release-label">ALPHA BUILD · RELEASE STATUS CHECKING</span>
+        </aside>
+      </section>
+
+      <section id="status">
+        <div class="notice" style="margin-bottom:18px"><strong>Two separate playtest builds:</strong> the browser alpha is an existing Cloudflare-backed build at the <a href="../">site root</a>; Alpha 36 is a Windows client with self-hosted local services. They do not share accounts, saves, or world state.</div>
+        <div class="section-heading"><div><span class="eyebrow">What works now</span><h2>Small systems, real consequences.</h2></div><p>The playtest favors dependable isometric exploration and a persistent simulation over modes and controls that are not ready yet.</p></div>
+        <div class="grid">
+          <article class="panel"><span class="number">01 / EXPLORE</span><h3>Isometric settlement</h3><p>Follow the player camera across discovered land, zoom the view, and inspect residents, places, and local resources.</p><span class="tag">Playable</span></article>
+          <article class="panel"><span class="number">02 / RESIDENTS</span><h3>Independent Samaritans</h3><p>Residents have needs, work, memories, and proximity conversation. Off-duty residents can choose known public places and walk there over world ticks.</p><span class="tag">Simulation slice</span></article>
+          <article class="panel"><span class="number">03 / MAKE A MARK</span><h3>Work with evidence</h3><p>Survey, measure, gather, and organize work through recorded state changes. Provisional CU is accounting only, not spendable money.</p><span class="tag">Prototype</span></article>
+        </div>
+        <div class="status-grid" style="margin-top:13px">
+          <article class="panel"><span class="number">NOT IN THIS BUILD</span><h3>Combat, first-person, crafting</h3><p>These systems are not advertised as playable until their actions, persistence, and failure rules are implemented.</p><span class="tag planned">In development</span></article>
+          <article class="panel"><span class="number">HOSTING</span><h3>Self-hosted services</h3><p>The release includes server software, not managed 24/7 hosting. Testers need to run or arrange the authentication API, MongoDB, and persistent-world service.</p><span class="tag planned">Read setup first</span></article>
+        </div>
+      </section>
+
+      <section id="support">
+        <div class="section-heading"><div><span class="eyebrow">Support the work</span><h2>Help the world get sturdier.</h2></div><p>Clear reports and thoughtful contributions make the next build better than a promise ever could.</p></div>
+        <div class="support-row">
+          <div class="notice"><strong>Funding note:</strong> This page does not currently collect money. A sponsorship link will appear only after an owner-controlled payout destination is verified. Contributions would not automatically convert into OpenAI or Codex usage credits.</div>
+          <a class="button secondary" href="https://github.com/themaxghoul/Echoes-of-a-Virtual-World/issues">Report a bug or idea</a>
+        </div>
+        <div class="grid" style="margin-top:13px">
+          <article class="panel"><span class="number">PLAY</span><h3>Test an ordinary session</h3><p>Walk the settlement, talk with a nearby resident, follow what they do, and see whether state survives a restart.</p></article>
+          <article class="panel"><span class="number">REPORT</span><h3>Give reproducible feedback</h3><p>Include build number, server setup, steps, expected result, and what actually happened. Never attach passwords, tokens, or private server secrets.</p></article>
+          <article class="panel"><span class="number">CONTRIBUTE</span><h3>Improve the foundation</h3><p>Review the public roadmap, file focused issues, and contribute code or art that fits the game's causal, persistent-world direction.</p></article>
+        </div>
+      </section>
+    </main>
+
+    <footer><span>Echoes of Virtuality · community playtest · not a production service</span><a href="https://github.com/themaxghoul/Echoes-of-a-Virtual-World">Source repository</a></footer>
+  </div>
+  <script>
+    (async function loadRelease() {
+      const state = document.getElementById('release-state');
+      const client = document.getElementById('client-download');
+      const server = document.getElementById('server-download');
+      const checksum = document.getElementById('checksum-download');
+      const label = document.getElementById('release-label');
+      try {
+        const response = await fetch('https://api.github.com/repos/themaxghoul/Echoes-of-a-Virtual-World/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
+        if (!response.ok) throw new Error('No published release is available yet.');
+        const release = await response.json();
+        const assets = Array.isArray(release.assets) ? release.assets : [];
+        const clientAsset = assets.find(asset => /^EoV-Alpha\d+-Windows-x64\.zip$/.test(asset.name));
+        const serverAsset = assets.find(asset => /^EoV-Alpha\d+-Persistent-Server\.zip$/.test(asset.name));
+        const checksumAsset = assets.find(asset => /^EoV-Alpha\d+-SHA256\.txt$/.test(asset.name));
+        if (!clientAsset || !serverAsset) throw new Error('Latest release is still preparing the client and server downloads.');
+        client.href = clientAsset.browser_download_url;
+        client.textContent = `Download ${clientAsset.name.replace('-Windows-x64.zip', '')}`;
+        client.removeAttribute('aria-disabled');
+        server.href = serverAsset.browser_download_url;
+        server.textContent = 'Download self-hosted server bundle';
+        server.removeAttribute('aria-disabled');
+        if (checksumAsset) {
+          checksum.href = checksumAsset.browser_download_url;
+          checksum.removeAttribute('aria-disabled');
+        }
+        label.textContent = `${release.tag_name.toUpperCase()} · ${new Date(release.published_at).toLocaleDateString()}`;
+        state.textContent = `Release ready: ${clientAsset.name} · ${serverAsset.name}`;
+      } catch (error) {
+        state.textContent = `${error.message} Check the release list for status.`;
+        client.href = 'https://github.com/themaxghoul/Echoes-of-a-Virtual-World/releases';
+        client.textContent = 'View GitHub releases';
+        client.removeAttribute('aria-disabled');
+        server.href = 'https://github.com/themaxghoul/Echoes-of-a-Virtual-World/releases';
+        server.textContent = 'Release status';
+        checksum.href = 'https://github.com/themaxghoul/Echoes-of-a-Virtual-World/releases';
+        checksum.textContent = 'View checksums';
+        checksum.removeAttribute('aria-disabled');
+        label.textContent = 'ALPHA BUILD · CHECK RELEASE STATUS';
+      }
+    }());
+  </script>
+</body>
+</html>

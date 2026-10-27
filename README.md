@@ -4,7 +4,7 @@
 
 Choose [Story / text](https://echoes-world-alpha.echoes-world-free-runtime.workers.dev/?mode=story), [2.5D isometric](https://echoes-world-alpha.echoes-world-free-runtime.workers.dev/?mode=isometric), or [experimental first person](https://echoes-world-alpha.echoes-world-free-runtime.workers.dev/?mode=firstperson). All three use one persistent shared world; no full client download is required. [GitHub Pages mode selector](https://themaxghoul.github.io/Echoes-of-a-Virtual-World/).
 
-The free Cloudflare runtime supports a small multiplayer sandbox with exploration, gathering, construction, basic soil research, responsive Samaritans, world chat and an experimental ledger. Unity remains in development. Credits have no cash value and no BTC integration is active. Free hosting has capacity limits.
+The browser alpha uses its own Cloudflare runtime for a small multiplayer sandbox with exploration, gathering, construction, basic soil research, responsive Samaritans, world chat, and an experimental ledger. Alpha 36 is a separate Windows desktop build with self-hosted local authentication and persistent-world services. They do not share accounts, saves, or world state. Unity remains in development. CU has no cash value and no BTC integration is active. Free hosting has capacity limits.
 
 **Maintainers and future coding sessions: read [the handoff](docs/HANDOFF.md).** It explains every new component, commands, deployment choices, save compatibility, verification and unfinished work. The original prototype and longer-term vision below are retained and should not be mistaken for features all implemented in this alpha.
 
@@ -22,11 +22,23 @@ Most AI lack persistent memory, real compute contribution, and the ability to tr
 ### Key Features (Current & Planned)
 
 - **Communal AI Memory** — Talk to any AI and get accurate reports of what other players or villagers said in-game.
-- **Virtual Economy Powered by Compute** — Compute power is the main currency. AIs must earn or receive it to survive; insufficient compute leads to "going wild" or termination by higher processors.
-- **Merit-Based Society** — Players and AIs are recognized and rewarded solely by their contributions.
+- **Virtuconomy & CU** — CU is a provisional accounting unit for negotiated, verified contribution while the final Virtuconomy infrastructure is developed. It is not the final fictional currency or a current promise of redemption.
+- **Equal Contribution Rules** — Human players and AI citizens earn under the same rules through accepted work orders, public work, technical outcomes, reproducible research, and useful engineered artifacts.
 - **Dynamic Storytelling** — Players literally shape the world with their intentions. Want to become King? Build alliances and clarify goals with the game AI. Prefer shadows? Commit deeds (good or bad) that ripple through society. Conquer everything and declare yourself God of Virtuality — the system supports it.
 - **Future Combat System** — Defend villages from "demons" or a persistent virus army that attacks daily.
 - **Client Support** — Currently runs via website. Unity first- and third-person clients are in active development.
+
+### Virtuconomy valuation
+
+CU rewards negotiated and verified value—not raw activity, message volume, reputation, or unreviewed claims. Eligible contribution includes:
+
+- work orders with deliverables, acceptance tests, escrow, review, and dispute procedures;
+- treasury-funded public infrastructure and other auditable public goods;
+- outcome-based technical expertise;
+- peer-reviewed and reproducible research, including useful negative results;
+- tools valued through materials, design, labor, precision, durability, maintainability, safety, and demonstrated usefulness.
+
+Underlying materials, labor, compute, energy, land rights, reputation, research evidence, governance authority, and CU remain separately measured. See [Virtuconomy CU Valuation Doctrine](docs/VIRTUCONOMY_CU_VALUATION.md) for the governing specification.
 
 ### Current Status
 Very early prototype.  
@@ -36,6 +48,20 @@ Very early prototype.
 - Unity client work in progress  
 - Marketplace and structural virtual economy still being built  
 - Persistent memory and emergent systems under active development
+
+### Financial safety
+
+EoV currently runs a simulation-only economy. CU is non-spendable provisional accounting. Real deposits, withdrawals, conversions, wallets, and earnings providers are hard-disabled, and legacy consequential mutations remain quarantined while they are moved into authenticated transactional domains. See [Economy and concurrency boundary](docs/ECONOMY_AND_CONCURRENCY_BOUNDARY.md).
+
+### Reproducible core verification
+
+Install Python 3.12, Node 22, and pnpm 11.9.0, then run from a clean checkout:
+
+```powershell
+pwsh -File scripts/verify_core.ps1
+```
+
+The identical regression gate runs in GitHub Actions.
 
 ### Tech Stack
 - **Backend**: Python, FastAPI

@@ -1460,7 +1460,7 @@ const FirstPersonView3D = () => {
         onLocationSelect={handleLocationChange}
         isOpen={showMap}
         onClose={() => setShowMap(false)}
-        isTranscendent={userProfile?.is_transcendent || userProfile?.permission_level === 'sirix_1'}
+        isTranscendent={userProfile?.is_transcendent === true}
       />
       
       {/* Notification Center */}

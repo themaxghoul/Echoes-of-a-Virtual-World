@@ -2,7 +2,7 @@ name: Publish browser modes
 on:
   push:
     branches: [main]
-    paths: ['docs/play/**', '.github/workflows/pages.yml']
+    paths: ['docs/play/**', 'docs/support/**', '.github/workflows/pages.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -20,9 +20,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      - name: Assemble browser alpha and support pages
+        run: |
+          mkdir -p _site/support
+          cp -a docs/play/. _site/
+          cp -a docs/support/. _site/support/
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: docs/play
+          path: _site
       - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4

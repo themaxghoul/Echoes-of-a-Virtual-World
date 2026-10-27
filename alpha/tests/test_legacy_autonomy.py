@@ -36,7 +36,9 @@ def test_legacy_autonomy_uses_async_story_chat_contract(monkeypatch):
     monkeypatch.setitem(sys.modules, "emergentintegrations.llm.chat", module)
     monkeypatch.setenv("EMERGENT_LLM_KEY", "test-only-not-a-key")
     monkeypatch.delenv("LLM_API_KEY", raising=False)
-    path = Path(__file__).resolve().parents[2] / "backend/ai_autonomy_router.py"
+    backend_path = Path(__file__).resolve().parents[2] / "backend"
+    monkeypatch.syspath_prepend(str(backend_path))
+    path = backend_path / "ai_autonomy_router.py"
     spec = importlib.util.spec_from_file_location("legacy_autonomy_contract", path)
     router = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(router)

@@ -9,6 +9,7 @@ import {
   Crown, Shield, X, ChevronDown, Volume2, VolumeX
 } from 'lucide-react';
 import { toast } from 'sonner';
+import axios from 'axios';
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const WS_URL = process.env.REACT_APP_BACKEND_URL?.replace('https://', 'wss://').replace('http://', 'ws://');
@@ -46,9 +47,10 @@ const MultiplayerChat = ({ userId, characterId, location, availableChannels = []
   useEffect(() => {
     if (!isOpen || !userId || !location) return;
     
-    const connectWs = () => {
+    const connectWs = async () => {
       try {
-        const ws = new WebSocket(`${WS_URL}/ws/${location}/${userId}`);
+        const ticketResponse = await axios.post(`${API}/auth/ws-ticket`, { location_id: location });
+        const ws = new WebSocket(`${WS_URL}/ws/${location}/${userId}?ticket=${encodeURIComponent(ticketResponse.data.ticket)}`);
         
         ws.onopen = () => {
           setIsConnected(true);
@@ -109,6 +111,8 @@ const MultiplayerChat = ({ userId, characterId, location, availableChannels = []
         wsRef.current = ws;
       } catch (error) {
         console.error('Failed to connect:', error);
+        setIsConnected(false);
+        toast.error(error.response?.data?.detail || 'Authenticated chat connection failed');
       }
     };
     
